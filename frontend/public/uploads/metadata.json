@@ -1,0 +1,94 @@
+[
+  {
+    "id": "project_1775723190540",
+    "url": "/uploads/project/project_1775723190540_a34un0.png",
+    "filename": "project_1775723190540_a34un0.png",
+    "originalName": "7.PNG",
+    "type": "project",
+    "entityId": "2",
+    "size": 1056998,
+    "createdAt": "2026-04-09T08:26:30.547Z"
+  },
+  {
+    "id": "project_1775723206067",
+    "url": "/uploads/project/project_1775723206067_cdyz4w.png",
+    "filename": "project_1775723206067_cdyz4w.png",
+    "originalName": "11.PNG",
+    "type": "project",
+    "entityId": "3",
+    "size": 491129,
+    "createdAt": "2026-04-09T08:26:46.070Z"
+  },
+  {
+    "id": "project_1775723859223",
+    "url": "/uploads/project/project_1775723859223_zsgjgt.png",
+    "filename": "project_1775723859223_zsgjgt.png",
+    "originalName": "3.PNG",
+    "type": "project",
+    "entityId": "1",
+    "size": 972993,
+    "createdAt": "2026-04-09T08:37:39.234Z"
+  },
+  {
+    "id": "project_1775733848989",
+    "url": "/uploads/project/project_1775733848989_g4bq7i.jpeg",
+    "filename": "project_1775733848989_g4bq7i.jpeg",
+    "originalName": "FB_IMG_17757244000432691.jpg",
+    "type": "project",
+    "entityId": "2",
+    "size": 381154,
+    "createdAt": "2026-04-09T11:24:08.994Z"
+  },
+  {
+    "id": "project_1775733870556",
+    "url": "/uploads/project/project_1775733870556_c94be8.jpeg",
+    "filename": "project_1775733870556_c94be8.jpeg",
+    "originalName": "FB_IMG_17757248676190841.jpg",
+    "type": "project",
+    "entityId": "3",
+    "size": 346860,
+    "createdAt": "2026-04-09T11:24:30.562Z"
+  },
+  {
+    "id": "project_1775801815305",
+    "url": "/uploads/project/project_1775801815305_o0k28x.jpeg",
+    "filename": "project_1775801815305_o0k28x.jpeg",
+    "originalName": "FB_IMG_17757242568552983.jpg",
+    "type": "project",
+    "entityId": "1",
+    "size": 253459,
+    "createdAt": "2026-04-10T06:16:55.311Z"
+  },
+  {
+    "id": "banner_1775809547356",
+    "url": "/uploads/banner/banner_1775809547356_gogsm3.jpeg",
+    "filename": "banner_1775809547356_gogsm3.jpeg",
+    "originalName": "FB_IMG_17757249526156021.jpg",
+    "type": "banner",
+    "entityId": "",
+    "size": 70376,
+    "createdAt": "2026-04-10T08:25:47.358Z"
+  },
+  {
+    "id": "logo_1776168699761_cer4l6vm",
+    "url": "/uploads/logo/logo_1776168699761_cer4l6vm.png",
+    "filename": "logo_1776168699761_cer4l6vm.png",
+    "originalName": "36.PNG",
+    "type": "logo",
+    "entityId": "",
+    "size": 42428,
+    "mimeType": "image/png",
+    "createdAt": "2026-04-14T12:11:39.769Z"
+  },
+  {
+    "id": "profile_1776890028992_j380iluc",
+    "url": "/uploads/profile/profile_1776890028992_j380iluc.jpg",
+    "filename": "profile_1776890028992_j380iluc.jpg",
+    "originalName": "LMC_20250804_152245_Night 2 Day by Riyan -1.PORTRAIT.jpg",
+    "type": "profile",
+    "entityId": "",
+    "size": 4623635,
+    "mimeType": "image/jpeg",
+    "createdAt": "2026-04-22T20:33:49.192Z"
+  }
+]

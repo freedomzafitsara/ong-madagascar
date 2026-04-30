@@ -1,0 +1,583 @@
+// src/services/api.ts
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+
+// ==================== CONFIGURATION ====================
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+
+// Configuration de base
+export const api: AxiosInstance = axios.create({
+  baseURL: API_URL,
+  headers: { 
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+  timeout: 30000, // 30 secondes
+});
+
+// ==================== INTERCEPTEURS ====================
+
+// Intercepteur de requête - Ajout du token
+api.interceptors.request.use(
+  (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
+    // Récupérer le token depuis localStorage
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    return config;
+  },
+  (error: AxiosError): Promise<AxiosError> => {
+    console.error('Erreur de requête:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Intercepteur de réponse - Gestion des erreurs
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    
+    // Gestion des erreurs 401 (Non autorisé)
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      // Token refresh (si implémenté)
+      // const refreshToken = localStorage.getItem('refreshToken');
+      // if (refreshToken) {
+      //   try {
+      //     const response = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+      //     const { token } = response.data;
+      //     localStorage.setItem('token', token);
+      //     originalRequest.headers.Authorization = `Bearer ${token}`;
+      //     return api(originalRequest);
+      //   } catch (refreshError) {
+      //     // Rediriger vers login
+      //     if (typeof window !== 'undefined') {
+      //       localStorage.removeItem('token');
+      //       localStorage.removeItem('user');
+      //       window.location.href = '/login';
+      //     }
+      //   }
+      // } else {
+        // Rediriger vers login
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('admin_token');
+          window.location.href = '/login';
+        }
+      // }
+    }
+    
+    // Message d'erreur personnalisé
+    const errorMessage = (error.response?.data as any)?.message || error.message || 'Une erreur est survenue';
+    console.error('API Error:', errorMessage);
+    
+    return Promise.reject(error);
+  }
+);
+
+// ==================== TYPES ====================
+
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data: T;
+  message?: string;
+  errors?: string[];
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// ==================== SERVICE AUTHENTIFICATION ====================
+
+export const authService = {
+  /**
+   * Connexion utilisateur
+   */
+  login: (email: string, password: string) => 
+    api.post<ApiResponse<{ token: string; user: any }>>('/auth/login', { email, password }),
+  
+  /**
+   * Inscription utilisateur
+   */
+  register: (data: any) => 
+    api.post<ApiResponse<{ token: string; user: any }>>('/auth/register', data),
+  
+  /**
+   * Récupérer le profil utilisateur
+   */
+  getProfile: () => 
+    api.get<ApiResponse<any>>('/auth/profile'),
+  
+  /**
+   * Mettre à jour le profil
+   */
+  updateProfile: (data: any) => 
+    api.put<ApiResponse<any>>('/auth/profile', data),
+  
+  /**
+   * Changer le mot de passe
+   */
+  changePassword: (oldPassword: string, newPassword: string) => 
+    api.post<ApiResponse<{ message: string }>>('/auth/change-password', { oldPassword, newPassword }),
+  
+  /**
+   * Demander réinitialisation du mot de passe
+   */
+  forgotPassword: (email: string) => 
+    api.post<ApiResponse<{ message: string }>>('/auth/forgot-password', { email }),
+  
+  /**
+   * Réinitialiser le mot de passe
+   */
+  resetPassword: (token: string, password: string) => 
+    api.post<ApiResponse<{ message: string }>>('/auth/reset-password', { token, password }),
+  
+  /**
+   * Déconnexion
+   */
+  logout: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('admin_token');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('admin_token');
+    }
+  },
+  
+  /**
+   * Rafraîchir le token
+   */
+  refreshToken: () => 
+    api.post<ApiResponse<{ token: string }>>('/auth/refresh'),
+};
+
+// ==================== SERVICE PROJETS ====================
+
+export const projectService = {
+  getAll: (params?: any) => 
+    api.get<PaginatedResponse<any>>('/projects', { params }),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/projects/${id}`),
+  
+  create: (data: any) => 
+    api.post<ApiResponse<any>>('/projects', data),
+  
+  update: (id: string, data: any) => 
+    api.put<ApiResponse<any>>(`/projects/${id}`, data),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/projects/${id}`),
+  
+  getStats: () => 
+    api.get<ApiResponse<any>>('/projects/stats'),
+  
+  getBeneficiaries: (id: string) => 
+    api.get<PaginatedResponse<any>>(`/projects/${id}/beneficiaries`),
+  
+  addBeneficiary: (id: string, beneficiaryId: string) => 
+    api.post<ApiResponse<any>>(`/projects/${id}/beneficiaries`, { beneficiaryId }),
+  
+  removeBeneficiary: (id: string, beneficiaryId: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/projects/${id}/beneficiaries/${beneficiaryId}`),
+  
+  getImages: (id: string) => 
+    api.get<ApiResponse<any[]>>(`/projects/${id}/images`),
+  
+  uploadImage: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    return api.post<ApiResponse<any>>(`/projects/${id}/images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  
+  setMainImage: (id: string, imageId: string) => 
+    api.patch<ApiResponse<any>>(`/projects/${id}/images/${imageId}/main`),
+  
+  deleteImage: (id: string, imageId: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/projects/${id}/images/${imageId}`),
+};
+
+// ==================== SERVICE BÉNÉFICIAIRES ====================
+
+export const beneficiaryService = {
+  getAll: (params?: any) => 
+    api.get<PaginatedResponse<any>>('/beneficiaries', { params }),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/beneficiaries/${id}`),
+  
+  create: (data: any) => 
+    api.post<ApiResponse<any>>('/beneficiaries', data),
+  
+  update: (id: string, data: any) => 
+    api.put<ApiResponse<any>>(`/beneficiaries/${id}`, data),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/beneficiaries/${id}`),
+  
+  getByProject: (projectId: string) => 
+    api.get<PaginatedResponse<any>>(`/beneficiaries/project/${projectId}`),
+  
+  getStats: () => 
+    api.get<ApiResponse<any>>('/beneficiaries/stats'),
+};
+
+// ==================== SERVICE DONS ====================
+
+export const donationService = {
+  getAll: (params?: any) => 
+    api.get<PaginatedResponse<any>>('/donations', { params }),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/donations/${id}`),
+  
+  create: (data: any) => 
+    api.post<ApiResponse<any>>('/donations', data),
+  
+  confirm: (id: string) => 
+    api.patch<ApiResponse<any>>(`/donations/${id}/confirm`),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/donations/${id}`),
+  
+  getStats: () => 
+    api.get<ApiResponse<any>>('/donations/stats'),
+  
+  generateReceipt: (id: string) => 
+    api.get(`/donations/${id}/receipt`, { responseType: 'blob' }),
+  
+  getByProject: (projectId: string) => 
+    api.get<PaginatedResponse<any>>(`/donations/project/${projectId}`),
+};
+
+// ==================== SERVICE BÉNÉVOLES ====================
+
+export const volunteerService = {
+  getAll: (params?: any) => 
+    api.get<PaginatedResponse<any>>('/volunteers', { params }),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/volunteers/${id}`),
+  
+  create: (data: any) => 
+    api.post<ApiResponse<any>>('/volunteers', data),
+  
+  update: (id: string, data: any) => 
+    api.put<ApiResponse<any>>(`/volunteers/${id}`, data),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/volunteers/${id}`),
+  
+  assignToProject: (volunteerId: string, projectId: string, role: string) => 
+    api.post<ApiResponse<any>>('/volunteers/assign', { volunteerId, projectId, role }),
+  
+  unassignFromProject: (volunteerId: string, projectId: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/volunteers/${volunteerId}/projects/${projectId}`),
+  
+  getHours: (id: string) => 
+    api.get<ApiResponse<{ total: number; details: any[] }>>(`/volunteers/${id}/hours`),
+  
+  addHours: (id: string, projectId: string, hours: number, date?: string) => 
+    api.post<ApiResponse<any>>(`/volunteers/${id}/hours`, { projectId, hours, date }),
+  
+  getProjects: (id: string) => 
+    api.get<PaginatedResponse<any>>(`/volunteers/${id}/projects`),
+  
+  getStats: () => 
+    api.get<ApiResponse<any>>('/volunteers/stats'),
+};
+
+// ==================== SERVICE BLOG ====================
+
+export const blogService = {
+  getAll: (params?: any) => 
+    api.get<PaginatedResponse<any>>('/blog', { params }),
+  
+  getBySlug: (slug: string) => 
+    api.get<ApiResponse<any>>(`/blog/${slug}`),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/blog/${id}`),
+  
+  create: (data: any) => 
+    api.post<ApiResponse<any>>('/blog', data),
+  
+  update: (id: string, data: any) => 
+    api.put<ApiResponse<any>>(`/blog/${id}`, data),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/blog/${id}`),
+  
+  incrementViews: (id: string) => 
+    api.patch<ApiResponse<any>>(`/blog/${id}/views`),
+  
+  publish: (id: string) => 
+    api.patch<ApiResponse<any>>(`/blog/${id}/publish`),
+  
+  unpublish: (id: string) => 
+    api.patch<ApiResponse<any>>(`/blog/${id}/unpublish`),
+  
+  getCategories: () => 
+    api.get<ApiResponse<string[]>>('/blog/categories'),
+  
+  getStats: () => 
+    api.get<ApiResponse<any>>('/blog/stats'),
+};
+
+// ==================== SERVICE RECRUTEMENT ====================
+
+export const recruitmentService = {
+  getAll: (params?: any) => 
+    api.get<PaginatedResponse<any>>('/recruitment', { params }),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/recruitment/${id}`),
+  
+  create: (data: any) => 
+    api.post<ApiResponse<any>>('/recruitment', data),
+  
+  update: (id: string, data: any) => 
+    api.put<ApiResponse<any>>(`/recruitment/${id}`, data),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/recruitment/${id}`),
+  
+  updateStatus: (id: string, status: string) => 
+    api.patch<ApiResponse<any>>(`/recruitment/${id}/status`, { status }),
+  
+  getStats: () => 
+    api.get<ApiResponse<any>>('/recruitment/stats'),
+  
+  getCandidates: (id: string) => 
+    api.get<PaginatedResponse<any>>(`/recruitment/${id}/candidates`),
+  
+  apply: (id: string, data: any) => 
+    api.post<ApiResponse<any>>(`/recruitment/${id}/apply`, data),
+  
+  updateCandidateStatus: (recruitmentId: string, candidateId: string, status: string) => 
+    api.patch<ApiResponse<any>>(`/recruitment/${recruitmentId}/candidates/${candidateId}`, { status }),
+};
+
+// ==================== SERVICE CONTACT ====================
+
+export const contactService = {
+  send: (data: any) => 
+    api.post<ApiResponse<{ message: string }>>('/contact', data),
+  
+  getAll: (params?: any) => 
+    api.get<PaginatedResponse<any>>('/contact', { params }),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/contact/${id}`),
+  
+  markAsRead: (id: string) => 
+    api.patch<ApiResponse<any>>(`/contact/${id}/read`),
+  
+  reply: (id: string, reply: string) => 
+    api.post<ApiResponse<any>>(`/contact/${id}/reply`, { reply }),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/contact/${id}`),
+  
+  getStats: () => 
+    api.get<ApiResponse<any>>('/contact/stats'),
+};
+
+// ==================== SERVICE RAPPORTS ====================
+
+export const reportService = {
+  getAll: () => 
+    api.get<PaginatedResponse<any>>('/reports'),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/reports/${id}`),
+  
+  generate: (type: string, params: any) => 
+    api.post<ApiResponse<any>>('/reports/generate', { type, params }),
+  
+  download: (id: string) => 
+    api.get(`/reports/${id}/download`, { responseType: 'blob' }),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/reports/${id}`),
+  
+  getTypes: () => 
+    api.get<ApiResponse<string[]>>('/reports/types'),
+};
+
+// ==================== SERVICE MÉDIAS ====================
+
+export const mediaService = {
+  upload: (file: File, entityType: string, entityId: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('entityType', entityType);
+    formData.append('entityId', entityId);
+    return api.post<ApiResponse<any>>('/media/upload', formData, { 
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000, // 60 secondes pour l'upload
+    });
+  },
+  
+  getAll: (params?: { entityType?: string; entityId?: string }) => 
+    api.get<PaginatedResponse<any>>('/media', { params }),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/media/${id}`),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/media/${id}`),
+  
+  getStats: () => 
+    api.get<ApiResponse<any>>('/media/stats'),
+};
+
+// ==================== SERVICE STATISTIQUES ====================
+
+export const statsService = {
+  getDashboard: () => 
+    api.get<ApiResponse<any>>('/stats/dashboard'),
+  
+  getPublic: () => 
+    api.get<ApiResponse<any>>('/stats/public'),
+  
+  getProjectStats: (id: string) => 
+    api.get<ApiResponse<any>>(`/stats/project/${id}`),
+  
+  getDonationStats: (period?: 'day' | 'week' | 'month' | 'year') => 
+    api.get<ApiResponse<any>>('/stats/donations', { params: { period } }),
+  
+  getVolunteerStats: () => 
+    api.get<ApiResponse<any>>('/stats/volunteers'),
+  
+  getBeneficiaryStats: () => 
+    api.get<ApiResponse<any>>('/stats/beneficiaries'),
+};
+
+// ==================== SERVICE AUDIT ====================
+
+export const auditService = {
+  getAll: (params?: { page?: number; limit?: number; action?: string; userId?: string }) => 
+    api.get<PaginatedResponse<any>>('/audit', { params }),
+  
+  getUserLogs: (userId: string) => 
+    api.get<PaginatedResponse<any>>(`/audit/user/${userId}`),
+  
+  getEntityLogs: (entityType: string, entityId: string) => 
+    api.get<PaginatedResponse<any>>(`/audit/entity/${entityType}/${entityId}`),
+  
+  getActions: () => 
+    api.get<ApiResponse<string[]>>('/audit/actions'),
+};
+
+// ==================== SERVICE UTILISATEURS (Admin) ====================
+
+export const userService = {
+  getAll: (params?: any) => 
+    api.get<PaginatedResponse<any>>('/users', { params }),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/users/${id}`),
+  
+  create: (data: any) => 
+    api.post<ApiResponse<any>>('/users', data),
+  
+  update: (id: string, data: any) => 
+    api.put<ApiResponse<any>>(`/users/${id}`, data),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/users/${id}`),
+  
+  deactivate: (id: string) => 
+    api.patch<ApiResponse<any>>(`/users/${id}/deactivate`),
+  
+  activate: (id: string) => 
+    api.patch<ApiResponse<any>>(`/users/${id}/activate`),
+  
+  getRoles: () => 
+    api.get<ApiResponse<string[]>>('/users/roles'),
+  
+  getStats: () => 
+    api.get<ApiResponse<any>>('/users/stats'),
+};
+
+// ==================== SERVICE ÉVÉNEMENTS ====================
+
+export const eventService = {
+  getAll: (params?: any) => 
+    api.get<PaginatedResponse<any>>('/events', { params }),
+  
+  getById: (id: string) => 
+    api.get<ApiResponse<any>>(`/events/${id}`),
+  
+  create: (data: any) => 
+    api.post<ApiResponse<any>>('/events', data),
+  
+  update: (id: string, data: any) => 
+    api.put<ApiResponse<any>>(`/events/${id}`, data),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/events/${id}`),
+  
+  register: (id: string, participantData: any) => 
+    api.post<ApiResponse<any>>(`/events/${id}/register`, participantData),
+  
+  getRegistrations: (id: string) => 
+    api.get<PaginatedResponse<any>>(`/events/${id}/registrations`),
+  
+  updateRegistrationStatus: (eventId: string, registrationId: string, status: string) => 
+    api.patch<ApiResponse<any>>(`/events/${eventId}/registrations/${registrationId}`, { status }),
+  
+  getStats: () => 
+    api.get<ApiResponse<any>>('/events/stats'),
+};
+
+// ==================== SERVICE NOTIFICATIONS ====================
+
+export const notificationService = {
+  getAll: () => 
+    api.get<PaginatedResponse<any>>('/notifications'),
+  
+  markAsRead: (id: string) => 
+    api.patch<ApiResponse<any>>(`/notifications/${id}/read`),
+  
+  markAllAsRead: () => 
+    api.patch<ApiResponse<any>>('/notifications/read-all'),
+  
+  delete: (id: string) => 
+    api.delete<ApiResponse<{ message: string }>>(`/notifications/${id}`),
+  
+  getUnreadCount: () => 
+    api.get<ApiResponse<{ count: number }>>('/notifications/unread-count'),
+};
+
+// ==================== SERVICE PARAMÈTRES ====================
+
+export const settingsService = {
+  get: () => 
+    api.get<ApiResponse<any>>('/settings'),
+  
+  update: (data: any) => 
+    api.put<ApiResponse<any>>('/settings', data),
+  
+  getPublic: () => 
+    api.get<ApiResponse<any>>('/settings/public'),
+};
+
+// ==================== EXPORT PAR DÉFAUT ====================
+
+export default api;

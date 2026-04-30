@@ -1,0 +1,15 @@
+﻿<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f172a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#grad)"/>
+  <text x="960" y="500" font-size="48" text-anchor="middle" fill="#D4AF37" font-family="Arial" font-weight="bold">
+    🎬 VIDÉO DE FOND
+  </text>
+  <text x="960" y="560" font-size="24" text-anchor="middle" fill="#ffffff" font-family="Arial">
+    Placez votre vidéo ici : public/videos/background.mp4
+  </text>
+</svg>
