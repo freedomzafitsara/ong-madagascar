@@ -1,4 +1,4 @@
-﻿import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+﻿import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('footer_contact')
 export class FooterContact {
@@ -11,18 +11,9 @@ export class FooterContact {
   @Column()
   value: string;
 
-  @Column({ nullable: true })
+  @Column()
   icon: string;
 
-  @Column({ default: 0 })
-  order: number;
-
-  @Column({ default: true })
-  is_active: boolean;
-
-  @CreateDateColumn()
-  created_at: Date;
-
-  @UpdateDateColumn()
-  updated_at: Date;
+  @Column({ name: 'order_num', default: 0 })
+  orderNum: number;
 }

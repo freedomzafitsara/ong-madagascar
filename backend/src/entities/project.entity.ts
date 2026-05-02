@@ -1,5 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { User } from './user.entity';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('projects')
 export class Project {
@@ -10,19 +9,13 @@ export class Project {
   title: string;
 
   @Column({ nullable: true })
-  titleMg: string;
+  title_mg: string;
 
   @Column('text')
   description: string;
 
   @Column('text', { nullable: true })
-  descriptionMg: string;
-
-  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
-  budget: number;
-
-  @Column({ nullable: true })
-  region: string;
+  description_mg: string;
 
   @Column({ nullable: true })
   location: string;
@@ -30,40 +23,48 @@ export class Project {
   @Column({ nullable: true })
   category: string;
 
+  @Column({ nullable: true })
+  region: string;
+
+  @Column({ default: 'active' })
+  status: string;
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  budget: number;
+
+  @Column({ default: 0 })
+  beneficiaries_count: number;
+
+  @Column({ default: 0 })
+  youth_impact: number;
+
+  @Column({ default: 0 })
+  jobs_created: number;
+
   @Column({ default: 0 })
   progress: number;
 
-  @Column({ default: 'planning' })
-  status: string;
+  @Column({ type: 'date', nullable: true })
+  start_date: Date;
 
-  @Column({ name: 'start_date', type: 'date', nullable: true })
-  startDate: Date;
+  @Column({ type: 'date', nullable: true })
+  end_date: Date;
 
-  @Column({ name: 'end_date', type: 'date', nullable: true })
-  endDate: Date;
+  @Column({ nullable: true })
+  image_url: string;
 
-  @Column({ name: 'image_url', nullable: true })
-  imageUrl: string;
+  @Column('text', { array: true, nullable: true })
+  gallery_images: string[];
 
-  @Column({ name: 'gallery_images', type: 'text', array: true, nullable: true })
-  galleryImages: string[];
+  @Column({ default: false })
+  is_featured: boolean;
 
-  @Column({ name: 'youth_impact', default: 0 })
-  youthImpact: number;
+  @Column({ nullable: true })
+  manager_id: string;
 
-  @Column({ name: 'jobs_created', default: 0 })
-  jobsCreated: number;
+  @CreateDateColumn()
+  created_at: Date;
 
-  @Column({ name: 'is_featured', default: false })
-  isFeatured: boolean;
-
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'manager_id' })
-  manager: User;
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  @UpdateDateColumn()
+  updated_at: Date;
 }

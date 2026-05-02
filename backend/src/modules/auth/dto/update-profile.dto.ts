@@ -1,40 +1,31 @@
-// src/modules/auth/dto/update-profile.dto.ts
-import { IsOptional, IsString, IsUrl, IsObject } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString, IsEmail } from 'class-validator';
 
 export class UpdateProfileDto {
-  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
   @IsOptional()
   @IsString()
   firstName?: string;
 
-  @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
   lastName?: string;
 
-  @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
   phone?: string;
 
-  @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
   bio?: string;
 
-  @ApiProperty({ required: false })
   @IsOptional()
-  @IsUrl()
-  avatarUrl?: string;
+  @IsString()
+  region?: string;
 
-  @ApiProperty({ required: false })
   @IsOptional()
-  @IsObject()
-  socialLinks?: {
-    facebook?: string;
-    instagram?: string;
-    linkedin?: string;
-    twitter?: string;
-  };
+  @IsString()
+  photo?: string;
 }

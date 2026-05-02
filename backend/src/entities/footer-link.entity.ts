@@ -1,30 +1,22 @@
-﻿import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { FooterSection } from './footer-section.entity';
+﻿import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('footer_links')
 export class FooterLink {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => FooterSection, (section) => section.links)
-  @JoinColumn({ name: 'section_id' })
-  section: FooterSection;
-
   @Column()
   title: string;
+
+  @Column({ nullable: true })
+  title_mg: string;
 
   @Column()
   url: string;
 
-  @Column({ default: 0 })
-  order: number;
+  @Column({ name: 'order_num', default: 0 })
+  orderNum: number;
 
-  @Column({ default: true })
-  is_active: boolean;
-
-  @CreateDateColumn()
-  created_at: Date;
-
-  @UpdateDateColumn()
-  updated_at: Date;
+  @Column({ name: 'section_id' })
+  sectionId: string;
 }

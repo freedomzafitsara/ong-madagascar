@@ -1,8 +1,9 @@
-﻿import api from "./api";
+﻿import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
 export interface FooterLink {
   id: string;
   title: string;
+  title_mg?: string;
   url: string;
   order: number;
 }
@@ -10,83 +11,53 @@ export interface FooterLink {
 export interface FooterSection {
   id: string;
   title: string;
+  title_mg?: string;
+  order: number;
   links: FooterLink[];
 }
 
 export interface FooterContact {
   id: string;
-  type: string;
+  type: 'address' | 'phone' | 'email' | 'badge';
   value: string;
-  icon: string;
+  icon: IconDefinition;  // ✅ Changé de 'string' à 'IconDefinition'
+  order: number;
 }
 
 export interface FooterLegalLink {
   id: string;
   title: string;
   url: string;
+  order: number;
 }
 
 export interface FooterData {
   sections: FooterSection[];
   contactInfo: FooterContact[];
   legalLinks: FooterLegalLink[];
+  copyright: string;
 }
 
-export const footerService = {
-  getFooterData: async (): Promise<FooterData> => {
+class FooterService {
+  async getFooterData(): Promise<FooterData> {
     try {
-      const response = await api.get("/footer");
-      return response.data;
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+      const response = await fetch(`${API_URL}/footer`);
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement du footer');
+      }
+      return await response.json();
     } catch (error) {
-      console.error("Erreur chargement footer:", error);
-      // Données par défaut en cas d'erreur
+      console.error('Erreur footerService:', error);
+      // Retourner des données par défaut
       return {
-        sections: [
-          {
-            id: "1",
-            title: "L'organisation",
-            links: [
-              { id: "1", title: "Qui sommes-nous", url: "/about", order: 1 },
-              { id: "2", title: "Notre équipe", url: "/team", order: 2 },
-              { id: "3", title: "Nos valeurs", url: "/values", order: 3 },
-              { id: "4", title: "Rapports annuels", url: "/reports", order: 4 },
-            ],
-          },
-          {
-            id: "2",
-            title: "Nos actions",
-            links: [
-              { id: "5", title: "Nos projets", url: "/projects", order: 1 },
-              { id: "6", title: "Faire un don", url: "/donate", order: 2 },
-              { id: "7", title: "Devenir bénévole", url: "/volunteers", order: 3 },
-              { id: "8", title: "Partenariats", url: "/partners", order: 4 },
-            ],
-          },
-          {
-            id: "3",
-            title: "Ressources",
-            links: [
-              { id: "9", title: "Actualités", url: "/blog", order: 1 },
-              { id: "10", title: "Contact", url: "/contact", order: 2 },
-              { id: "11", title: "FAQ", url: "/faq", order: 3 },
-              { id: "12", title: "Transparence", url: "/transparency", order: 4 },
-            ],
-          },
-        ],
-        contactInfo: [
-          { id: "1", type: "address", value: "Carion, Madagascar", icon: "📍" },
-          { id: "2", type: "phone", value: "+261 32 04 856 97", icon: "📞" },
-          { id: "3", type: "email", value: "ymad.mg@gmail.com", icon: "✉️" },
-          { id: "4", type: "badge", value: "Reconnue d'utilité publique", icon: "🏛️" },
-        ],
-        legalLinks: [
-          { id: "1", title: "Politique de confidentialité", url: "/privacy" },
-          { id: "2", title: "Conditions d'utilisation", url: "/terms" },
-          { id: "3", title: "Cookies", url: "/cookies" },
-        ],
+        sections: [],
+        contactInfo: [],
+        legalLinks: [],
+        copyright: `© ${new Date().getFullYear()} Y-Mad. Tous droits réservés.`,
       };
     }
-  },
-};
+  }
+}
 
-export default footerService;
+export const footerService = new FooterService();

@@ -22,42 +22,42 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Validation des champs
   const validateForm = () => {
+    const errors: Record<string, string> = {};
+
     if (formData.password !== formData.confirmPassword) {
-      setError('Les mots de passe ne correspondent pas');
-      return false;
+      errors.confirmPassword = 'Les mots de passe ne correspondent pas';
     }
 
     if (formData.password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères');
-      return false;
+      errors.password = 'Le mot de passe doit contenir au moins 6 caractères';
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      setError('Veuillez entrer une adresse email valide');
-      return false;
+      errors.email = 'Veuillez entrer une adresse email valide';
     }
 
     if (formData.firstName.length < 2) {
-      setError('Le prénom doit contenir au moins 2 caractères');
-      return false;
+      errors.firstName = 'Le prénom doit contenir au moins 2 caractères';
     }
 
     if (formData.lastName.length < 2) {
-      setError('Le nom doit contenir au moins 2 caractères');
-      return false;
+      errors.lastName = 'Le nom doit contenir au moins 2 caractères';
     }
 
-    return true;
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setFieldErrors({});
 
     if (!validateForm()) {
       setLoading(false);
@@ -70,11 +70,12 @@ export default function RegisterPage() {
       setSuccess(true);
       setTimeout(() => {
         router.push('/dashboard');
+        router.refresh();
       }, 2000);
     } catch (err: any) {
-      const message = err.response?.data?.message || err.message || 'Erreur lors de l\'inscription';
-      if (message.includes('duplicate') || message.includes('already exists')) {
-        setError('Cet email est déjà utilisé');
+      const message = err.response?.data?.message || err.message || "Erreur lors de l'inscription";
+      if (message.includes('duplicate') || message.includes('already exists') || message.includes('déjà utilisé')) {
+        setError('Cet email est déjà utilisé. Veuillez vous connecter.');
       } else {
         setError(message);
       }
@@ -91,8 +92,11 @@ export default function RegisterPage() {
             <CheckCircle className="w-10 h-10 text-green-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Inscription réussie !</h2>
-          <p className="text-gray-600 mb-6">
-            Votre compte a été créé avec succès. Vous allez être redirigé...
+          <p className="text-gray-600 mb-2">
+            Votre compte a été créé avec succès.
+          </p>
+          <p className="text-gray-500 text-sm mb-6">
+            Vous allez être redirigé vers votre espace personnel...
           </p>
           <div className="w-16 h-1 bg-blue-600 mx-auto rounded-full animate-pulse" />
         </div>
@@ -138,9 +142,14 @@ export default function RegisterPage() {
                 required
                 value={formData.firstName}
                 onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                placeholder="Jean"
+                className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition ${
+                  fieldErrors.firstName ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="votre prénom"
               />
+              {fieldErrors.firstName && (
+                <p className="text-xs text-red-500 mt-1">{fieldErrors.firstName}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
@@ -149,9 +158,14 @@ export default function RegisterPage() {
                 required
                 value={formData.lastName}
                 onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                placeholder="Rakoto"
+                className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition ${
+                  fieldErrors.lastName ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="votre nom"
               />
+              {fieldErrors.lastName && (
+                <p className="text-xs text-red-500 mt-1">{fieldErrors.lastName}</p>
+              )}
             </div>
           </div>
 
@@ -164,10 +178,16 @@ export default function RegisterPage() {
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                placeholder="jean@example.com"
+                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition ${
+                  fieldErrors.email ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="votre@email.com"
+                autoComplete="email"
               />
             </div>
+            {fieldErrors.email && (
+              <p className="text-xs text-red-500 mt-1">{fieldErrors.email}</p>
+            )}
           </div>
 
           <div>
@@ -179,7 +199,7 @@ export default function RegisterPage() {
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                placeholder="034 00 000 00"
+                placeholder="votre numéro de téléphone"
               />
             </div>
           </div>
@@ -193,8 +213,11 @@ export default function RegisterPage() {
                 required
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                className={`w-full pl-10 pr-10 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition ${
+                  fieldErrors.password ? 'border-red-500' : 'border-gray-300'
+                }`}
                 placeholder="••••••••"
+                autoComplete="new-password"
               />
               <button
                 type="button"
@@ -204,7 +227,12 @@ export default function RegisterPage() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères</p>
+            {fieldErrors.password && (
+              <p className="text-xs text-red-500 mt-1">{fieldErrors.password}</p>
+            )}
+            {!fieldErrors.password && (
+              <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères</p>
+            )}
           </div>
 
           <div>
@@ -216,16 +244,22 @@ export default function RegisterPage() {
                 required
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition ${
+                  fieldErrors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                }`}
                 placeholder="••••••••"
+                autoComplete="new-password"
               />
             </div>
+            {fieldErrors.confirmPassword && (
+              <p className="text-xs text-red-500 mt-1">{fieldErrors.confirmPassword}</p>
+            )}
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
           >
             {loading ? (
               <>

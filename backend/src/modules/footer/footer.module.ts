@@ -1,12 +1,11 @@
-﻿// backend/src/modules/footer/footer.module.ts
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FooterController } from './footer.controller';
 import { FooterService } from './footer.service';
-import { FooterSection } from '../../entities/footer-section.entity';
-import { FooterLink } from '../../entities/footer-link.entity';
-import { FooterContact } from '../../entities/footer-contact.entity';
-import { FooterLegalLink } from '../../entities/footer-legal-link.entity';
+import { FooterSection } from './entities/footer-section.entity';
+import { FooterLink } from './entities/footer-link.entity';
+import { FooterContact } from './entities/footer-contact.entity';
+import { FooterLegalLink } from './entities/footer-legal-link.entity';
 
 @Module({
   imports: [

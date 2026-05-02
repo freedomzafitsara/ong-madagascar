@@ -1,9 +1,10 @@
 ﻿import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
-import { JobOffer } from './entities/job-offer.entity';
-import { JobApplication } from './entities/job-application.entity';
-import { CreateJobOfferDto, UpdateJobOfferDto, CreateJobApplicationDto } from './dto/job.dto';
+import { JobOffer, JobStatus, JobType } from '../../entities/job-offer.entity';
+import { JobApplication, ApplicationStatus } from '../../entities/job-application.entity';
+import { CreateJobOfferDto, UpdateJobOfferDto } from './dto/job-offer.dto';
+import { CreateJobApplicationDto } from './dto/job-application.dto';
 
 @Injectable()
 export class JobsService {
@@ -11,162 +12,178 @@ export class JobsService {
     @InjectRepository(JobOffer)
     private jobOfferRepository: Repository<JobOffer>,
     @InjectRepository(JobApplication)
-    private jobApplicationRepository: Repository<JobApplication>,
+    private applicationRepository: Repository<JobApplication>,
   ) {}
 
-  async findAllOffers(query: any) {
-    const { page = 1, limit = 10, status = 'published', jobType, region, sector, search } = query;
+  // ==================== OFFRE D'EMPLOI ====================
+
+  async createJobOffer(createJobOfferDto: CreateJobOfferDto, userId: string) {
+    const jobOffer = this.jobOfferRepository.create({
+      ...createJobOfferDto,
+      createdBy: userId,
+      status: JobStatus.DRAFT,
+    });
+    return this.jobOfferRepository.save(jobOffer);
+  }
+
+  async findAllJobOffers(page: number = 1, limit: number = 10, jobType?: string, sector?: string, region?: string, search?: string) {
     const skip = (page - 1) * limit;
+    const query: any = { status: JobStatus.PUBLISHED };
     
-    const where: any = { status };
-    if (jobType) where.jobType = jobType;
-    if (region) where.region = region;
-    if (sector) where.sector = sector;
-    if (search) where.title = Like(`%${search}%`);
-    
-    // Sélectionner uniquement les colonnes qui existent dans la base
+    if (jobType && jobType !== 'all') query.jobType = jobType;
+    if (sector && sector !== 'all') query.sector = sector;
+    if (region && region !== 'all') query.region = region;
+    if (search) query.title = Like(`%${search}%`);
+
     const [data, total] = await this.jobOfferRepository.findAndCount({
-      select: ['id', 'title', 'description', 'companyName', 'location', 'region', 'jobType', 'status', 'applicationsCount', 'isFeatured', 'createdAt', 'deadline'],
-      where,
+      where: query,
+      order: { createdAt: 'DESC' },
       skip,
       take: limit,
-      order: { createdAt: 'DESC' },
     });
-    
-    return {
-      data,
-      total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages: Math.ceil(total / limit)
-    };
+
+    return { data, total, page, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOfferById(id: string): Promise<JobOffer> {
-    const offer = await this.jobOfferRepository.findOne({
+  async findJobOfferById(id: string) {
+    const jobOffer = await this.jobOfferRepository.findOne({
       where: { id },
+      relations: ['creator'],
     });
-    
-    if (!offer) {
-      throw new NotFoundException(`Offre d'emploi avec l'ID ${id} non trouvée`);
-    }
-    
-    return offer;
+    if (!jobOffer) throw new NotFoundException('Offre d\'emploi non trouvée');
+    return jobOffer;
   }
 
-  async createOffer(createDto: CreateJobOfferDto): Promise<JobOffer> {
-    const offer = this.jobOfferRepository.create({
-      title: createDto.title,
-      description: createDto.description,
-      companyName: createDto.companyName,
-      location: createDto.location,
-      region: createDto.region,
-      jobType: createDto.jobType || 'cdi',
-      deadline: createDto.deadline,
-      isFeatured: createDto.isFeatured || false,
-      status: 'published',
-    });
-    
-    return await this.jobOfferRepository.save(offer);
-  }
-
-  async updateOffer(id: string, updateDto: UpdateJobOfferDto): Promise<JobOffer> {
-    await this.findOfferById(id);
-    await this.jobOfferRepository.update(id, updateDto);
-    return this.findOfferById(id);
-  }
-
-  async deleteOffer(id: string): Promise<void> {
-    const offer = await this.findOfferById(id);
-    await this.jobOfferRepository.remove(offer);
-  }
-
-  async updateOfferStatus(id: string, status: string): Promise<JobOffer> {
-    await this.findOfferById(id);
-    await this.jobOfferRepository.update(id, { status });
-    return this.findOfferById(id);
-  }
-
-  async findApplicationsByOffer(offerId: string, query: any) {
-    const { page = 1, limit = 10, status } = query;
-    const skip = (page - 1) * limit;
-    
-    await this.findOfferById(offerId);
-    
-    const where: any = { jobOffer: { id: offerId } };
-    if (status) where.status = status;
-    
-    const [data, total] = await this.jobApplicationRepository.findAndCount({
-      where,
-      skip,
-      take: limit,
+  async findFeaturedJobOffers() {
+    return this.jobOfferRepository.find({
+      where: { isFeatured: true, status: JobStatus.PUBLISHED },
       order: { createdAt: 'DESC' },
+      take: 3,
     });
-    
-    return {
-      data,
-      total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages: Math.ceil(total / limit)
-    };
   }
 
-  async createApplication(offerId: string, createDto: CreateJobApplicationDto): Promise<JobApplication> {
-    const offer = await this.findOfferById(offerId);
+  async updateJobOffer(id: string, updateJobOfferDto: UpdateJobOfferDto) {
+    await this.jobOfferRepository.update(id, updateJobOfferDto);
+    return this.findJobOfferById(id);
+  }
+
+  async updateJobOfferStatus(id: string, status: string) {
+    await this.jobOfferRepository.update(id, { status });
+    return this.findJobOfferById(id);
+  }
+
+  async deleteJobOffer(id: string) {
+    await this.jobOfferRepository.delete(id);
+    return { success: true, message: 'Offre supprimée avec succès' };
+  }
+
+  async getJobOffersStats() {
+    const total = await this.jobOfferRepository.count();
+    const published = await this.jobOfferRepository.count({ where: { status: JobStatus.PUBLISHED } });
+    const closed = await this.jobOfferRepository.count({ where: { status: JobStatus.CLOSED } });
+    const totalApplications = await this.applicationRepository.count();
     
-    if (offer.status !== 'published') {
+    return { total, published, closed, totalApplications };
+  }
+
+  // ==================== CANDIDATURES ====================
+
+  async applyToJob(createApplicationDto: CreateJobApplicationDto, userId: string | null, cvFile?: Express.Multer.File, photoFile?: Express.Multer.File, diplomaFile?: Express.Multer.File) {
+    const jobOffer = await this.findJobOfferById(createApplicationDto.jobOfferId);
+    
+    if (jobOffer.status !== JobStatus.PUBLISHED) {
       throw new BadRequestException('Cette offre n\'est plus disponible');
     }
     
-    const existing = await this.jobApplicationRepository.findOne({
-      where: {
-        jobOffer: { id: offerId },
-        email: createDto.email,
-      },
+    if (jobOffer.deadline && new Date(jobOffer.deadline) < new Date()) {
+      throw new BadRequestException('La date limite de candidature est dépassée');
+    }
+
+    const existing = await this.applicationRepository.findOne({
+      where: { jobOfferId: createApplicationDto.jobOfferId, email: createApplicationDto.email },
     });
-    
     if (existing) {
       throw new BadRequestException('Vous avez déjà postulé à cette offre');
     }
-    
-    const application = this.jobApplicationRepository.create({
-      fullName: createDto.fullName,
-      email: createDto.email,
-      phone: createDto.phone,
-      address: createDto.address,
-      experienceYears: createDto.experienceYears,
-      coverLetter: createDto.coverLetter,
-      photoUrl: createDto.photoUrl,
-      cvUrl: createDto.cvUrl,
-      diplomaUrl: createDto.diplomaUrl,
-      attestationUrl: createDto.attestationUrl,
-      jobOffer: { id: offerId },
-      status: 'submitted',
+
+    let cvUrl = null;
+    let photoUrl = null;
+    let diplomaUrl = null;
+
+    // Ici vous pouvez ajouter l'upload vers Cloudinary ou autre service
+    // Pour l'instant, on simule l'upload
+
+    const application = this.applicationRepository.create({
+      ...createApplicationDto,
+      userId: userId || null,
+      cvUrl: cvUrl || '/uploads/cv/demo.pdf',
+      photoUrl: photoUrl || null,
+      diplomaUrl: diplomaUrl || null,
+      status: ApplicationStatus.SUBMITTED,
     });
+
+    await this.applicationRepository.save(application);
     
-    const saved = await this.jobApplicationRepository.save(application);
-    
-    await this.jobOfferRepository.update(offerId, {
-      applicationsCount: () => 'applications_count + 1',
-    });
-    
-    return saved;
+    // Incrémenter le compteur de candidatures
+    jobOffer.applicationsCount += 1;
+    await this.jobOfferRepository.save(jobOffer);
+
+    return { success: true, message: 'Candidature envoyée avec succès', application };
   }
 
-  async updateApplicationStatus(id: string, status: string, notes?: string): Promise<JobApplication> {
-    const application = await this.jobApplicationRepository.findOne({
-      where: { id },
+  async getApplicationsByJob(jobOfferId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+    const [data, total] = await this.applicationRepository.findAndCount({
+      where: { jobOfferId },
+      relations: ['user'],
+      order: { appliedAt: 'DESC' },
+      skip,
+      take: limit,
     });
-    
-    if (!application) {
-      throw new NotFoundException('Candidature non trouvée');
-    }
-    
-    application.status = status;
-    if (notes) application.notes = notes;
-    application.reviewedAt = new Date();
-    
-    return await this.jobApplicationRepository.save(application);
+
+    return { data, total, page, totalPages: Math.ceil(total / limit) };
+  }
+
+  async getUserApplications(userId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+    const [data, total] = await this.applicationRepository.findAndCount({
+      where: { userId },
+      relations: ['jobOffer'],
+      order: { appliedAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return { data, total, page, totalPages: Math.ceil(total / limit) };
+  }
+
+  async getApplicationById(id: string) {
+    const application = await this.applicationRepository.findOne({
+      where: { id },
+      relations: ['jobOffer', 'user'],
+    });
+    if (!application) throw new NotFoundException('Candidature non trouvée');
+    return application;
+  }
+
+  async updateApplicationStatus(id: string, status: string) {
+    await this.applicationRepository.update(id, { status });
+    return this.getApplicationById(id);
+  }
+
+  async getAllApplications(page: number = 1, limit: number = 10, status?: string) {
+    const skip = (page - 1) * limit;
+    const query: any = {};
+    if (status) query.status = status;
+
+    const [data, total] = await this.applicationRepository.findAndCount({
+      where: query,
+      relations: ['jobOffer', 'user'],
+      order: { appliedAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return { data, total, page, totalPages: Math.ceil(total / limit) };
   }
 }

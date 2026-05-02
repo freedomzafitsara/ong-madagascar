@@ -1,27 +1,29 @@
-// backend/src/modules/payments/payment.service.ts
+// backend/src/modules/payments/payments.service.ts (à compléter)
 import { Injectable } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
 
 @Injectable()
-export class PaymentService {
-  // 📱 MVola - Telma Madagascar
-  async payWithMVola(phoneNumber: string, amount: number): Promise<any> {
-    // API MVola (nécessite un compte marchand Telma)
-    // Documentation: https://developers.mvola.com
-    console.log(`Paiement MVola: ${phoneNumber} - ${amount} Ar`);
-    return { success: true, transactionId: 'MVOLA_' + Date.now() };
+export class PaymentsService {
+  constructor(private httpService: HttpService) {}
+
+  async processMVolaPayment(phoneNumber: string, amount: number, reference: string) {
+    // Intégration API MVola
+    const response = await this.httpService.post(`${process.env.MVOLA_API_URL}/payment`, {
+      phone_number: phoneNumber,
+      amount: amount,
+      currency: 'MGA',
+      reference: reference
+    }).toPromise();
+    return response.data;
   }
-  
-  // 📱 Orange Money
-  async payWithOrangeMoney(phoneNumber: string, amount: number): Promise<any> {
-    // API Orange Money (nécessite un compte marchand Orange)
-    console.log(`Paiement Orange Money: ${phoneNumber} - ${amount} Ar`);
-    return { success: true, transactionId: 'ORANGE_' + Date.now() };
+
+  async processOrangeMoneyPayment(phoneNumber: string, amount: number, reference: string) {
+    // Intégration Orange Money
+    // ...
   }
-  
-  // 💳 Paiement international (carte bancaire)
-  async payWithStripe(amount: number, currency: string, token: string): Promise<any> {
-    // Intégration Stripe pour les donateurs diaspora
-    console.log(`Paiement Stripe: ${amount} ${currency}`);
-    return { success: true, transactionId: 'STRIPE_' + Date.now() };
+
+  async processAirtelMoneyPayment(phoneNumber: string, amount: number, reference: string) {
+    // Intégration Airtel Money
+    // ...
   }
 }

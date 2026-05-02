@@ -1,12 +1,11 @@
-﻿// backend/src/modules/auth/auth.service.ts
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+﻿import { Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
-import { User, UserRole } from './entities/user.entity';
-import { RegisterDto, LoginDto, ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto, UpdateProfileDto } from './dto';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { User, UserRole } from '../../entities/user.entity';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
@@ -16,243 +15,112 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  // ========================================
-  // 1. INSCRIPTION
-  // ========================================
-  async register(registerDto: RegisterDto): Promise<{ user: Partial<User>; token: string }> {
-    // Vérifier si l'email existe déjà
+  async register(registerDto: RegisterDto) {
     const existingUser = await this.userRepository.findOne({
       where: { email: registerDto.email },
     });
-    
+
     if (existingUser) {
       throw new ConflictException('Cet email est déjà utilisé');
     }
-    
-    // Générer un token de vérification email
-    const emailVerificationToken = randomBytes(32).toString('hex');
-    
-    // Créer le nouvel utilisateur (rôle VISITOR par défaut)
+
     const user = this.userRepository.create({
-      firstName: registerDto.firstName,
-      lastName: registerDto.lastName,
-      email: registerDto.email,
-      password: registerDto.password,
-      phone: registerDto.phone,
-      role: UserRole.VISITOR,
-      emailVerificationToken,
-      isActive: true,
+      ...registerDto,
+      role: registerDto.role || UserRole.VISITOR,
     });
-    
+
     await this.userRepository.save(user);
-    
-    // Générer le token JWT
     const token = this.generateToken(user);
-    
-    // Retourner l'utilisateur sans le mot de passe
-    const { password, ...userWithoutPassword } = user;
-    
-    // TODO: Envoyer email de vérification
-    console.log(`📧 Email de vérification: ${process.env.FRONTEND_URL}/verify-email?token=${emailVerificationToken}`);
-    
-    return { user: userWithoutPassword, token };
+
+    return {
+      success: true,
+      message: 'Inscription réussie',
+      user: this.sanitizeUser(user),
+      token,
+    };
   }
 
-  // ========================================
-  // 2. CONNEXION
-  // ========================================
-  async login(loginDto: LoginDto, ipAddress?: string): Promise<{ user: Partial<User>; token: string }> {
+  async login(loginDto: LoginDto) {
     const user = await this.userRepository.findOne({
       where: { email: loginDto.email },
-      select: ['id', 'email', 'password', 'firstName', 'lastName', 'role', 'isActive', 'emailVerified'],
     });
-    
+
     if (!user) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
-    
-    // Vérifier le mot de passe
+
     const isPasswordValid = await user.comparePassword(loginDto.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
-    
-    // Vérifier si le compte est actif
+
     if (!user.isActive) {
-      throw new UnauthorizedException('Votre compte a été désactivé. Contactez l\'administrateur.');
+      throw new UnauthorizedException('Votre compte est désactivé');
     }
-    
-    // Mettre à jour la dernière connexion
-    user.lastLoginAt = new Date();
-    user.lastLoginIp = ipAddress;
+
+    user.lastLogin = new Date();
     await this.userRepository.save(user);
-    
-    // Générer le token
+
     const token = this.generateToken(user);
-    
-    const { password, ...userWithoutPassword } = user;
-    return { user: userWithoutPassword, token };
+
+    return {
+      success: true,
+      message: 'Connexion réussie',
+      user: this.sanitizeUser(user),
+      token,
+    };
   }
 
-  // ========================================
-  // 3. RÉINITIALISATION MOT DE PASSE
-  // ========================================
-  async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
-    const user = await this.userRepository.findOne({
-      where: { email: forgotPasswordDto.email },
-    });
-    
-    if (!user) {
-      // Pour des raisons de sécurité, on ne révèle pas si l'email existe
-      return { message: 'Si cet email existe, un lien de réinitialisation vous a été envoyé' };
-    }
-    
-    // Générer un token unique
-    const resetToken = randomBytes(32).toString('hex');
-    const resetExpires = new Date();
-    resetExpires.setHours(resetExpires.getHours() + 1); // Valable 1 heure
-    
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = resetExpires;
-    await this.userRepository.save(user);
-    
-    // TODO: Envoyer email avec lien de réinitialisation
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    console.log(`📧 Lien de réinitialisation: ${resetLink}`);
-    
-    return { message: 'Si cet email existe, un lien de réinitialisation vous a été envoyé' };
-  }
-
-  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    const user = await this.userRepository.findOne({
-      where: { 
-        resetPasswordToken: resetPasswordDto.token,
-      },
-    });
-    
-    if (!user || !user.resetPasswordExpires || user.resetPasswordExpires < new Date()) {
-      throw new BadRequestException('Token invalide ou expiré');
-    }
-    
-    // Mettre à jour le mot de passe
-    user.password = resetPasswordDto.newPassword;
-    user.resetPasswordToken = null;
-    user.resetPasswordExpires = null;
-    await this.userRepository.save(user);
-    
-    return { message: 'Mot de passe réinitialisé avec succès' };
-  }
-
-  // ========================================
-  // 4. CHANGEMENT DE MOT DE PASSE (Connecté)
-  // ========================================
-  async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<{ message: string }> {
+  async getProfile(userId: string) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      select: ['id', 'password'],
     });
-    
+
     if (!user) {
-      throw new UnauthorizedException('Utilisateur non trouvé');
+      throw new NotFoundException('Utilisateur non trouvé');
     }
-    
-    const isPasswordValid = await user.comparePassword(changePasswordDto.currentPassword);
+
+    return this.sanitizeUser(user);
+  }
+
+  async updateProfile(userId: string, updateData: any) {
+    await this.userRepository.update(userId, updateData);
+    return this.getProfile(userId);
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    const isPasswordValid = await user.comparePassword(currentPassword);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Mot de passe actuel incorrect');
     }
-    
-    user.password = changePasswordDto.newPassword;
+
+    user.password = await bcrypt.hash(newPassword, 10);
     await this.userRepository.save(user);
-    
-    return { message: 'Mot de passe modifié avec succès' };
+
+    return { success: true, message: 'Mot de passe changé avec succès' };
   }
 
-  // ========================================
-  // 5. MODIFICATION DU PROFIL
-  // ========================================
-  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto): Promise<Partial<User>> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    
-    if (!user) {
-      throw new UnauthorizedException('Utilisateur non trouvé');
-    }
-    
-    Object.assign(user, updateProfileDto);
-    await this.userRepository.save(user);
-    
-    const { password, ...result } = user;
-    return result;
-  }
-
-  // ========================================
-  // 6. VÉRIFICATION EMAIL
-  // ========================================
-  async verifyEmail(token: string): Promise<{ message: string }> {
-    const user = await this.userRepository.findOne({
-      where: { emailVerificationToken: token },
-    });
-    
-    if (!user) {
-      throw new BadRequestException('Token invalide');
-    }
-    
-    user.emailVerified = true;
-    user.emailVerificationToken = null;
-    await this.userRepository.save(user);
-    
-    return { message: 'Email vérifié avec succès' };
-  }
-
-  // ========================================
-  // 7. GESTION DES RÔLES (Admin uniquement)
-  // ========================================
-  async updateUserRole(userId: string, newRole: UserRole, adminId: string): Promise<User> {
-    // Vérifier que l'admin a les droits
-    const admin = await this.userRepository.findOne({ where: { id: adminId } });
-    if (!admin || admin.role !== UserRole.SUPER_ADMIN) {
-      throw new UnauthorizedException('Seul un Super Admin peut modifier les rôles');
-    }
-    
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new UnauthorizedException('Utilisateur non trouvé');
-    }
-    
-    user.role = newRole;
-    await this.userRepository.save(user);
-    
-    return user;
-  }
-
-  // ========================================
-  // 8. UTILITAIRES
-  // ========================================
   private generateToken(user: User): string {
-    const payload = { 
-      sub: user.id, 
-      email: user.email, 
+    const payload = {
+      sub: user.id,
+      email: user.email,
       role: user.role,
       firstName: user.firstName,
       lastName: user.lastName,
     };
-    return this.jwtService.sign(payload, { expiresIn: '7d' });
+    return this.jwtService.sign(payload);
   }
 
-  async getProfile(userId: string): Promise<Partial<User>> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new UnauthorizedException('Utilisateur non trouvé');
-    }
-    
-    const { password, ...result } = user;
-    return result;
-  }
-
-  async getAllUsers(): Promise<Partial<User>[]> {
-    const users = await this.userRepository.find({
-      order: { createdAt: 'DESC' },
-    });
-    
-    return users.map(({ password, ...user }) => user);
+  private sanitizeUser(user: User) {
+    const { password, ...sanitized } = user;
+    return sanitized;
   }
 }

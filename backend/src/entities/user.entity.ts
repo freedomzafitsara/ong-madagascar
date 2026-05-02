@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, OneToOne } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, BeforeInsert } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
@@ -7,7 +8,7 @@ export enum UserRole {
   MEMBER = 'member',
   VOLUNTEER = 'volunteer',
   PARTNER = 'partner',
-  VISITOR = 'visitor'
+  VISITOR = 'visitor',
 }
 
 @Entity('users')
@@ -21,45 +22,47 @@ export class User {
   @Column()
   password: string;
 
-  @Column({ name: 'first_name', nullable: true })
+  @Column()
   firstName: string;
 
-  @Column({ name: 'last_name', nullable: true })
+  @Column()
   lastName: string;
 
   @Column({ nullable: true })
   phone: string;
 
-  @Column({ type: 'enum', enum: UserRole, default: UserRole.VISITOR })
-  role: UserRole;
+  @Column({ nullable: true })
+  photo: string;  // ← URL de la photo de profil
+
+  @Column({ nullable: true })
+  bio: string;
 
   @Column({ nullable: true })
   region: string;
 
-  @Column({ default: 'fr' })
-  language: string;
+  @Column({ type: 'varchar', default: UserRole.VISITOR })
+  role: string;
 
-  @Column({ name: 'profile_image_url', nullable: true })
-  profileImageUrl: string;
-
-  @Column({ type: 'text', nullable: true })
-  bio: string;
-
-  @Column({ type: 'jsonb', nullable: true })
-  socialLinks: object;
-
-  @Column({ name: 'is_active', default: true })
+  @Column({ default: true })
   isActive: boolean;
 
-  @Column({ name: 'email_verified', default: false })
-  emailVerified: boolean;
-
-  @Column({ name: 'last_login', type: 'timestamp', nullable: true })
+  @Column({ nullable: true })
   lastLogin: Date;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn()
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn()
   updatedAt: Date;
+
+  @BeforeInsert()
+  async hashPassword() {
+    if (this.password) {
+      this.password = await bcrypt.hash(this.password, 10);
+    }
+  }
+
+  async comparePassword(attempt: string): Promise<boolean> {
+    return bcrypt.compare(attempt, this.password);
+  }
 }

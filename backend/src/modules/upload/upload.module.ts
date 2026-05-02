@@ -1,8 +1,8 @@
-﻿// backend/src/modules/upload/upload.module.ts
-import { Module } from '@nestjs/common';
-import { UploadController } from './upload.controller';
+﻿import { Module } from '@nestjs/common';
+import { UploadService } from './upload.service';
 
 @Module({
-  controllers: [UploadController],
+  providers: [UploadService],
+  exports: [UploadService],  // ← IMPORTANT: exporter le service
 })
 export class UploadModule {}

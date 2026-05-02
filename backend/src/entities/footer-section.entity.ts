@@ -1,5 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
-import { FooterLink } from './footer-link.entity';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('footer_sections')
 export class FooterSection {
@@ -9,18 +8,9 @@ export class FooterSection {
   @Column()
   title: string;
 
-  @Column({ default: 0 })
-  order: number;
+  @Column({ nullable: true })
+  title_mg: string;
 
-  @Column({ default: true })
-  is_active: boolean;
-
-  @OneToMany(() => FooterLink, (link) => link.section)
-  links: FooterLink[];
-
-  @CreateDateColumn()
-  created_at: Date;
-
-  @UpdateDateColumn()
-  updated_at: Date;
+  @Column({ name: 'order_num', default: 0 })
+  orderNum: number;
 }

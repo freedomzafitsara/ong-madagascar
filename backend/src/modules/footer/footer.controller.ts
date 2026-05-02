@@ -1,5 +1,4 @@
-﻿// backend/src/modules/footer/footer.controller.ts
-import { Controller, Get } from '@nestjs/common';
+﻿import { Controller, Get } from '@nestjs/common';
 import { FooterService } from './footer.service';
 
 @Controller('footer')

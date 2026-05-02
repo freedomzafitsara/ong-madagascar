@@ -1,11 +1,25 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { User } from './user.entity';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
+// ✅ Exporter les enums
 export enum MembershipStatus {
   PENDING = 'pending',
   ACTIVE = 'active',
   EXPIRED = 'expired',
-  SUSPENDED = 'suspended'
+  SUSPENDED = 'suspended',
+}
+
+export enum MembershipType {
+  STANDARD = 'standard',
+  PREMIUM = 'premium',
+  STUDENT = 'student',
+  HONORARY = 'honorary',
+}
+
+export enum PaymentMethod {
+  MVOLA = 'mvola',
+  ORANGE_MONEY = 'orange_money',
+  AIRTEL = 'airtel',
+  BANK = 'bank',
 }
 
 @Entity('members')
@@ -13,40 +27,45 @@ export class Member {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'member_number', unique: true })
+  @Column({ name: 'memberNumber', unique: true })
   memberNumber: string;
 
-  @Column({ name: 'membership_type', default: 'standard' })
+  @Column({ name: 'userId' })
+  userId: string;
+
+  @Column({ type: 'varchar', default: MembershipStatus.PENDING })
+  status: string;
+
+  @Column({ name: 'membershipType', type: 'varchar' })
   membershipType: string;
 
-  @Column({ type: 'enum', enum: MembershipStatus, default: MembershipStatus.PENDING })
-  status: MembershipStatus;
-
-  @Column({ name: 'start_date', type: 'date', default: () => 'CURRENT_DATE' })
+  @Column({ name: 'startDate', type: 'date' })
   startDate: Date;
 
-  @Column({ name: 'end_date', type: 'date' })
-  endDate: Date;
+  @Column({ name: 'expiryDate', type: 'date' })
+  expiryDate: Date;
 
-  @Column({ name: 'payment_method', nullable: true })
+  @Column({ name: 'amountPaid', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  amountPaid: number;
+
+  @Column({ name: 'paymentMethod', nullable: true })
   paymentMethod: string;
 
-  @Column({ name: 'payment_amount', type: 'decimal', precision: 15, scale: 2, nullable: true })
-  paymentAmount: number;
+  @Column({ name: 'transactionId', nullable: true })
+  transactionId: string;
 
-  @Column({ name: 'card_url', nullable: true })
+  @Column({ name: 'cardUrl', nullable: true, type: 'text' })
   cardUrl: string;
 
-  @Column({ name: 'qr_code', nullable: true })
+  @Column({ name: 'qrCode', nullable: true, type: 'text' })
   qrCode: string;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'user_id' })
-  user: User;
+  @Column({ name: 'qrCodeData', nullable: true, type: 'text' })
+  qrCodeData: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'createdAt' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updatedAt' })
   updatedAt: Date;
 }
