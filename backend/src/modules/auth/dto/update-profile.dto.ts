@@ -1,16 +1,14 @@
-import { IsOptional, IsString, IsEmail } from 'class-validator';
+import { IsOptional, IsString, IsEmail, MinLength, MaxLength } from 'class-validator';
 
 export class UpdateProfileDto {
   @IsOptional()
-  @IsEmail()
-  email?: string;
-
-  @IsOptional()
   @IsString()
+  @MinLength(2)
   firstName?: string;
 
   @IsOptional()
   @IsString()
+  @MinLength(2)
   lastName?: string;
 
   @IsOptional()
@@ -19,13 +17,11 @@ export class UpdateProfileDto {
 
   @IsOptional()
   @IsString()
-  bio?: string;
-
-  @IsOptional()
-  @IsString()
   region?: string;
 
   @IsOptional()
   @IsString()
-  photo?: string;
+  @MinLength(10)
+  @MaxLength(500)
+  bio?: string;
 }

@@ -20,6 +20,12 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
+    if (!email || !password) {
+      setError('Veuillez remplir tous les champs');
+      setLoading(false);
+      return;
+    }
+
     try {
       await login(email, password);
       console.log('✅ Connexion réussie');
@@ -37,6 +43,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8">
+        {/* Bouton retour */}
         <div className="mb-6">
           <Link href="/" className="inline-flex items-center text-gray-500 hover:text-blue-600 transition">
             <ArrowLeft className="w-4 h-4 mr-1" />
@@ -44,6 +51,7 @@ export default function LoginPage() {
           </Link>
         </div>
 
+        {/* En-tête */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Mail className="w-8 h-8 text-blue-600" />
@@ -52,6 +60,7 @@ export default function LoginPage() {
           <p className="text-gray-500 mt-2">Connectez-vous à votre compte Y-Mad</p>
         </div>
 
+        {/* Message d'erreur */}
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-2">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -59,7 +68,9 @@ export default function LoginPage() {
           </div>
         )}
 
+        {/* Formulaire */}
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Champ Email */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Adresse email *</label>
             <div className="relative">
@@ -70,12 +81,13 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                placeholder="admin@ymad.mg"
+                placeholder="exemple@ymad.mg"
                 autoComplete="email"
               />
             </div>
           </div>
 
+          {/* Champ Mot de passe */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe *</label>
             <div className="relative">
@@ -99,16 +111,29 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Options supplémentaires */}
           <div className="flex items-center justify-between">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+              <input 
+                type="checkbox" 
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    localStorage.setItem('savedEmail', email);
+                  } else {
+                    localStorage.removeItem('savedEmail');
+                  }
+                }}
+              />
               <span className="text-sm text-gray-600">Se souvenir de moi</span>
             </label>
+            {/* ✅ LIEN MOT DE PASSE OUBLIÉ */}
             <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
               Mot de passe oublié ?
             </Link>
           </div>
 
+          {/* Bouton de connexion */}
           <button
             type="submit"
             disabled={loading}
@@ -125,6 +150,7 @@ export default function LoginPage() {
           </button>
         </form>
 
+        {/* Lien vers l'inscription */}
         <div className="mt-6 text-center">
           <p className="text-gray-600">
             Pas encore de compte ?{' '}
@@ -132,15 +158,6 @@ export default function LoginPage() {
               S'inscrire
             </Link>
           </p>
-        </div>
-
-        {/* Compte de test - MIS À JOUR */}
-        <div className="mt-6 pt-4 border-t border-gray-200">
-          <p className="text-xs text-gray-400 text-center mb-2">🔐 Compte administrateur unique</p>
-          <div className="text-xs text-gray-400 text-center">
-            <p>Email: <span className="font-mono font-semibold">admin@ymad.mg</span></p>
-            <p>Mot de passe: <span className="font-mono font-semibold">Admin123!</span></p>
-          </div>
         </div>
       </div>
     </div>

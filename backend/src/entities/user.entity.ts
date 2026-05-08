@@ -1,4 +1,7 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, BeforeInsert } from 'typeorm';
+import { 
+  Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, 
+  UpdateDateColumn, BeforeInsert, Index 
+} from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
 export enum UserRole {
@@ -12,6 +15,8 @@ export enum UserRole {
 }
 
 @Entity('users')
+@Index(['email'])
+@Index(['role'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -19,7 +24,7 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  @Column({ select: false })
   password: string;
 
   @Column({ name: 'first_name' })
@@ -34,7 +39,7 @@ export class User {
   @Column({ nullable: true })
   photo: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, type: 'text' })
   bio: string;
 
   @Column({ nullable: true })
@@ -49,12 +54,26 @@ export class User {
   @Column({ name: 'last_login', nullable: true })
   lastLogin: Date;
 
-  // 🔐 NOUVEAUX CHAMPS POUR MOT DE PASSE OUBLIÉ
+  @Column({ name: 'last_ip', nullable: true })
+  lastIp: string;
+
+  @Column({ name: 'login_attempts', default: 0 })
+  loginAttempts: number;
+
+  @Column({ name: 'locked_until', nullable: true })
+  lockedUntil: Date;
+
   @Column({ name: 'reset_password_token', nullable: true })
   resetPasswordToken: string;
 
   @Column({ name: 'reset_password_expires', nullable: true })
   resetPasswordExpires: Date;
+
+  @Column({ name: 'email_verified', default: false })
+  emailVerified: boolean;
+
+  @Column({ name: 'verification_token', nullable: true })
+  verificationToken: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
@@ -65,25 +84,32 @@ export class User {
   @BeforeInsert()
   async hashPassword() {
     if (this.password) {
-      console.log('🔐 HASH - Mot de passe original:', this.password);
-      this.password = await bcrypt.hash(this.password, 10);
-      console.log('🔐 HASH - Hash généré:', this.password);
+      const saltRounds = this.role === UserRole.SUPER_ADMIN ? 12 : 10;
+      this.password = await bcrypt.hash(this.password, saltRounds);
+      console.log('🔐 Hash généré pour:', this.email);
     }
   }
 
   async comparePassword(attempt: string): Promise<boolean> {
-    console.log('═══════════════════════════════════════════════');
-    console.log('🔐 COMPARE - Vérification du mot de passe');
-    console.log('🔐 COMPARE - Mot de passe saisi par l\'utilisateur:', attempt);
-    console.log('🔐 COMPARE - Hash stocké dans la base de données:', this.password);
-    console.log('🔐 COMPARE - Longueur du hash:', this.password?.length);
-    console.log('🔐 COMPARE - Début du hash:', this.password?.substring(0, 20));
+    return bcrypt.compare(attempt, this.password);
+  }
+
+  isLocked(): boolean {
+    return this.lockedUntil && this.lockedUntil > new Date();
+  }
+
+  incrementLoginAttempts(): void {
+    this.loginAttempts += 1;
+    const maxAttempts = this.role === UserRole.SUPER_ADMIN ? 3 : 5;
+    const lockDuration = this.role === UserRole.SUPER_ADMIN ? 60 : 30;
     
-    const result = await bcrypt.compare(attempt, this.password);
-    
-    console.log('🔐 COMPARE - Résultat de bcrypt.compare():', result);
-    console.log('═══════════════════════════════════════════════');
-    
-    return result;
+    if (this.loginAttempts >= maxAttempts) {
+      this.lockedUntil = new Date(Date.now() + lockDuration * 60 * 1000);
+    }
+  }
+
+  resetLoginAttempts(): void {
+    this.loginAttempts = 0;
+    this.lockedUntil = null;
   }
 }

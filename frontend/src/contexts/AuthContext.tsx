@@ -3,11 +3,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authService, User } from '@/services/authService';
 
+export type UserRole = 'super_admin' | 'admin' | 'staff' | 'member' | 'volunteer' | 'partner' | 'visitor';
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  hasRole: (roles: UserRole | UserRole[]) => boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => void;
@@ -38,25 +41,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const userData = await authService.getProfile();
           setUser(userData);
-          console.log('✅ Auth initialisé:', userData.email);
+          console.log('✅ Auth init - Rôle:', userData.role);
         } catch (error) {
-          console.error('Erreur chargement profil:', error);
+          console.error('Erreur:', error);
           authService.logout();
-          setToken(null);
-          setUser(null);
         }
       }
       setIsLoading(false);
     };
-
     initAuth();
   }, []);
+
+  const hasRole = (roles: UserRole | UserRole[]): boolean => {
+    if (!user) return false;
+    const userRole = user.role as UserRole;
+    const roleHierarchy: Record<UserRole, number> = {
+      super_admin: 100,
+      admin: 80,
+      staff: 60,
+      member: 40,
+      volunteer: 30,
+      partner: 20,
+      visitor: 10,
+    };
+    
+    if (Array.isArray(roles)) {
+      return roles.some(role => roleHierarchy[userRole] >= roleHierarchy[role]);
+    }
+    return roleHierarchy[userRole] >= roleHierarchy[roles];
+  };
 
   const login = async (email: string, password: string) => {
     const response = await authService.login(email, password);
     setUser(response.user);
     setToken(response.token);
-    console.log('✅ Connexion réussie:', response.user.email);
   };
 
   const register = async (data: any) => {
@@ -84,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         isLoading,
         isAuthenticated: !!user && !!token,
+        hasRole,
         login,
         register,
         logout,
