@@ -6,7 +6,8 @@ import {
   ArrowRight, Heart, Users, Globe, MapPin, Award,
   Target, HandHeart, GraduationCap, Leaf, ChevronRight, Eye,
   Sparkles, Play, Quote, Mail, Shield, TrendingUp, Gift,
-  Building, Calendar, Star, BookOpen, Briefcase, Clock
+  Building, Calendar, Star, BookOpen, Briefcase, Clock,
+  Facebook, Instagram, Twitter, Linkedin, Youtube, Phone
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -199,6 +200,15 @@ export default function HomePage() {
     { icon: Shield, titleFr: 'Transparence', titleMg: 'Fahamarinana', descFr: 'Toutes nos actions sont documentées', descMg: 'Ny hetsika rehetra dia voarakitra' },
     { icon: TrendingUp, titleFr: 'Innovation', titleMg: 'Fanavaozana', descFr: 'Solutions nouvelles pour Madagascar', descMg: 'Vahaolana vaovao ho an\'i Madagasikara' },
     { icon: Award, titleFr: 'Impact mesurable', titleMg: 'Vokatra azo refesina', descFr: 'Indicateurs clairs et vérifiables', descMg: 'Mari-pamantarana mazava sy azo hamarinina' },
+  ];
+
+  // Réseaux sociaux
+  const socialLinks = [
+    { icon: Facebook, href: 'https://facebook.com/ymadorg', label: 'Facebook', bg: '#1877F2' },
+    { icon: Instagram, href: 'https://instagram.com/ymad_mg', label: 'Instagram', bg: '#E4405F' },
+    { icon: Linkedin, href: 'https://linkedin.com/company/ymad', label: 'LinkedIn', bg: '#0A66C2' },
+    { icon: Twitter, href: 'https://twitter.com/ymad_mg', label: 'Twitter', bg: '#1DA1F2' },
+    { icon: Youtube, href: 'https://youtube.com/@ymad', label: 'YouTube', bg: '#FF0000' },
   ];
 
   if (loading) {
@@ -487,6 +497,33 @@ export default function HomePage() {
             <Link href="/volunteers" className="inline-flex items-center gap-2 border-2 border-white/30 px-8 py-3 rounded-full font-semibold hover:bg-white/10 transition">
               <HandHeart className="w-5 h-5" /> {language === 'fr' ? 'Devenir bénévole' : 'Mpanao asa soa'}
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ==================== RÉSEAUX SOCIAUX ==================== */}
+      <section className="py-12 bg-gray-50">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <h3 className="text-lg font-semibold text-gray-700 mb-4">
+            {language === 'fr' ? 'Suivez-nous sur les réseaux' : 'Araho izahay amin\'ny tambajotra sosialy'}
+          </h3>
+          <div className="flex justify-center gap-4">
+            {socialLinks.map((social, idx) => {
+              const Icon = social.icon;
+              return (
+                <a
+                  key={idx}
+                  href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg"
+                  style={{ backgroundColor: social.bg }}
+                  aria-label={social.label}
+                >
+                  <Icon className="w-5 h-5 text-white" />
+                </a>
+              );
+            })}
           </div>
         </div>
       </section>

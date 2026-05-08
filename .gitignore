@@ -1,49 +1,39 @@
-# Dependencies
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-package-lock.json
-
-# Environment variables
+# Environnement
 .env
 .env.local
 .env.production
 .env.*.local
 
-# Build outputs
+# Dépendances
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Builds
 dist/
 build/
 .next/
 out/
-.vercel
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# OS
-Thumbs.db
-Desktop.ini
-
-# Docker
-*.pid
-docker-compose.override.yml
 
 # Logs
 logs/
 *.log
-npm-debug.log*
 
-# Testing
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Tests
 coverage/
-.nyc_output/
 
-# Temporary files
-tmp/
-temp/
+# Temp
 *.tmp
+*.temp
+.cache/

@@ -1,6 +1,8 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { 
+  Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, 
+  ManyToOne, JoinColumn, Index 
+} from 'typeorm';
 import { JobOffer } from './job-offer.entity';
-import { User } from './user.entity';
 
 export enum ApplicationStatus {
   SUBMITTED = 'submitted',
@@ -12,54 +14,59 @@ export enum ApplicationStatus {
 }
 
 @Entity('job_applications')
+@Index(['email'])
+@Index(['status'])
+@Index(['jobOfferId', 'email'], { unique: true })
 export class JobApplication {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ name: 'job_offer_id' })
   jobOfferId: string;
 
   @ManyToOne(() => JobOffer)
-  @JoinColumn({ name: 'jobOfferId' })
+  @JoinColumn({ name: 'job_offer_id' })
   jobOffer: JobOffer;
 
-  @Column({ nullable: true })
+  @Column({ name: 'user_id', nullable: true })
   userId: string;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'userId' })
-  user: User;
-
-  @Column()
+  @Column({ name: 'full_name' })
   fullName: string;
 
   @Column()
   email: string;
 
-  @Column('text')
-  address: string;
-
   @Column({ nullable: true })
   phone: string;
 
-  @Column({ nullable: true })
+  @Column('text')
+  address: string;
+
+  @Column('text', { nullable: true })
   experience: string;
 
   @Column('text', { nullable: true })
-  coverLetter: string;
+  cover_letter: string;
 
   @Column({ nullable: true })
-  cvUrl: string;
+  photo_url: string;
+
+  @Column()
+  cv_url: string;
 
   @Column({ nullable: true })
-  diplomaUrl: string;
+  diploma_url: string;
 
   @Column({ nullable: true })
-  photoUrl: string;
+  attestation_url: string;
 
   @Column({ type: 'varchar', default: ApplicationStatus.SUBMITTED })
   status: string;
 
-  @CreateDateColumn()
-  appliedAt: Date;
+  @Column('text', { nullable: true })
+  notes: string;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 }

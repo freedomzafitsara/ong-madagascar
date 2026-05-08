@@ -1,145 +1,140 @@
-﻿import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UploadedFiles, UseInterceptors } from '@nestjs/common';
+﻿import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, Req } from '@nestjs/common';
 import { JobsService } from './jobs.service';
-import { CreateJobOfferDto, UpdateJobOfferDto, UpdateJobStatusDto } from './dto/job-offer.dto';
-import { CreateJobApplicationDto, UpdateApplicationStatusDto } from './dto/job-application.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { CreateJobOfferDto } from './dto/create-job-offer.dto';
+import { UpdateJobOfferDto } from './dto/update-job-offer.dto';
+import { CreateJobApplicationDto } from './dto/create-job-application.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { UserRole } from '../../entities/user.entity';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { JobStatus } from '../../entities/job-offer.entity';
+import { ApplicationStatus } from '../../entities/job-application.entity';
+
+interface RequestWithUser extends Request {
+  user: {
+    sub: string;
+    email: string;
+    role: string;
+    firstName: string;
+    lastName: string;
+  };
+}
 
 @Controller('jobs')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
-  // ==================== OFFRES D'EMPLOI (PUBLIC) ====================
+  // ========== OFFRES D'EMPLOI ==========
+
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF, UserRole.PARTNER)
+  @Post('offers')
+  async createOffer(@Body() createDto: CreateJobOfferDto, @Req() req: RequestWithUser) {
+    return this.jobsService.createOffer(createDto, req.user.sub);
+  }
 
   @Public()
   @Get('offers')
   async findAllOffers(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('status') status?: string,
     @Query('jobType') jobType?: string,
     @Query('sector') sector?: string,
     @Query('region') region?: string,
     @Query('search') search?: string,
   ) {
-    return this.jobsService.findAllJobOffers(page, limit, jobType, sector, region, search);
+    return this.jobsService.findAllOffers(parseInt(page), parseInt(limit), status, jobType, sector, region, search);
   }
 
   @Public()
   @Get('offers/featured')
-  async findFeaturedOffers() {
-    return this.jobsService.findFeaturedJobOffers();
+  async getFeaturedOffers() {
+    return this.jobsService.getFeaturedOffers();
+  }
+
+  @Public()
+  @Get('offers/stats')
+  async getStats() {
+    return this.jobsService.getStats();
   }
 
   @Public()
   @Get('offers/:id')
-  async findOfferById(@Param('id') id: string) {
-    return this.jobsService.findJobOfferById(id);
+  async findOneOffer(@Param('id') id: string) {
+    return this.jobsService.findOneOffer(id);
   }
 
-  // ==================== OFFRES D'EMPLOI (ADMIN) ====================
-
-  @Post('offers')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.PARTNER)
-  async createJobOffer(@Body() createJobOfferDto: CreateJobOfferDto, @CurrentUser() user: any) {
-    return this.jobsService.createJobOffer(createJobOfferDto, user.id);
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF, UserRole.PARTNER)
+  @Patch('offers/:id')
+  async updateOffer(
+    @Param('id') id: string,
+    @Body() updateDto: UpdateJobOfferDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.jobsService.updateOffer(id, updateDto, req.user.role, req.user.sub);
   }
 
-  @Put('offers/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async updateJobOffer(@Param('id') id: string, @Body() updateJobOfferDto: UpdateJobOfferDto) {
-    return this.jobsService.updateJobOffer(id, updateJobOfferDto);
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Patch('offers/:id/status')
+  async updateOfferStatus(
+    @Param('id') id: string,
+    @Body('status') status: JobStatus,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.jobsService.updateOfferStatus(id, status, req.user.role);
   }
 
-  @Put('offers/:id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async updateJobOfferStatus(@Param('id') id: string, @Body() updateStatusDto: UpdateJobStatusDto) {
-    return this.jobsService.updateJobOfferStatus(id, updateStatusDto.status);
-  }
-
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Delete('offers/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async deleteJobOffer(@Param('id') id: string) {
-    return this.jobsService.deleteJobOffer(id);
+  async deleteOffer(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.jobsService.deleteOffer(id, req.user.role);
   }
 
-  @Get('offers/stats/all')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async getJobOffersStats() {
-    return this.jobsService.getJobOffersStats();
-  }
-
-  // ==================== CANDIDATURES ====================
+  // ========== CANDIDATURES ==========
 
   @Public()
   @Post('apply')
-  @UseInterceptors(FilesInterceptor('files'))
-  async applyToJob(
-    @Body() createApplicationDto: CreateJobApplicationDto,
-    @UploadedFiles() files: Express.Multer.File[],
-  ) {
-    const cvFile = files?.find(f => f.fieldname === 'cv');
-    const photoFile = files?.find(f => f.fieldname === 'photo');
-    const diplomaFile = files?.find(f => f.fieldname === 'diploma');
-    
-    return this.jobsService.applyToJob(createApplicationDto, null, cvFile, photoFile, diplomaFile);
+  async apply(@Body() createDto: CreateJobApplicationDto) {
+    return this.jobsService.apply(createDto);
   }
 
   @Post('apply/auth')
-  @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FilesInterceptor('files'))
-  async applyToJobAuth(
-    @Body() createApplicationDto: CreateJobApplicationDto,
-    @CurrentUser() user: any,
-    @UploadedFiles() files: Express.Multer.File[],
-  ) {
-    const cvFile = files?.find(f => f.fieldname === 'cv');
-    const photoFile = files?.find(f => f.fieldname === 'photo');
-    const diplomaFile = files?.find(f => f.fieldname === 'diploma');
-    
-    return this.jobsService.applyToJob(createApplicationDto, user.id, cvFile, photoFile, diplomaFile);
+  async applyAuth(@Body() createDto: CreateJobApplicationDto, @Req() req: RequestWithUser) {
+    return this.jobsService.apply(createDto, req.user.sub);
   }
 
-  @Get('applications/my')
-  @UseGuards(JwtAuthGuard)
-  async getMyApplications(@CurrentUser() user: any, @Query('page') page: number = 1, @Query('limit') limit: number = 10) {
-    return this.jobsService.getUserApplications(user.id, page, limit);
-  }
-
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   @Get('offers/:id/applications')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async getJobApplications(@Param('id') id: string, @Query('page') page: number = 1, @Query('limit') limit: number = 10) {
-    return this.jobsService.getApplicationsByJob(id, page, limit);
+  async getApplicationsByOffer(@Param('id') id: string) {
+    return this.jobsService.getApplicationsByOffer(id);
   }
 
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   @Get('applications/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   async getApplicationById(@Param('id') id: string) {
     return this.jobsService.getApplicationById(id);
   }
 
-  @Put('applications/:id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async updateApplicationStatus(@Param('id') id: string, @Body() updateStatusDto: UpdateApplicationStatusDto) {
-    return this.jobsService.updateApplicationStatus(id, updateStatusDto.status);
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  @Patch('applications/:id/status')
+  async updateApplicationStatus(
+    @Param('id') id: string,
+    @Body('status') status: ApplicationStatus,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.jobsService.updateApplicationStatus(id, status, req.user.role);
   }
 
+  @Get('applications/my')
+  async getMyApplications(@Req() req: RequestWithUser) {
+    return this.jobsService.getMyApplications(req.user.sub);
+  }
+
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Get('applications/all')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async getAllApplications(@Query('page') page: number = 1, @Query('limit') limit: number = 10, @Query('status') status?: string) {
-    return this.jobsService.getAllApplications(page, limit, status);
+  async getAllApplications() {
+    return this.jobsService.getApplicationsByOffer('');
   }
 }

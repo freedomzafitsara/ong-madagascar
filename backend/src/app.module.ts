@@ -79,9 +79,9 @@ import { FooterLegalLink } from './modules/footer/entities/footer-legal-link.ent
     MembersModule,
     DonationsModule,
     EventsModule,
-    JobsModule,
+    JobsModule,      // ✅ Module emploi
     BlogModule,
-    UploadModule,  // ← Module pour l'upload de fichiers
+    UploadModule,
   ],
   providers: [
     {

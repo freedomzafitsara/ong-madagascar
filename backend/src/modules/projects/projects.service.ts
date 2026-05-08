@@ -1,29 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
-import { Project } from '../../entities/project.entity';
-
-// Interface DTO définie directement dans le fichier
-export interface CreateProjectDto {
-  title: string;
-  title_mg?: string;
-  description: string;
-  description_mg?: string;
-  location?: string;
-  category?: string;
-  region?: string;
-  status?: string;
-  budget?: number;
-  beneficiaries_count?: number;
-  youth_impact?: number;
-  jobs_created?: number;
-  progress?: number;
-  start_date?: Date;
-  end_date?: Date;
-  image_url?: string;
-  gallery_images?: string[];
-  is_featured?: boolean;
-}
+import { Project, ProjectStatus } from '../../entities/project.entity';
+import { CreateProjectDto } from './dto/create-project.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
 
 @Injectable()
 export class ProjectsService {
@@ -32,95 +12,123 @@ export class ProjectsService {
     private projectRepository: Repository<Project>,
   ) {}
 
-  async findAll(page: number = 1, limit: number = 9, search?: string, category?: string, region?: string) {
-    const skip = (page - 1) * limit;
-    
-    const query: any = { status: 'active' };
-    
-    if (search) {
-      query.title = Like(`%${search}%`);
-    }
-    
-    if (category) {
-      query.category = category;
-    }
-    
-    if (region) {
-      query.region = region;
-    }
-
-    const [data, total] = await this.projectRepository.findAndCount({
-      where: query,
-      order: { created_at: 'DESC' },
-      skip,
-      take: limit,
-    });
-
-    return { data, total };
-  }
-
-  async findFeatured() {
-    return this.projectRepository.find({
-      where: { is_featured: true, status: 'active' },
-      order: { created_at: 'DESC' },
-      take: 3,
-    });
-  }
-
-  async findOne(id: string) {
-    const project = await this.projectRepository.findOne({
-      where: { id },
-    });
-    
-    if (!project) {
-      throw new NotFoundException(`Projet avec l'ID ${id} non trouvé`);
-    }
-    
-    return project;
-  }
-
-  async create(createProjectDto: CreateProjectDto, managerId: string) {
+  async create(createProjectDto: CreateProjectDto, userId: string): Promise<Project> {
     const project = this.projectRepository.create({
       ...createProjectDto,
-      manager_id: managerId,
+      managerId: userId, // ✅ Utilise managerId (string) pas manager
     });
     return this.projectRepository.save(project);
   }
 
-  async update(id: string, updateProjectDto: Partial<CreateProjectDto>) {
+  async findAll(
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+    region?: string,
+    search?: string,
+  ): Promise<{ data: Project[]; total: number; page: number; totalPages: number }> {
+    const skip = (page - 1) * limit;
+    const query: any = {};
+
+    if (status && status !== 'all') query.status = status;
+    if (region && region !== 'all') query.region = region;
+    if (search) query.title = Like(`%${search}%`);
+
+    // ✅ Simplifier la requête sans jointure problématique
+    const [data, total] = await this.projectRepository.findAndCount({
+      where: query,
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async findOne(id: string): Promise<Project> {
+    const project = await this.projectRepository.findOne({
+      where: { id },
+    });
+    if (!project) throw new NotFoundException('Projet non trouvé');
+    return project;
+  }
+
+  async update(id: string, updateProjectDto: UpdateProjectDto, userRole: string, userId: string): Promise<Project> {
+    const project = await this.findOne(id);
+
+    if (userRole !== 'super_admin' && userRole !== 'admin' && project.managerId !== userId) {
+      throw new ForbiddenException('Vous ne pouvez pas modifier ce projet');
+    }
+
     await this.projectRepository.update(id, updateProjectDto);
     return this.findOne(id);
   }
 
-  async updateProgress(id: string, progress: number) {
+  async updateProgress(id: string, progress: number, userRole: string, userId: string): Promise<Project> {
+    const project = await this.findOne(id);
+
+    if (userRole !== 'super_admin' && userRole !== 'admin' && project.managerId !== userId) {
+      throw new ForbiddenException('Vous ne pouvez pas modifier ce projet');
+    }
+
     await this.projectRepository.update(id, { progress });
     return this.findOne(id);
   }
 
-  async remove(id: string) {
-    await this.projectRepository.update(id, { status: 'archived' });
-    return { message: 'Projet archivé avec succès' };
+  async delete(id: string, userRole: string): Promise<void> {
+    if (userRole !== 'super_admin' && userRole !== 'admin') {
+      throw new ForbiddenException('Seul un administrateur peut supprimer un projet');
+    }
+    await this.projectRepository.delete(id);
   }
 
-  async getStats() {
-    const total = await this.projectRepository.count({ where: { status: 'active' } });
-    const completed = await this.projectRepository.count({ where: { status: 'completed' } });
-    
-    const beneficiariesResult = await this.projectRepository
-      .createQueryBuilder('project')
-      .select('SUM(project.beneficiaries_count)', 'total')
-      .getRawOne();
+  async getFeatured(): Promise<Project[]> {
+    return this.projectRepository.find({
+      where: { is_featured: true, status: ProjectStatus.ACTIVE },
+      order: { createdAt: 'DESC' },
+      take: 3,
+    });
+  }
+
+  async getStats(): Promise<{
+    total: number;
+    active: number;
+    completed: number;
+    totalBudget: number;
+    totalBeneficiaries: number;
+    totalJobsCreated: number;
+  }> {
+    const total = await this.projectRepository.count();
+    const active = await this.projectRepository.count({ where: { status: ProjectStatus.ACTIVE } });
+    const completed = await this.projectRepository.count({ where: { status: ProjectStatus.COMPLETED } });
     
     const budgetResult = await this.projectRepository
       .createQueryBuilder('project')
       .select('SUM(project.budget)', 'total')
       .getRawOne();
     
-    return { 
-      total, 
-      completed, 
-      totalBeneficiaries: Number(beneficiariesResult?.total) || 0, 
-      totalBudget: Number(budgetResult?.total) || 0 
+    const beneficiariesResult = await this.projectRepository
+      .createQueryBuilder('project')
+      .select('SUM(project.beneficiaries_count)', 'total')
+      .getRawOne();
+    
+    const jobsResult = await this.projectRepository
+      .createQueryBuilder('project')
+      .select('SUM(project.jobs_created)', 'total')
+      .getRawOne();
+
+    return {
+      total,
+      active,
+      completed,
+      totalBudget: Number(budgetResult?.total) || 0,
+      totalBeneficiaries: Number(beneficiariesResult?.total) || 0,
+      totalJobsCreated: Number(jobsResult?.total) || 0,
     };
   }
 }

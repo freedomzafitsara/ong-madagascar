@@ -1,311 +1,316 @@
-// src/app/(dashboard)/dashboard/backgrounds/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { backgroundService, Background, backgroundPages } from '@/services/backgroundService';
 import { 
-  Upload, X, CheckCircle, AlertCircle, Loader2,
-  Image, Trash2, Eye, RefreshCw, Home, Briefcase,
-  FileText, Calendar, Mail, Heart, Layers
+  Image as ImageIcon, Plus, Edit, Trash2, Eye, RefreshCw, Loader2,
+  CheckCircle, XCircle as XCircleIcon, AlertCircle, Upload, Link as LinkIcon
 } from 'lucide-react';
-
-interface Background {
-  id: string;
-  page: string;
-  pageKey: string;
-  title: string;
-  imageUrl: string;
-  filename?: string;
-  updatedAt: string;
-  updatedBy: string;
-}
-
-const pageConfigs = [
-  { key: 'home', title: 'Page Accueil', icon: <Home className="w-5 h-5" />, description: 'Fond d\'écran pour la page d\'accueil' },
-  { key: 'projects', title: 'Page Projets', icon: <Briefcase className="w-5 h-5" />, description: 'Fond d\'écran pour la page "Nos projets"' },
-  { key: 'jobs', title: 'Page Offres d\'emploi', icon: <FileText className="w-5 h-5" />, description: 'Fond d\'écran pour la page "Offres d\'emploi"' },
-  { key: 'blog', title: 'Page Actualités', icon: <FileText className="w-5 h-5" />, description: 'Fond d\'écran pour la page "Blog / Actualités"' },
-  { key: 'events', title: 'Page Événements', icon: <Calendar className="w-5 h-5" />, description: 'Fond d\'écran pour la page "Événements"' },
-  { key: 'contact', title: 'Page Contact', icon: <Mail className="w-5 h-5" />, description: 'Fond d\'écran pour la page "Contact"' },
-  { key: 'donate', title: 'Page Don', icon: <Heart className="w-5 h-5" />, description: 'Fond d\'écran pour la page "Faire un don"' },
-];
-
-const STORAGE_KEY = 'ymad_page_backgrounds';
-
-// Images par défaut (placeholders)
-const defaultImages: Record<string, string> = {
-  home: '/images/hero-bg.jpg',
-  projects: '/images/projects-bg.jpg',
-  jobs: '/images/jobs-bg.jpg',
-  blog: '/images/blog-bg.jpg',
-  events: '/images/events-bg.jpg',
-  contact: '/images/contact-bg.jpg',
-  donate: '/images/donate-bg.jpg',
-};
+import NextImage from 'next/image';
 
 export default function BackgroundsPage() {
+  const { token, hasRole } = useAuth();
+  const { language } = useLanguage();
   const [backgrounds, setBackgrounds] = useState<Background[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Background | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [formData, setFormData] = useState({
+    page: 'home',
+    image_url: '',
+    thumbnail_url: '',
+    mobile_url: '',
+    is_active: true,
+    alt_text: '',
+    overlay_opacity: 0,
+    position: 'center',
+    size: 'cover',
+  });
 
   useEffect(() => {
-    loadBackgrounds();
+    fetchBackgrounds();
   }, []);
 
-  const loadBackgrounds = () => {
+  const fetchBackgrounds = async () => {
     setLoading(true);
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setBackgrounds(parsed);
-      } else {
-        const defaultBg: Background[] = pageConfigs.map(config => ({
-          id: `${config.key}_default`,
-          page: config.title,
-          pageKey: config.key,
-          title: `Fond ${config.title}`,
-          imageUrl: defaultImages[config.key],
-          updatedAt: new Date().toISOString(),
-          updatedBy: 'system'
-        }));
-        setBackgrounds(defaultBg);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultBg));
-      }
+      const data = await backgroundService.getAll(token!);
+      setBackgrounds(data);
     } catch (error) {
-      console.error('Erreur chargement:', error);
-      showMessage('Erreur lors du chargement des fonds', 'error');
+      console.error('Erreur:', error);
+      setMessage({ type: 'error', text: 'Erreur de chargement' });
     } finally {
       setLoading(false);
     }
   };
 
-  const showMessage = (text: string, type: 'success' | 'error') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage(null), 3000);
-  };
-
-  const getBackgroundForPage = (pageKey: string): Background | undefined => {
-    return backgrounds.find(b => b.pageKey === pageKey);
-  };
-
-  const handleUpload = async (pageConfig: typeof pageConfigs[0], file: File) => {
-    if (!file.type.startsWith('image/')) {
-      showMessage('Veuillez sélectionner une image', 'error');
-      return;
-    }
-    
-    if (file.size > 5 * 1024 * 1024) {
-      showMessage('L\'image ne doit pas dépasser 5 Mo', 'error');
-      return;
-    }
-
-    setUploading(pageConfig.key);
-    
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('pageKey', pageConfig.key);
-
-      const response = await fetch('/api/upload/background', {
-        method: 'POST',
-        body: formData,
+      if (editing) {
+        await backgroundService.update(token!, editing.id, formData);
+        setMessage({ type: 'success', text: 'Fond d\'écran mis à jour' });
+      } else {
+        await backgroundService.create(token!, formData);
+        setMessage({ type: 'success', text: 'Fond d\'écran créé' });
+      }
+      setShowModal(false);
+      setEditing(null);
+      setFormData({
+        page: 'home',
+        image_url: '',
+        thumbnail_url: '',
+        mobile_url: '',
+        is_active: true,
+        alt_text: '',
+        overlay_opacity: 0,
+        position: 'center',
+        size: 'cover',
       });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erreur upload');
-      }
-
-      const oldBackground = getBackgroundForPage(pageConfig.key);
-      if (oldBackground?.filename) {
-        await fetch(`/api/upload/background/delete?filename=${oldBackground.filename}`, {
-          method: 'DELETE',
-        });
-      }
-
-      const newBackground: Background = {
-        id: `${pageConfig.key}_${Date.now()}`,
-        page: pageConfig.title,
-        pageKey: pageConfig.key,
-        title: `Fond ${pageConfig.title}`,
-        imageUrl: result.imageUrl,
-        filename: result.filename,
-        updatedAt: new Date().toISOString(),
-        updatedBy: 'admin'
-      };
-      
-      const filtered = backgrounds.filter(b => b.pageKey !== pageConfig.key);
-      const updated = [...filtered, newBackground];
-      
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      setBackgrounds(updated);
-      showMessage(`Fond d'écran pour "${pageConfig.title}" mis à jour avec succès`, 'success');
+      fetchBackgrounds();
+      setTimeout(() => setMessage(null), 3000);
     } catch (error) {
-      console.error('Erreur upload:', error);
-      showMessage('Erreur lors de l\'upload', 'error');
-    } finally {
-      setUploading(null);
+      setMessage({ type: 'error', text: 'Erreur lors de l\'enregistrement' });
     }
   };
 
-  const handleDelete = async (pageKey: string) => {
-    if (confirm('Réinitialiser ce fond d\'écran ?')) {
-      const background = getBackgroundForPage(pageKey);
-      
-      if (background?.filename) {
-        try {
-          await fetch(`/api/upload/background/delete?filename=${background.filename}`, {
-            method: 'DELETE',
-          });
-        } catch (error) {
-          console.error('Erreur suppression fichier:', error);
-        }
-      }
-      
-      const defaultBg: Background = {
-        id: `${pageKey}_default_${Date.now()}`,
-        page: pageConfigs.find(c => c.key === pageKey)?.title || '',
-        pageKey: pageKey,
-        title: `Fond ${pageKey}`,
-        imageUrl: defaultImages[pageKey],
-        updatedAt: new Date().toISOString(),
-        updatedBy: 'system'
-      };
-      
-      const filtered = backgrounds.filter(b => b.pageKey !== pageKey);
-      const updated = [...filtered, defaultBg];
-      
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      setBackgrounds(updated);
-      showMessage('Fond d\'écran réinitialisé', 'success');
+  const handleDelete = async (id: string) => {
+    if (!confirm('Supprimer ce fond d\'écran ?')) return;
+    try {
+      await backgroundService.delete(token!, id);
+      setMessage({ type: 'success', text: 'Fond d\'écran supprimé' });
+      fetchBackgrounds();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Erreur lors de la suppression' });
     }
+  };
+
+  const handleEdit = (background: Background) => {
+    setEditing(background);
+    setFormData({
+      page: background.page,
+      image_url: background.image_url,
+      thumbnail_url: background.thumbnail_url || '',
+      mobile_url: background.mobile_url || '',
+      is_active: background.is_active,
+      alt_text: background.alt_text || '',
+      overlay_opacity: background.overlay_opacity || 0,
+      position: background.position || 'center',
+      size: background.size || 'cover',
+    });
+    setShowModal(true);
+  };
+
+  const getPageLabel = (page: string) => {
+    const found = backgroundPages.find(p => p.value === page);
+    return found ? (language === 'fr' ? found.label : found.label_mg) : page;
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <div className="space-y-6">
+      {/* En-tête */}
+      <div className="flex justify-between items-center">
+        <div>
+          <div className="flex items-center gap-2">
+            <ImageIcon className="w-6 h-6 text-blue-600" />
+            <h1 className="text-2xl font-bold text-gray-800">Fonds d'écran</h1>
+          </div>
+          <p className="text-gray-500 text-sm mt-1">Gérez les images de fond pour chaque page</p>
+        </div>
+        <button
+          onClick={() => { setEditing(null); setShowModal(true); }}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          <Plus className="w-4 h-4" />
+          Ajouter
+        </button>
+      </div>
+
+      {/* Message */}
       {message && (
         <div className={`p-3 rounded-lg flex items-center gap-2 ${
-          message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+          message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
         }`}>
           {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
           {message.text}
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center gap-2">
-            <Layers className="w-7 h-7 text-blue-600" />
-            Fonds d'écran
-          </h1>
-          <p className="text-gray-500 mt-1">Personnalisez l'image de fond de chaque page du site public</p>
-        </div>
-        <button onClick={loadBackgrounds} className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition">
-          <RefreshCw className="w-4 h-4" />
-          Actualiser
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {pageConfigs.map((pageConfig) => {
-          const background = getBackgroundForPage(pageConfig.key);
-          const isUploading = uploading === pageConfig.key;
-          const imageUrl = background?.imageUrl || defaultImages[pageConfig.key];
-          
-          return (
-            <div key={pageConfig.key} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    {pageConfig.icon}
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-gray-800">{pageConfig.title}</h2>
-                    <p className="text-xs text-gray-500">{pageConfig.description}</p>
-                  </div>
+      {/* Liste des fonds d'écran */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {backgrounds.map((bg) => (
+          <div key={bg.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="relative h-40 bg-gray-100">
+              {bg.image_url ? (
+                <img src={bg.image_url} alt={bg.alt_text || bg.page} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <ImageIcon className="w-12 h-12 text-gray-300" />
                 </div>
-                <button onClick={() => handleDelete(pageConfig.key)} className="p-1 text-red-500 hover:bg-red-50 rounded transition" title="Réinitialiser">
+              )}
+              {bg.is_active && (
+                <div className="absolute top-2 right-2 px-2 py-1 bg-green-500 text-white text-xs rounded-full">Actif</div>
+              )}
+            </div>
+            <div className="p-4">
+              <h3 className="font-semibold text-gray-800">{getPageLabel(bg.page)}</h3>
+              <p className="text-xs text-gray-500 mt-1 truncate">{bg.image_url}</p>
+              <div className="flex justify-end gap-2 mt-3">
+                <button onClick={() => handleEdit(bg)} className="p-1 text-gray-500 hover:text-blue-600">
+                  <Edit className="w-4 h-4" />
+                </button>
+                <button onClick={() => handleDelete(bg.id)} className="p-1 text-gray-500 hover:text-red-600">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-              
-              <div className="p-4">
-                <div className="relative h-48 rounded-lg overflow-hidden bg-gray-100">
-                  <img
-                    src={imageUrl}
-                    alt={`Fond ${pageConfig.title}`}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'https://placehold.co/600x400/e2e8f0/64748b?text=Image+non+trouvée';
-                    }}
-                  />
-                </div>
-                
-                <div className="mt-4 flex gap-2">
-                  <button onClick={() => setPreviewImage(imageUrl)} className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
-                    <Eye className="w-4 h-4" />
-                    Aperçu
-                  </button>
-                  <label className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition cursor-pointer bg-blue-600 text-white hover:bg-blue-700`}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleUpload(pageConfig, file);
-                        e.target.value = '';
-                      }}
-                      disabled={isUploading}
-                    />
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Upload...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4" />
-                        Changer
-                      </>
-                    )}
-                  </label>
-                </div>
-                
-                {background && (
-                  <p className="text-xs text-gray-400 mt-2 text-center">
-                    Mis à jour le {new Date(background.updatedAt).toLocaleDateString('fr-FR')}
-                  </p>
-                )}
-              </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
-      {previewImage && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setPreviewImage(null)}>
-          <div className="relative max-w-4xl w-full bg-white rounded-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="relative h-[60vh] w-full bg-gray-900">
-              <img src={previewImage} alt="Aperçu fond d'écran" className="w-full h-full object-contain" />
-            </div>
-            <div className="p-4 border-t flex justify-end">
-              <button onClick={() => setPreviewImage(null)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                Fermer
+      {/* Modal d'ajout/édition */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+              <h2 className="text-xl font-bold text-gray-800">
+                {editing ? 'Modifier le fond d\'écran' : 'Ajouter un fond d\'écran'}
+              </h2>
+              <button onClick={() => setShowModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+                <XCircleIcon className="w-6 h-6" />
               </button>
             </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Page *</label>
+                <select
+                  required
+                  value={formData.page}
+                  onChange={(e) => setFormData({ ...formData, page: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  {backgroundPages.map(page => (
+                    <option key={page.value} value={page.value}>
+                      {language === 'fr' ? page.label : page.label_mg}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">URL de l'image *</label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    required
+                    value={formData.image_url}
+                    onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
+                    placeholder="https://..."
+                  />
+                  {formData.image_url && (
+                    <div className="w-12 h-12 bg-gray-100 rounded border overflow-hidden">
+                      <img src={formData.image_url} alt="Aperçu" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">URL miniature (optionnel)</label>
+                <input
+                  type="url"
+                  value={formData.thumbnail_url}
+                  onChange={(e) => setFormData({ ...formData, thumbnail_url: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">URL mobile (optionnel)</label>
+                <input
+                  type="url"
+                  value={formData.mobile_url}
+                  onChange={(e) => setFormData({ ...formData, mobile_url: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Texte alternatif</label>
+                <input
+                  type="text"
+                  value={formData.alt_text}
+                  onChange={(e) => setFormData({ ...formData, alt_text: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="Description de l'image"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Opacité overlay (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.overlay_opacity}
+                    onChange={(e) => setFormData({ ...formData, overlay_opacity: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
+                  <select
+                    value={formData.position}
+                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="center">Centre</option>
+                    <option value="top">Haut</option>
+                    <option value="bottom">Bas</option>
+                    <option value="left">Gauche</option>
+                    <option value="right">Droite</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span className="text-sm text-gray-700">Actif (afficher sur le site)</span>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                  Annuler
+                </button>
+                <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                  {editing ? 'Mettre à jour' : 'Créer'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

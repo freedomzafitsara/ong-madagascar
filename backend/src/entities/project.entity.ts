@@ -1,6 +1,19 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { 
+  Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, 
+  UpdateDateColumn, ManyToOne, JoinColumn, Index 
+} from 'typeorm';
+import { User } from './user.entity';
+
+export enum ProjectStatus {
+  ACTIVE = 'active',
+  COMPLETED = 'completed',
+  PAUSED = 'paused',
+  CANCELLED = 'cancelled',
+}
 
 @Entity('projects')
+@Index(['status'])
+@Index(['region'])
 export class Project {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -26,11 +39,15 @@ export class Project {
   @Column({ nullable: true })
   region: string;
 
-  @Column({ default: 'active' })
+  @Column({ type: 'varchar', default: ProjectStatus.ACTIVE })
   status: string;
 
   @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
   budget: number;
+
+  // ✅ SUPPRIMER "spent" ou le garder avec name
+  @Column({ name: 'spent', type: 'decimal', precision: 15, scale: 2, default: 0, nullable: true })
+  spent: number;
 
   @Column({ default: 0 })
   beneficiaries_count: number;
@@ -53,18 +70,22 @@ export class Project {
   @Column({ nullable: true })
   image_url: string;
 
-  @Column('text', { array: true, nullable: true })
+  @Column('simple-array', { nullable: true })
   gallery_images: string[];
 
   @Column({ default: false })
   is_featured: boolean;
 
-  @Column({ nullable: true })
-  manager_id: string;
+  @Column({ name: 'manager_id', type: 'uuid', nullable: true })
+  managerId: string;
 
-  @CreateDateColumn()
-  created_at: Date;
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'manager_id' })
+  manager: User;
 
-  @UpdateDateColumn()
-  updated_at: Date;
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

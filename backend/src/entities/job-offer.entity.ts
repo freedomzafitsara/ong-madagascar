@@ -1,4 +1,7 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { 
+  Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, 
+  UpdateDateColumn, ManyToOne, JoinColumn, Index 
+} from 'typeorm';
 import { User } from './user.entity';
 
 export enum JobType {
@@ -6,7 +9,7 @@ export enum JobType {
   CDD = 'cdd',
   STAGE = 'stage',
   FREELANCE = 'freelance',
-  BENEVOLAT = 'benevolat',
+  VOLUNTEER = 'volunteer',
 }
 
 export enum JobStatus {
@@ -17,6 +20,9 @@ export enum JobStatus {
 }
 
 @Entity('job_offers')
+@Index(['status'])
+@Index(['jobType'])
+@Index(['sector'])
 export class JobOffer {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -33,7 +39,7 @@ export class JobOffer {
   @Column('text', { nullable: true })
   description_mg: string;
 
-  @Column({ name: 'company_name' })  // ← CORRIGÉ : snake_case
+  @Column({ name: 'company_name' })
   companyName: string;
 
   @Column({ nullable: true })
@@ -42,7 +48,8 @@ export class JobOffer {
   @Column({ nullable: true })
   region: string;
 
-  @Column({ name: 'job_type' })  // ← CORRIGÉ : snake_case
+  // ✅ CORRECTION : Utiliser le nom exact de la colonne dans la base
+  @Column({ name: 'job_type', type: 'varchar', default: JobType.CDI })
   jobType: string;
 
   @Column({ nullable: true })
@@ -51,19 +58,28 @@ export class JobOffer {
   @Column({ nullable: true })
   sector: string;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'text', nullable: true })
+  requirements: string;
+
+  @Column({ nullable: true })
+  contact_email: string;
+
+  @Column({ nullable: true })
+  contact_phone: string;
+
+  @Column({ type: 'date' })
   deadline: Date;
 
   @Column({ type: 'varchar', default: JobStatus.DRAFT })
   status: string;
 
-  @Column({ name: 'applications_count', default: 0 })  // ← CORRIGÉ : snake_case
-  applicationsCount: number;
+  @Column({ default: 0 })
+  applications_count: number;
 
-  @Column({ name: 'is_featured', default: false })  // ← CORRIGÉ : snake_case
-  isFeatured: boolean;
+  @Column({ default: false })
+  is_featured: boolean;
 
-  @Column({ name: 'created_by', nullable: true })  // ← CORRIGÉ : snake_case
+  @Column({ name: 'created_by', nullable: true })
   createdBy: string;
 
   @ManyToOne(() => User)
