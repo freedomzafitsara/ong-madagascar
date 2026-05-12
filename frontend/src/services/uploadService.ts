@@ -26,12 +26,12 @@ class UploadService {
   }
 
   async uploadImage(file: File, type: UploadType, entityId?: string): Promise<UploadedImage> {
-    // ✅ Validation
+    // ✅ Validation du type
     if (!file.type.startsWith('image/')) {
       throw new Error('Format non supporté. Veuillez sélectionner une image (JPG, PNG, GIF, WEBP).');
     }
 
-    // ✅ Augmentation de la limite à 10MB pour les images
+    // ✅ Limite selon le type (background: 10MB, autres: 5MB)
     const maxSize = type === 'background' ? 10 : 5;
     if (file.size > maxSize * 1024 * 1024) {
       throw new Error(`Fichier trop grand. Maximum ${maxSize} Mo.`);
@@ -58,16 +58,17 @@ class UploadService {
       body: formData,
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      throw new Error(data.message || data.error || 'Erreur lors de l\'upload');
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.message || data.error || `Erreur HTTP ${response.status}`);
     }
 
+    const data = await response.json();
+
     return {
-      id: `${type}_${Date.now()}`,
-      url: data.url,
-      filename: data.filename,
+      id: data.id || `${type}_${Date.now()}`,
+      url: data.url || data.fileUrl || data.secure_url,
+      filename: data.filename || file.name,
       originalName: file.name,
       type: type,
       entityId: entityId || '',
@@ -83,32 +84,32 @@ class UploadService {
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
     const response = await fetch(`${API_URL}/upload?${params.toString()}`);
-    const data = await response.json();
-
+    
     if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
       throw new Error(data.message || data.error || 'Erreur lors de la récupération');
     }
 
-    return data.files || data.images || [];
+    const data = await response.json();
+    return data.files || data.images || data.data || [];
   }
 
-  async deleteImage(url: string): Promise<void> {
+  async deleteImage(urlOrId: string): Promise<void> {
     const token = this.getToken();
     if (!token) {
       throw new Error('Non authentifié');
     }
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
-    const response = await fetch(`${API_URL}/upload?url=${encodeURIComponent(url)}`, {
+    const response = await fetch(`${API_URL}/upload?url=${encodeURIComponent(urlOrId)}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`,
       },
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
       throw new Error(data.message || data.error || 'Erreur lors de la suppression');
     }
   }
@@ -174,6 +175,13 @@ class UploadService {
     return images.length > 0 ? images[0] : null;
   }
 
+  async deleteBackground(pageKey: string): Promise<void> {
+    const background = await this.getBackground(pageKey);
+    if (background) {
+      await this.deleteImage(background.url);
+    }
+  }
+
   // ========================================
   // MÉTHODES SPÉCIFIQUES POUR LE PROFIL
   // ========================================
@@ -185,6 +193,14 @@ class UploadService {
     const images = await this.getImages('profile');
     return images.length > 0 ? images[0] : null;
   }
+
+  async deleteProfileImage(): Promise<void> {
+    const profile = await this.getProfileImage();
+    if (profile) {
+      await this.deleteImage(profile.url);
+    }
+  }
 }
 
 export const uploadService = new UploadService();
+export default uploadService;

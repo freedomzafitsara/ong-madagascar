@@ -1,28 +1,20 @@
-﻿import { Injectable, UnauthorizedException, ConflictException, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+﻿// backend/src/modules/auth/auth.service.ts
+import { 
+  Injectable, 
+  NotFoundException, 
+  BadRequestException, 
+  ConflictException, 
+  UnauthorizedException,
+  ForbiddenException
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
+import { JwtService } from '@nestjs/jwt';
 import { User, UserRole } from '../../entities/user.entity';
-import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
-
-export interface SanitizedUser {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  phone?: string;
-  region?: string;
-  photo?: string;
-  bio?: string;
-  isActive: boolean;
-  lastLogin?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { LoginDto, RegisterDto } from './dto';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class AuthService {
@@ -32,331 +24,67 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async register(registerDto: RegisterDto, ip?: string): Promise<{ success: boolean; message: string; user: SanitizedUser; token: string }> {
-    console.log('📝 Tentative d\'inscription:', registerDto.email);
-    
-    const existingUser = await this.userRepository.findOne({
-      where: { email: registerDto.email },
-    });
+  /**
+   * Inscription d'un nouvel utilisateur
+   */
+  async register(registerDto: RegisterDto, ip: string): Promise<{ success: boolean; message: string }> {
+    const { email, password, firstName, lastName, phone } = registerDto;
 
+    // Vérifier si l'email existe déjà
+    const existingUser = await this.userRepository.findOne({ where: { email } });
     if (existingUser) {
       throw new ConflictException('Cet email est déjà utilisé');
     }
 
-    const verificationToken = crypto.randomBytes(32).toString('hex');
+    // Hacher le mot de passe
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const verificationToken = Math.random().toString(36).substring(2, 15);
 
+    // Créer l'utilisateur
     const user = this.userRepository.create({
-      ...registerDto,
-      role: registerDto.role || UserRole.VISITOR,
+      email,
+      password: hashedPassword,
+      firstName,
+      lastName,
+      phone,
+      role: UserRole.MEMBER,
       verificationToken,
-      lastIp: ip,
+      isActive: true,
+      emailVerified: false,
     });
 
     await this.userRepository.save(user);
-    
-    const token = this.generateToken(user);
-
-    console.log('✅ Inscription réussie:', registerDto.email);
 
     return {
       success: true,
-      message: 'Inscription réussie',
-      user: this.sanitizeUser(user),
-      token,
+      message: 'Compte créé avec succès. Veuillez vérifier votre email.',
     };
   }
 
-  async login(loginDto: LoginDto, ip?: string): Promise<{ success: boolean; message: string; user: SanitizedUser; token: string }> {
-    console.log('🔐 Tentative de connexion pour:', loginDto.email);
-    
-    const user = await this.userRepository.findOne({
-      where: { email: loginDto.email },
-      select: ['id', 'email', 'password', 'role', 'firstName', 'lastName', 'isActive', 'loginAttempts', 'lockedUntil'],
-    });
+  /**
+   * Connexion d'un utilisateur
+   */
+  async login(loginDto: LoginDto, ip: string): Promise<{ access_token: string; user: any }> {
+    const { email, password } = loginDto;
 
+    // Rechercher l'utilisateur
+    const user = await this.userRepository.findOne({ where: { email } });
     if (!user) {
-      console.log('❌ Utilisateur non trouvé');
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
 
-    if (user.isLocked && user.isLocked()) {
-      const remainingMinutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
-      console.log(`🔒 Compte verrouillé pour ${remainingMinutes} minutes`);
-      throw new UnauthorizedException(`Compte temporairement verrouillé. Réessayez dans ${remainingMinutes} minutes.`);
-    }
-
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
-    
-    if (!isPasswordValid) {
-      user.incrementLoginAttempts();
-      await this.userRepository.save(user);
-      
-      const remainingAttempts = (user.role === UserRole.SUPER_ADMIN ? 3 : 5) - user.loginAttempts;
-      console.log(`❌ Mot de passe incorrect - ${remainingAttempts} tentatives restantes`);
-      throw new UnauthorizedException(`Email ou mot de passe incorrect. Il vous reste ${remainingAttempts} tentative(s).`);
-    }
-
+    // Vérifier si le compte est actif
     if (!user.isActive) {
-      console.log('❌ Compte désactivé');
-      throw new UnauthorizedException('Votre compte est désactivé');
+      throw new UnauthorizedException('Votre compte est désactivé. Contactez l\'administrateur.');
     }
 
-    user.resetLoginAttempts();
-    user.lastLogin = new Date();
-    user.lastIp = ip;
-    await this.userRepository.save(user);
-
-    const token = this.generateToken(user);
-    
-    console.log('✅ Connexion réussie pour:', loginDto.email);
-
-    return {
-      success: true,
-      message: 'Connexion réussie',
-      user: this.sanitizeUser(user),
-      token,
-    };
-  }
-
-  // ✅ AJOUT DE LA MÉTHODE verifyEmail
-  async verifyEmail(token: string): Promise<{ success: boolean; message: string }> {
-    console.log('🔐 Vérification d\'email avec token:', token.substring(0, 20) + '...');
-    
-    const user = await this.userRepository.findOne({
-      where: { verificationToken: token },
-    });
-
-    if (!user) {
-      throw new BadRequestException('Token de vérification invalide');
-    }
-
-    if (user.emailVerified) {
-      return { success: true, message: 'Email déjà vérifié' };
-    }
-
-    await this.userRepository.update(user.id, {
-      emailVerified: true,
-      verificationToken: null
-    });
-
-    console.log('✅ Email vérifié avec succès pour:', user.email);
-    
-    return { success: true, message: 'Email vérifié avec succès' };
-  }
-
-  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
-    console.log('🔐 DEMANDE DE RÉINITIALISATION pour:', email);
-    
-    const user = await this.userRepository.findOne({ where: { email } });
-    
-    if (!user) {
-      console.log('❌ Utilisateur non trouvé');
-      return { success: true, message: 'Si un compte existe, un email a été envoyé' };
-    }
-
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetExpires = new Date(Date.now() + 3600000);
-    
-    await this.userRepository.update(user.id, {
-      resetPasswordToken: resetToken,
-      resetPasswordExpires: resetExpires
-    });
-    
-    console.log('\n╔══════════════════════════════════════════════════════════════════╗');
-    console.log('║              🔐 LIEN DE RÉINITIALISATION DE MOT DE PASSE          ║');
-    console.log('╠══════════════════════════════════════════════════════════════════╣');
-    console.log(`║ 📧 Email: ${email}`);
-    console.log(`║ 🔗 Lien: http://localhost:3000/reset-password?token=${resetToken}`);
-    console.log('╚══════════════════════════════════════════════════════════════════╝\n');
-    
-    return { success: true, message: 'Email de réinitialisation envoyé' };
-  }
-
-  async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
-    console.log('🔐 Tentative de réinitialisation...');
-    
-    const user = await this.userRepository.findOne({
-      where: { resetPasswordToken: token },
-    });
-
-    if (!user) {
-      throw new BadRequestException('Token invalide');
-    }
-
-    if (!user.resetPasswordExpires || user.resetPasswordExpires < new Date()) {
-      throw new BadRequestException('Ce lien a expiré. Veuillez refaire une demande.');
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
-    await this.userRepository.update(user.id, {
-      password: hashedPassword,
-      resetPasswordToken: null,
-      resetPasswordExpires: null,
-      loginAttempts: 0,
-      lockedUntil: null
-    });
-
-    console.log('✅ Mot de passe réinitialisé pour:', user.email);
-    
-    return { success: true, message: 'Mot de passe réinitialisé avec succès' };
-  }
-
-  async getProfile(userId: string): Promise<SanitizedUser> {
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    return this.sanitizeUser(user);
-  }
-
-  async updateProfile(userId: string, updateData: any): Promise<SanitizedUser> {
-    const { password, ...safeUpdateData } = updateData;
-    await this.userRepository.update(userId, safeUpdateData);
-    return this.getProfile(userId);
-  }
-
-  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      select: ['id', 'password'],
-    });
-
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    // Vérifier le mot de passe
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Mot de passe actuel incorrect');
+      throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
-    await this.userRepository.update(user.id, {
-      password: hashedPassword
-    });
-
-    return { success: true, message: 'Mot de passe changé avec succès' };
-  }
-
-  async getAllUsers(currentUserRole: string): Promise<SanitizedUser[]> {
-    if (currentUserRole !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Accès non autorisé');
-    }
-    const users = await this.userRepository.find({
-      order: { createdAt: 'DESC' },
-    });
-    return users.map(user => this.sanitizeUser(user));
-  }
-
-  async getUserById(id: string, currentUserRole: string, currentUserId: string): Promise<SanitizedUser> {
-    const user = await this.userRepository.findOne({ where: { id } });
-    
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    if (currentUserRole !== UserRole.SUPER_ADMIN && currentUserId !== id) {
-      throw new ForbiddenException('Accès non autorisé');
-    }
-
-    return this.sanitizeUser(user);
-  }
-
-  async updateUserRole(id: string, newRole: UserRole, currentUserRole: string, currentUserId: string): Promise<SanitizedUser> {
-    if (currentUserRole !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Seul un Super Admin peut modifier les rôles');
-    }
-
-    const user = await this.userRepository.findOne({ where: { id } });
-    
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    if (user.role === UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Le rôle du Super Administrateur ne peut pas être modifié');
-    }
-
-    if (id === currentUserId) {
-      throw new ForbiddenException('Vous ne pouvez pas modifier votre propre rôle');
-    }
-
-    await this.userRepository.update(id, { role: newRole });
-    
-    console.log(`🔐 [AUDIT] ${currentUserId} a changé le rôle de ${user.email} vers ${newRole}`);
-    
-    const updatedUser = await this.userRepository.findOne({ where: { id } });
-    if (!updatedUser) {
-      throw new NotFoundException('Utilisateur non trouvé après mise à jour');
-    }
-    return this.sanitizeUser(updatedUser);
-  }
-
-  async toggleUserStatus(id: string, currentUserRole: string, currentUserId: string): Promise<SanitizedUser> {
-    if (currentUserRole !== UserRole.SUPER_ADMIN && currentUserRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Droits insuffisants');
-    }
-
-    const user = await this.userRepository.findOne({ where: { id } });
-    
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    if (user.role === UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Impossible de modifier le statut du Super Administrateur');
-    }
-
-    const newStatus = !user.isActive;
-    await this.userRepository.update(id, { isActive: newStatus });
-    
-    console.log(`🔐 [AUDIT] ${currentUserId} a ${newStatus ? 'activé' : 'désactivé'} le compte de ${user.email}`);
-    
-    const updatedUser = await this.userRepository.findOne({ where: { id } });
-    if (!updatedUser) {
-      throw new NotFoundException('Utilisateur non trouvé après mise à jour');
-    }
-    return this.sanitizeUser(updatedUser);
-  }
-
-  async deleteUser(id: string, currentUserRole: string, currentUserId: string): Promise<{ success: boolean }> {
-    if (currentUserRole !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Seul un Super Admin peut supprimer des utilisateurs');
-    }
-
-    const user = await this.userRepository.findOne({ where: { id } });
-    
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    if (id === currentUserId) {
-      throw new ForbiddenException('Vous ne pouvez pas supprimer votre propre compte');
-    }
-
-    if (user.role === UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Impossible de supprimer le Super Administrateur');
-    }
-
-    const superAdminCount = await this.userRepository.count({ where: { role: UserRole.SUPER_ADMIN } });
-    if (superAdminCount <= 1 && user.role === UserRole.SUPER_ADMIN) {
-      throw new BadRequestException('Impossible de supprimer le dernier Super Administrateur');
-    }
-
-    await this.userRepository.delete(id);
-    
-    console.log(`🔐 [AUDIT] ${currentUserId} a supprimé l'utilisateur ${user.email}`);
-    
-    return { success: true };
-  }
-
-  private generateToken(user: User): string {
+    // Générer le token JWT
     const payload = {
       sub: user.id,
       email: user.email,
@@ -364,20 +92,360 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
     };
-    return this.jwtService.sign(payload);
+    const access_token = this.jwtService.sign(payload);
+
+    // Mettre à jour la dernière connexion
+    await this.userRepository.update(user.id, {
+      lastLogin: new Date(),
+      lastIp: ip,
+    });
+
+    // Retourner le token et les informations utilisateur
+    return {
+      access_token,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        avatar_url: user.avatar_url,
+        isActive: user.isActive,
+      },
+    };
   }
 
-  private sanitizeUser(user: User): SanitizedUser {
-    const { 
-      password, 
-      resetPasswordToken, 
-      resetPasswordExpires, 
-      verificationToken,
-      loginAttempts,
-      lockedUntil,
-      lastIp,
-      ...sanitized 
-    } = user;
-    return sanitized as SanitizedUser;
+  /**
+   * Récupérer le profil d'un utilisateur
+   */
+  async getProfile(userId: string): Promise<any> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      avatar_url: user.avatar_url,
+      phone: user.phone,
+      region: user.region,
+      bio: user.bio,
+      position: user.position || '',
+      department: user.department || '',
+      skills: user.skills || '',
+      socialLinkedin: user.socialLinkedin || '',
+      socialTwitter: user.socialTwitter || '',
+      socialGithub: user.socialGithub || '',
+      isActive: user.isActive,
+      emailVerified: user.emailVerified,
+      lastLogin: user.lastLogin,
+      createdAt: user.createdAt,
+    };
+  }
+
+  /**
+   * Mettre à jour le profil d'un utilisateur (CORRIGÉ)
+   */
+  async updateProfile(userId: string, updateData: any): Promise<any> {
+    // Vérifier que l'utilisateur existe
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Vérifier que updateData est un objet et non vide
+    if (!updateData || typeof updateData !== 'object') {
+      return this.getProfile(userId);
+    }
+
+    // Construire l'objet de mise à jour avec les champs fournis uniquement
+    const updateFields: any = {};
+
+    // Liste des champs modifiables
+    const modifiableFields = [
+      'firstName', 'lastName', 'phone', 'region', 'bio',
+      'position', 'department', 'skills',
+      'socialLinkedin', 'socialTwitter', 'socialGithub'
+    ];
+
+    // Parcourir les champs modifiables
+    for (const field of modifiableFields) {
+      if (updateData[field] !== undefined && updateData[field] !== null) {
+        updateFields[field] = updateData[field];
+      }
+    }
+
+    // Gérer spécifiquement avatar_url (nom différent dans la base)
+    if (updateData.avatar_url !== undefined && updateData.avatar_url !== null) {
+      updateFields.avatar_url = updateData.avatar_url;
+    }
+
+    // 🔴 IMPORTANT: Si aucun champ à mettre à jour, on ne fait rien
+    if (Object.keys(updateFields).length === 0) {
+      console.log('Aucun champ à mettre à jour pour userId:', userId);
+      return this.getProfile(userId);
+    }
+
+    // Appliquer les modifications
+    await this.userRepository.update(userId, updateFields);
+    
+    // Retourner le profil mis à jour
+    return this.getProfile(userId);
+  }
+
+  /**
+   * Mettre à jour la photo de profil
+   */
+  async updateUserPhoto(userId: string, photoUrl: string): Promise<any> {
+    // Vérifier que l'utilisateur existe
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Vérifier que photoUrl est valide
+    if (!photoUrl) {
+      throw new BadRequestException('URL de photo invalide');
+    }
+
+    // Supprimer l'ancienne photo du disque (si elle existe)
+    if (user.avatar_url) {
+      try {
+        const oldFilePath = path.join(process.cwd(), 'uploads', 'profiles', path.basename(user.avatar_url));
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+          console.log(`Ancienne photo supprimée: ${oldFilePath}`);
+        }
+      } catch (error) {
+        console.error(`Erreur lors de la suppression: ${error.message}`);
+      }
+    }
+
+    // Mettre à jour la nouvelle photo
+    await this.userRepository.update(userId, { avatar_url: photoUrl });
+    
+    return this.getProfile(userId);
+  }
+
+  /**
+   * Supprimer la photo de profil
+   */
+  async deleteUserPhoto(userId: string): Promise<any> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Supprimer le fichier du disque
+    if (user.avatar_url) {
+      try {
+        const oldFilePath = path.join(process.cwd(), 'uploads', 'profiles', path.basename(user.avatar_url));
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+        }
+      } catch (error) {
+        console.error(`Erreur lors de la suppression: ${error.message}`);
+      }
+    }
+
+    // Supprimer la référence en base
+    await this.userRepository.update(userId, { avatar_url: null });
+    
+    return this.getProfile(userId);
+  }
+
+  /**
+   * Changer le mot de passe
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Vérifier l'ancien mot de passe
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isPasswordValid) {
+      throw new BadRequestException('Mot de passe actuel incorrect');
+    }
+
+    // Hacher le nouveau mot de passe
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.update(userId, { password: hashedPassword });
+
+    return {
+      success: true,
+      message: 'Mot de passe modifié avec succès',
+    };
+  }
+
+  /**
+   * Mot de passe oublié - Envoi d'un email de réinitialisation
+   */
+  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      // Pour des raisons de sécurité, on ne confirme pas si l'email existe
+      return {
+        success: true,
+        message: 'Si cet email existe, vous recevrez un lien de réinitialisation.',
+      };
+    }
+
+    // Générer un token unique
+    const resetToken = Math.random().toString(36).substring(2, 15);
+    const resetExpires = new Date();
+    resetExpires.setHours(resetExpires.getHours() + 1);
+
+    await this.userRepository.update(user.id, {
+      resetPasswordToken: resetToken,
+      resetPasswordExpires: resetExpires,
+    });
+
+    return {
+      success: true,
+      message: 'Email de réinitialisation envoyé',
+    };
+  }
+
+  /**
+   * Réinitialiser le mot de passe avec un token
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const user = await this.userRepository.findOne({
+      where: { resetPasswordToken: token },
+    });
+
+    // Vérifier que le token est valide et non expiré
+    if (!user || user.resetPasswordExpires < new Date()) {
+      throw new BadRequestException('Token invalide ou expiré');
+    }
+
+    // Hacher le nouveau mot de passe
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.update(user.id, {
+      password: hashedPassword,
+      resetPasswordToken: null,
+      resetPasswordExpires: null,
+    });
+
+    return {
+      success: true,
+      message: 'Mot de passe réinitialisé avec succès',
+    };
+  }
+
+  /**
+   * Vérifier l'email avec un token
+   */
+  async verifyEmail(token: string): Promise<{ success: boolean; message: string }> {
+    const user = await this.userRepository.findOne({
+      where: { verificationToken: token },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Token invalide');
+    }
+
+    await this.userRepository.update(user.id, {
+      emailVerified: true,
+      verificationToken: null,
+    });
+
+    return {
+      success: true,
+      message: 'Email vérifié avec succès',
+    };
+  }
+
+  /**
+   * Récupérer tous les utilisateurs (admin seulement)
+   */
+  async getAllUsers(currentUserRole: UserRole): Promise<User[]> {
+    return this.userRepository.find({
+      select: ['id', 'email', 'firstName', 'lastName', 'role', 'isActive', 'avatar_url', 'lastLogin', 'createdAt'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Récupérer un utilisateur par son ID (admin seulement)
+   */
+  async getUserById(id: string, currentUserRole: UserRole, currentUserId: string): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+    return user;
+  }
+
+  /**
+   * Mettre à jour le rôle d'un utilisateur (super admin seulement)
+   */
+  async updateUserRole(id: string, newRole: UserRole, currentUserRole: UserRole, currentUserId: string): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Un simple admin ne peut pas modifier un super admin
+    if (user.role === UserRole.SUPER_ADMIN && currentUserRole !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Vous ne pouvez pas modifier le rôle d\'un super administrateur');
+    }
+
+    await this.userRepository.update(id, { role: newRole });
+    return this.userRepository.findOne({ where: { id } });
+  }
+
+  /**
+   * Activer/Désactiver un utilisateur (admin+)
+   */
+  async toggleUserStatus(id: string, currentUserRole: UserRole, currentUserId: string): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Un simple admin ne peut pas désactiver un super admin
+    if (user.role === UserRole.SUPER_ADMIN && currentUserRole !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Vous ne pouvez pas désactiver un super administrateur');
+    }
+
+    // Inverser le statut actif/inactif
+    await this.userRepository.update(id, { isActive: !user.isActive });
+    return this.userRepository.findOne({ where: { id } });
+  }
+
+  /**
+   * Supprimer un utilisateur (super admin seulement)
+   */
+  async deleteUser(id: string, currentUserRole: UserRole, currentUserId: string): Promise<{ success: boolean; message: string }> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Un simple admin ne peut pas supprimer un super admin
+    if (user.role === UserRole.SUPER_ADMIN && currentUserRole !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Vous ne pouvez pas supprimer un super administrateur');
+    }
+
+    // Supprimer la photo de profil si elle existe
+    if (user.avatar_url) {
+      const oldFilePath = path.join(process.cwd(), 'uploads', 'profiles', path.basename(user.avatar_url));
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlinkSync(oldFilePath);
+      }
+    }
+
+    await this.userRepository.delete(id);
+    return {
+      success: true,
+      message: 'Utilisateur supprimé avec succès',
+    };
   }
 }

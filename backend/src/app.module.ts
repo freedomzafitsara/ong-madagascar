@@ -13,6 +13,7 @@ import { EventsModule } from './modules/events/events.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { PagesModule } from './modules/pages/pages.module';  // ✅ AJOUTÉ
 
 // Guards
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -32,6 +33,8 @@ import { FooterSection } from './modules/footer/entities/footer-section.entity';
 import { FooterLink } from './modules/footer/entities/footer-link.entity';
 import { FooterContact } from './modules/footer/entities/footer-contact.entity';
 import { FooterLegalLink } from './modules/footer/entities/footer-legal-link.entity';
+import { PageContent } from './entities/page-content.entity';  
+import { PageBackground } from './entities/page-background.entity'; 
 
 @Module({
   imports: [
@@ -65,6 +68,8 @@ import { FooterLegalLink } from './modules/footer/entities/footer-legal-link.ent
           FooterLink,
           FooterContact,
           FooterLegalLink,
+          PageContent,     
+          PageBackground,  
         ],
         synchronize: false,
         logging: true,
@@ -79,9 +84,10 @@ import { FooterLegalLink } from './modules/footer/entities/footer-legal-link.ent
     MembersModule,
     DonationsModule,
     EventsModule,
-    JobsModule,      // ✅ Module emploi
+    JobsModule,
     BlogModule,
     UploadModule,
+    PagesModule,  
   ],
   providers: [
     {

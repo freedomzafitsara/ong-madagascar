@@ -6,9 +6,11 @@ import Link from 'next/link';
 import { 
   ArrowLeft, Upload, FileText, User, Mail, Phone, 
   MapPin, Briefcase, Send, CheckCircle, AlertCircle, 
-  Camera, X, Loader2, FileCheck, FileWarning
+  Camera, X, Loader2, FileCheck, FileWarning, Building,
+  Calendar, DollarSign, Clock, Heart, Star, GraduationCap
 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
+import { pageService, PageBackground } from '@/services/pageService';
 
 interface JobOffer {
   id: string;
@@ -19,6 +21,7 @@ interface JobOffer {
   description: string;
   requirements?: string[];
   salary?: string;
+  deadline?: string;
 }
 
 export default function ApplyPage() {
@@ -32,6 +35,7 @@ export default function ApplyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   
   // Formulaire
   const [formData, setFormData] = useState({
@@ -58,6 +62,7 @@ export default function ApplyPage() {
   useEffect(() => {
     if (jobId) {
       fetchJob();
+      loadPageBackground();
     }
     // Nettoyage des URLs
     return () => {
@@ -65,14 +70,26 @@ export default function ApplyPage() {
     };
   }, [jobId]);
 
+  const loadPageBackground = async () => {
+    try {
+      const background = await pageService.getBackground('apply');
+      if (background && background.is_active && background.image_url) {
+        setPageBackground(background);
+      }
+    } catch (error) {
+      console.error('Erreur chargement fond d ecran:', error);
+    }
+  };
+
   const fetchJob = async () => {
     try {
-      const response = await fetch(`/api/jobs/${jobId}`);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+      const response = await fetch(`${API_URL}/jobs/offers/${jobId}`);
       if (response.ok) {
         const data = await response.json();
-        setJob(data.job);
+        setJob(data);
       } else {
-        setError(language === 'fr' ? 'Offre d\'emploi non trouvée' : 'Tsy hita ny asa');
+        setError(language === 'fr' ? 'Offre d\'emploi non trouvee' : 'Tsy hita ny asa');
       }
     } catch (error) {
       console.error('Erreur:', error);
@@ -95,14 +112,14 @@ export default function ApplyPage() {
     
     // Validation taille
     if (file.size > 5 * 1024 * 1024) {
-      setError(language === 'fr' ? 'Le fichier ne doit pas dépasser 5 Mo' : 'Tsy tokony ho mihoatra ny 5 Mo ny rakitra');
+      setError(language === 'fr' ? 'Le fichier ne doit pas depasser 5 Mo' : 'Tsy tokony ho mihoatra ny 5 Mo ny rakitra');
       e.target.value = '';
       return;
     }
     
     // Validation type pour les images
     if (type === 'photo' && !file.type.startsWith('image/')) {
-      setError(language === 'fr' ? 'Le fichier doit être une image (JPG, PNG)' : 'Ny rakitra dia tokony ho sary (JPG, PNG)');
+      setError(language === 'fr' ? 'Le fichier doit etre une image (JPG, PNG)' : 'Ny rakitra dia tokony ho sary (JPG, PNG)');
       e.target.value = '';
       return;
     }
@@ -125,7 +142,6 @@ export default function ApplyPage() {
         setCertificatePreview(file.name);
         break;
     }
-    // Réinitialiser l'erreur
     setError('');
   };
 
@@ -189,7 +205,8 @@ export default function ApplyPage() {
     if (certificateFile) submitData.append('certificate', certificateFile);
     
     try {
-      const response = await fetch(`/api/jobs/${jobId}/apply`, {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+      const response = await fetch(`${API_URL}/jobs/apply`, {
         method: 'POST',
         body: submitData,
       });
@@ -200,21 +217,32 @@ export default function ApplyPage() {
         setSuccess(true);
         setTimeout(() => router.push('/jobs'), 3000);
       } else {
-        setError(data.error || (language === 'fr' ? 'Erreur lors de l\'envoi de votre candidature' : 'Nisy hadisoana tamin\'ny fandefasana ny fangatahanao'));
+        setError(data.message || (language === 'fr' ? 'Erreur lors de l\'envoi de votre candidature' : 'Nisy hadisoana tamin\'ny fandefasana ny fangatahanao'));
       }
     } catch (err) {
       console.error('Erreur:', err);
-      setError(language === 'fr' ? 'Erreur de connexion. Veuillez réessayer.' : 'Nisy hadisoana tamin\'ny fifandraisana. Miezaka indray azafady.');
+      setError(language === 'fr' ? 'Erreur de connexion. Veuillez reessayer.' : 'Nisy hadisoana tamin\'ny fifandraisana. Miezaka indray azafady.');
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Style du fond d ecran dynamique
+  const backgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
+    backgroundImage: `url(${pageBackground.image_url})`,
+    backgroundPosition: pageBackground.position || 'center',
+    backgroundSize: pageBackground.size || 'cover',
+  } : {};
+
+  const overlayStyle = pageBackground?.image_url ? {
+    backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 30) / 100})`,
+  } : {};
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-gray-500">{t('common.loading')}</p>
         </div>
       </div>
@@ -225,10 +253,10 @@ export default function ApplyPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <p className="text-gray-600">{error}</p>
           <Link href="/jobs" className="mt-4 inline-block text-blue-600 hover:underline">
-            ← {language === 'fr' ? 'Retour aux offres' : 'Hiverina any amin\'ny asa'}
+            <ArrowLeft className="w-4 h-4 inline mr-1" /> {language === 'fr' ? 'Retour aux offres' : 'Hiverina any amin\'ny asa'}
           </Link>
         </div>
       </div>
@@ -243,10 +271,10 @@ export default function ApplyPage() {
             <CheckCircle className="w-10 h-10 text-green-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {language === 'fr' ? 'Candidature envoyée !' : 'Vita ny fandefasana ny fangatahana !'}
+            {language === 'fr' ? 'Candidature envoyee' : 'Vita ny fandefasana ny fangatahana'}
           </h2>
           <p className="text-gray-600 mb-4">
-            {language === 'fr' ? 'Votre candidature pour' : 'Ny fangatahanao ho an\'ny'} <strong>{job?.title}</strong> {language === 'fr' ? 'a bien été enregistrée.' : 'dia voarakitra tsara.'}
+            {language === 'fr' ? 'Votre candidature pour' : 'Ny fangatahanao ho an\'ny'} <strong>{job?.title}</strong> {language === 'fr' ? 'a bien ete enregistree.' : 'dia voarakitra tsara.'}
           </p>
           <p className="text-sm text-gray-500 mb-6">
             {language === 'fr' 
@@ -261,8 +289,28 @@ export default function ApplyPage() {
     );
   }
 
+  // Obtenir l'icone du type de contrat
+  const getContractIcon = () => {
+    switch (job?.contract_type) {
+      case 'CDI': return Star;
+      case 'CDD': return Calendar;
+      case 'Stage': return GraduationCap;
+      case 'Volontariat': return Heart;
+      default: return Briefcase;
+    }
+  };
+  const ContractIcon = getContractIcon();
+
   return (
     <div className="min-h-screen bg-gray-50 py-12">
+      {/* Fond d ecran dynamique pour l'en-tete */}
+      {pageBackground?.image_url && (
+        <div className="fixed inset-0 -z-10">
+          <div className="absolute inset-0" style={backgroundStyle} />
+          <div className="absolute inset-0" style={overlayStyle} />
+        </div>
+      )}
+      
       <div className="max-w-3xl mx-auto px-4">
         {/* Lien retour */}
         <Link href="/jobs" className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-600 mb-6 transition">
@@ -270,7 +318,7 @@ export default function ApplyPage() {
           {language === 'fr' ? 'Retour aux offres' : 'Hiverina any amin\'ny asa'}
         </Link>
 
-        {/* En-tête offre */}
+        {/* En-tete offre */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-800">
             {language === 'fr' ? 'Candidature' : 'Fangatahana'}
@@ -279,10 +327,15 @@ export default function ApplyPage() {
             {language === 'fr' ? 'Offre :' : 'Asa :'} <span className="font-semibold text-blue-600">{job?.title}</span>
           </p>
           <div className="flex flex-wrap gap-3 mt-3 text-sm text-gray-500">
-            <span className="flex items-center gap-1">🏢 {job?.company_name || 'Y-Mad'}</span>
-            <span className="flex items-center gap-1">📍 {job?.location || 'Madagascar'}</span>
-            <span className="flex items-center gap-1">📄 {job?.contract_type}</span>
-            {job?.salary && <span className="flex items-center gap-1">💰 {job.salary}</span>}
+            <span className="flex items-center gap-1"><Building className="w-4 h-4" /> {job?.company_name || 'Y-Mad'}</span>
+            <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {job?.location || 'Madagascar'}</span>
+            <span className="flex items-center gap-1"><ContractIcon className="w-4 h-4" /> {job?.contract_type}</span>
+            {job?.salary && <span className="flex items-center gap-1"><DollarSign className="w-4 h-4" /> {job.salary}</span>}
+            {job?.deadline && (
+              <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> 
+                {language === 'fr' ? 'Limite :' : 'Farany :'} {new Date(job.deadline).toLocaleDateString()}
+              </span>
+            )}
           </div>
         </div>
 
@@ -330,7 +383,7 @@ export default function ApplyPage() {
                   />
                 </label>
               )}
-              <p className="text-xs text-gray-400">{language === 'fr' ? 'JPG, PNG, WebP • Max 5 Mo' : 'JPG, PNG, WebP • 5 Mo farafahakeliny'}</p>
+              <p className="text-xs text-gray-400">{language === 'fr' ? 'JPG, PNG, WebP - Max 5 Mo' : 'JPG, PNG, WebP - 5 Mo farafahakeliny'}</p>
             </div>
           </div>
 
@@ -378,7 +431,7 @@ export default function ApplyPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {language === 'fr' ? 'Téléphone' : 'Telefaonina'}
+                  {language === 'fr' ? 'Telephone' : 'Telefaonina'}
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -412,10 +465,10 @@ export default function ApplyPage() {
             </div>
           </div>
 
-          {/* Expérience */}
+          {/* Experience */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">
-              {language === 'fr' ? 'Expérience professionnelle' : 'Traza'}
+              {language === 'fr' ? 'Experience professionnelle' : 'Traza'}
             </h2>
             <textarea
               name="experience"
@@ -424,7 +477,7 @@ export default function ApplyPage() {
               rows={4}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
               placeholder={language === 'fr' 
-                ? 'Décrivez votre parcours professionnel, vos compétences et vos réalisations...'
+                ? 'Decrivez votre parcours professionnel, vos competences et vos realisations...'
                 : 'Lazao ny traza, fahaizana ary zava-bita...'}
             />
           </div>
@@ -452,7 +505,7 @@ export default function ApplyPage() {
                 </label>
               </div>
               
-              {/* Diplôme */}
+              {/* Diplome */}
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition cursor-pointer">
                 <input 
                   type="file" 
@@ -464,7 +517,7 @@ export default function ApplyPage() {
                 <label htmlFor="diploma" className="cursor-pointer block">
                   <FileWarning className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                   <p className="text-sm font-medium text-gray-700">
-                    {language === 'fr' ? 'Diplôme / Certificat' : 'Diploma / Fanamarinana'}
+                    {language === 'fr' ? 'Diplome / Certificat' : 'Diploma / Fanamarinana'}
                   </p>
                   <p className="text-xs text-gray-400">{language === 'fr' ? 'PDF, JPG, PNG - 5 Mo' : 'PDF, JPG, PNG - 5 Mo'}</p>
                   {diplomaPreview && <p className="text-xs text-green-600 mt-2 flex items-center justify-center gap-1"><FileCheck className="w-3 h-3" /> {diplomaPreview}</p>}
@@ -492,10 +545,10 @@ export default function ApplyPage() {
             </div>
           </div>
 
-          {/* Note supplémentaire */}
+          {/* Note supplementaire */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">
-              {language === 'fr' ? 'Note supplémentaire' : 'Fanamarihana fanampiny'}
+              {language === 'fr' ? 'Note supplementaire' : 'Fanamarihana fanampiny'}
             </h2>
             <textarea
               name="notes"
@@ -504,7 +557,7 @@ export default function ApplyPage() {
               rows={3}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
               placeholder={language === 'fr' 
-                ? 'Informations complémentaires que vous souhaitez ajouter...'
+                ? 'Informations complementaires que vous souhaitez ajouter...'
                 : 'Fampahalalana fanampiny tianao ampiana...'}
             />
           </div>

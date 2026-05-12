@@ -1,592 +1,753 @@
+// frontend/src/app/(dashboard)/dashboard/profile/page.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 import { 
-  User, Mail, Phone, MapPin, Shield, Edit, Save, X, 
-  LogOut, AlertCircle, CheckCircle, Eye, EyeOff, Lock, Camera
+  User, Mail, Phone, MapPin, Calendar, Shield, Edit2, Save, X, 
+  Camera, Loader2, CheckCircle, AlertCircle, Globe, 
+  Briefcase, Heart, Award, Clock, LogOut, Lock, Key,
+  Linkedin, Twitter, Github
 } from 'lucide-react';
-import api from '@/services/api';
-import { authService } from '@/services/authService';
+import { pageService, PageBackground } from '@/services/pageService';
+
+interface ProfileFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  region: string;
+  bio: string;
+  position: string;
+  department: string;
+  skills: string;
+  socialLinkedin: string;
+  socialTwitter: string;
+  socialGithub: string;
+}
 
 export default function ProfilePage() {
+  const { user, token, logout } = useAuth();
   const router = useRouter();
-  const { user, isLoading, logout, updateProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState('');
-  const [error, setError] = useState('');
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [photoVersion, setPhotoVersion] = useState(Date.now()); // Pour forcer le rechargement
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   
-  const [profile, setProfile] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
+  const [formData, setFormData] = useState<ProfileFormData>({
+    firstName: user?.firstName || '',
+    lastName: user?.lastName || '',
+    email: user?.email || '',
     phone: '',
-    region: '',
-    bio: '',
-    photo: '',
+    region: 'Analamanga',
+    bio: 'Membre engagé de Y-Mad, passionné par le développement de Madagascar.',
+    position: 'Membre actif',
+    department: 'Programmes',
+    skills: 'Gestion de projet, Communication, Travail d\'équipe',
+    socialLinkedin: '',
+    socialTwitter: '',
+    socialGithub: ''
   });
-  
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [passwordLoading, setPasswordLoading] = useState(false);
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState('');
 
+  const [originalData, setOriginalData] = useState<ProfileFormData>(formData);
+  const [originalImage, setOriginalImage] = useState<string | null>(null);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+
+  // Charger le fond d'écran
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push('/login');
+    loadPageBackground();
+  }, []);
+
+  const loadPageBackground = async () => {
+    try {
+      const background = await pageService.getBackground('profile');
+      if (background && background.is_active && background.image_url) {
+        setPageBackground(background);
+      }
+    } catch (error) {
+      console.error('Erreur chargement fond d\'écran:', error);
     }
-  }, [user, isLoading, router]);
-
-  useEffect(() => {
-    if (user) {
-      setProfile({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || '',
-        phone: user.phone || '',
-        region: user.region || '',
-        bio: user.bio || '',
-        photo: user.photo || '',
-      });
-    }
-  }, [user]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setProfile(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSaveProfile = async () => {
+  // Charger les données du profil depuis l'API
+  useEffect(() => {
+    fetchProfileData();
+  }, []);
+
+  const fetchProfileData = async () => {
+    try {
+      const response = await fetch(`${API_URL}/auth/profile`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setFormData(prev => ({
+          ...prev,
+          firstName: data.firstName || prev.firstName,
+          lastName: data.lastName || prev.lastName,
+          email: data.email || prev.email,
+          phone: data.phone || prev.phone,
+          region: data.region || prev.region,
+          bio: data.bio || prev.bio,
+          position: data.position || prev.position,
+          department: data.department || prev.department,
+          skills: data.skills || prev.skills,
+          socialLinkedin: data.socialLinkedin || '',
+          socialTwitter: data.socialTwitter || '',
+          socialGithub: data.socialGithub || '',
+        }));
+        setOriginalData(formData);
+        
+        // Charger la photo de profil
+        if (data.avatar_url) {
+          setProfileImage(data.avatar_url);
+          setOriginalImage(data.avatar_url);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur chargement profil:', error);
+    }
+  };
+
+  // Upload de la photo
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Veuillez sélectionner une image (JPG, PNG, WEBP)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('L\'image ne doit pas dépasser 5 Mo');
+      return;
+    }
+
+    setUploadError(null);
+    setImageFile(file);
+    setProfileImage(URL.createObjectURL(file));
+  };
+
+  const uploadImage = async (): Promise<string | null> => {
+    if (!imageFile) return null;
+
+    setIsUploading(true);
+    const uploadFormData = new FormData();
+    uploadFormData.append('file', imageFile);
+    uploadFormData.append('type', 'profile');
+
+    try {
+      const response = await fetch(`${API_URL}/upload/profile`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: uploadFormData,
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        const imageUrl = data.url;
+        setUploadSuccess(true);
+        setTimeout(() => setUploadSuccess(false), 3000);
+        return imageUrl;
+      } else {
+        setUploadError(data.message || 'Erreur lors de l\'upload');
+        return null;
+      }
+    } catch (error) {
+      setUploadError('Erreur de connexion');
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const removeImage = () => {
+    setProfileImage(null);
+    setImageFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSave = async () => {
     setSaving(true);
-    setError('');
-    setSuccess('');
+    setUploadError(null);
     
     try {
-      await updateProfile({
-        firstName: profile.firstName,
-        lastName: profile.lastName,
-        phone: profile.phone,
-        region: profile.region,
-        bio: profile.bio,
+      let newImageUrl = profileImage;
+      
+      // Upload de l'image si nécessaire
+      if (imageFile) {
+        const uploadedUrl = await uploadImage();
+        if (uploadedUrl) {
+          newImageUrl = uploadedUrl;
+        }
+      }
+
+      // Sauvegarde des données du profil
+      const response = await fetch(`${API_URL}/auth/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          region: formData.region,
+          bio: formData.bio,
+          position: formData.position,
+          department: formData.department,
+          skills: formData.skills,
+          socialLinkedin: formData.socialLinkedin,
+          socialTwitter: formData.socialTwitter,
+          socialGithub: formData.socialGithub,
+          avatar_url: newImageUrl
+        }),
       });
-      setSuccess('Profil mis à jour avec succès');
-      setIsEditing(false);
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la mise à jour');
-      setTimeout(() => setError(''), 3000);
+
+      if (response.ok) {
+        setSaveSuccess(true);
+        setOriginalData(formData);
+        setOriginalImage(profileImage);
+        setIsEditing(false);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        const data = await response.json();
+        setUploadError(data.message || 'Erreur lors de la sauvegarde');
+      }
+    } catch (error) {
+      setUploadError('Erreur de connexion');
     } finally {
       setSaving(false);
     }
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setError('Veuillez sélectionner une image');
-      setTimeout(() => setError(''), 3000);
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError('L\'image ne doit pas dépasser 5 Mo');
-      setTimeout(() => setError(''), 3000);
-      return;
-    }
-
-    setUploadingPhoto(true);
-    setError('');
-    setSuccess('');
-
-    const formData = new FormData();
-    formData.append('photo', file);
-
-    try {
-      const response = await api.post('/auth/upload-photo', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      if (response.data.success) {
-        const photoUrl = response.data.photoUrl;
-        
-        // Mettre à jour le state local
-        setProfile(prev => ({ ...prev, photo: photoUrl }));
-        
-        // Mettre à jour le localStorage
-        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-        currentUser.photo = photoUrl;
-        localStorage.setItem('user', JSON.stringify(currentUser));
-        
-        // Mettre à jour le contexte (forcer le rechargement)
-        await updateProfile({ photo: photoUrl });
-        
-        // Forcer le rechargement de l'image en changeant la version
-        setPhotoVersion(Date.now());
-        
-        setSuccess('Photo de profil mise à jour avec succès');
-        setTimeout(() => setSuccess(''), 3000);
-      }
-    } catch (err: any) {
-      console.error('Upload error:', err);
-      setError(err.response?.data?.message || 'Erreur lors de l\'upload');
-      setTimeout(() => setError(''), 3000);
-    } finally {
-      setUploadingPhoto(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
+  const handleCancel = () => {
+    setIsEditing(false);
+    setFormData(originalData);
+    setProfileImage(originalImage);
+    setImageFile(null);
+    setUploadError(null);
   };
 
-  const handleChangePassword = async () => {
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setPasswordError('Les mots de passe ne correspondent pas');
-      return;
-    }
-    
-    if (passwordData.newPassword.length < 6) {
-      setPasswordError('Le mot de passe doit contenir au moins 6 caractères');
-      return;
-    }
-    
-    setPasswordLoading(true);
-    setPasswordError('');
-    setPasswordSuccess('');
-    
-    try {
-      await authService.changePassword({
-        currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword,
-      });
-      setPasswordSuccess('Mot de passe changé avec succès');
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setTimeout(() => {
-        setShowPasswordModal(false);
-        setPasswordSuccess('');
-      }, 2000);
-    } catch (err: any) {
-      setPasswordError(err.response?.data?.message || 'Mot de passe actuel incorrect');
-    } finally {
-      setPasswordLoading(false);
-    }
+  const memberSince = "Janvier 2025";
+  const lastLogin = new Date().toLocaleString('fr-FR', { 
+    day: 'numeric', 
+    month: 'long', 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+
+  const stats = [
+    { label: 'Projets suivis', value: '8', icon: Briefcase, color: 'blue' },
+    { label: 'Bénéficiaires', value: '156', icon: Heart, color: 'rose' },
+    { label: 'Heures de bénévolat', value: '42', icon: Clock, color: 'green' },
+    { label: 'Certifications', value: '2', icon: Award, color: 'purple' },
+  ];
+
+  const getRoleLabel = () => {
+    const role = user?.role;
+    if (role === 'super_admin') return 'Super Administrateur';
+    if (role === 'admin') return 'Administrateur';
+    if (role === 'staff') return 'Personnel';
+    if (role === 'member') return 'Membre';
+    if (role === 'volunteer') return 'Bénévole';
+    if (role === 'partner') return 'Partenaire';
+    return 'Visiteur';
   };
 
-  const handleLogout = () => {
-    logout();
-    router.push('/');
+  const getRoleColor = () => {
+    const role = user?.role;
+    if (role === 'super_admin') return 'bg-purple-100 text-purple-700';
+    if (role === 'admin') return 'bg-red-100 text-red-700';
+    if (role === 'staff') return 'bg-blue-100 text-blue-700';
+    if (role === 'member') return 'bg-green-100 text-green-700';
+    if (role === 'volunteer') return 'bg-orange-100 text-orange-700';
+    return 'bg-gray-100 text-gray-700';
   };
 
-  const getRoleBadge = (role: string) => {
-    const roles: Record<string, { color: string; label: string }> = {
-      super_admin: { color: 'bg-red-100 text-red-700', label: 'Super Administrateur' },
-      admin: { color: 'bg-purple-100 text-purple-700', label: 'Administrateur' },
-      staff: { color: 'bg-blue-100 text-blue-700', label: 'Staff' },
-      member: { color: 'bg-green-100 text-green-700', label: 'Membre' },
-      volunteer: { color: 'bg-orange-100 text-orange-700', label: 'Bénévole' },
-      partner: { color: 'bg-cyan-100 text-cyan-700', label: 'Partenaire' },
-      visitor: { color: 'bg-gray-100 text-gray-700', label: 'Visiteur' },
-    };
-    return roles[role] || roles.visitor;
-  };
+  // Style du fond d'écran
+  const backgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
+    backgroundImage: `url(${pageBackground.image_url})`,
+    backgroundPosition: pageBackground.position || 'center',
+    backgroundSize: pageBackground.size || 'cover',
+    backgroundAttachment: 'fixed',
+  } : {};
 
-  const roleBadge = getRoleBadge(user.role);
-  
-  // Construire l'URL complète de la photo
-  const photoUrl = profile.photo 
-    ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}${profile.photo}?v=${photoVersion}`
-    : null;
+  const overlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
+    backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 30) / 100})`,
+  } : {};
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="container mx-auto px-4 max-w-4xl">
-        {/* Header */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
-          <div className="h-32 bg-gradient-to-r from-blue-600 to-blue-800"></div>
+    <div className="min-h-screen">
+      {/* Fond d'écran */}
+      {pageBackground?.image_url && (
+        <>
+          <div className="fixed inset-0 z-0" style={backgroundStyle} />
+          <div className="fixed inset-0 z-0" style={overlayStyle} />
+        </>
+      )}
+
+      <div className="relative z-10 bg-gray-50 min-h-screen py-6 lg:py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           
-          <div className="px-6 pb-6 relative">
-            <div className="flex flex-col md:flex-row md:items-end gap-4 -mt-12">
-              {/* Avatar avec upload */}
-              <div className="relative group">
-                <div className="w-28 h-28 rounded-full border-4 border-white bg-blue-100 overflow-hidden shadow-lg">
-                  {photoUrl ? (
-                    <img 
-                      src={photoUrl}
-                      alt="Avatar" 
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <span className="text-3xl font-bold text-blue-600">
-                        {profile.firstName?.charAt(0) || 'U'}{profile.lastName?.charAt(0) || 'S'}
-                      </span>
+          {/* En-tête */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Mon profil</h1>
+              <p className="text-gray-500 text-sm mt-1">Gérez vos informations personnelles et votre compte</p>
+            </div>
+            <div className="flex gap-3">
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={handleCancel}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+                  >
+                    <X className="w-4 h-4" />
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Modifier le profil
+                </button>
+              )}
+              <button
+                onClick={() => logout()}
+                className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition"
+              >
+                <LogOut className="w-4 h-4" />
+                Déconnexion
+              </button>
+            </div>
+          </div>
+
+          {/* Messages de notification */}
+          {saveSuccess && (
+            <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2">
+              <CheckCircle className="w-5 h-5" />
+              Profil mis à jour avec succès !
+            </div>
+          )}
+          {uploadSuccess && (
+            <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2">
+              <CheckCircle className="w-5 h-5" />
+              Photo de profil mise à jour avec succès !
+            </div>
+          )}
+          {uploadError && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              {uploadError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* ==================== COLONNE GAUCHE ==================== */}
+            <div className="space-y-5">
+              
+              {/* Carte de profil */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="relative h-24 bg-gradient-to-r from-blue-600 to-blue-700">
+                  <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2">
+                    <div className="relative">
+                      <div className="w-28 h-28 rounded-full bg-white p-1 shadow-lg">
+                        {profileImage ? (
+                          <img 
+                            src={profileImage} 
+                            alt="Photo de profil" 
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full rounded-full bg-blue-100 flex items-center justify-center">
+                            <User className="w-12 h-12 text-blue-600" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      {isEditing && (
+                        <>
+                          <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="absolute bottom-0 right-0 p-1.5 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition"
+                            title="Changer la photo"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                          </button>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
+                            onChange={handleImageSelect}
+                            className="hidden"
+                          />
+                          {profileImage && (
+                            <button
+                              onClick={removeImage}
+                              className="absolute bottom-0 -right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition"
+                              title="Supprimer la photo"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="pt-16 pb-5 px-4 text-center">
+                  <h3 className="text-xl font-bold text-gray-800">
+                    {formData.firstName} {formData.lastName}
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-2">{formData.position}</p>
+                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${getRoleColor()}`}>
+                    <Shield className="w-3 h-3" />
+                    {getRoleLabel()}
+                  </div>
+                  
+                  {isUploading && (
+                    <div className="mt-3 flex items-center justify-center gap-2 text-sm text-blue-600">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Téléchargement en cours...
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingPhoto}
-                  className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-1.5 text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50"
-                >
-                  {uploadingPhoto ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Camera className="w-4 h-4" />
-                  )}
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/gif,image/webp"
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                />
+                
+                <div className="border-t border-gray-100 p-4 space-y-2 bg-gray-50">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Calendar className="w-4 h-4" />
+                    <span>Membre depuis {memberSince}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Clock className="w-4 h-4" />
+                    <span>Dernière connexion: {lastLogin}</span>
+                  </div>
+                </div>
               </div>
+
+              {/* Statistiques */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Statistiques</h3>
+                <div className="space-y-3">
+                  {stats.map((stat, idx) => {
+                    const Icon = stat.icon;
+                    return (
+                      <div key={idx} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <Icon className="w-4 h-4 text-gray-500" />
+                          </div>
+                          <span className="text-sm text-gray-600">{stat.label}</span>
+                        </div>
+                        <span className="font-semibold text-gray-800">{stat.value}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* ==================== COLONNE DROITE ==================== */}
+            <div className="lg:col-span-2 space-y-5">
               
-              <div className="flex-1 text-center md:text-left">
-                <div className="flex flex-col md:flex-row md:items-center gap-2">
-                  <h1 className="text-2xl font-bold text-gray-800">
-                    {profile.firstName} {profile.lastName}
-                  </h1>
-                  <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${roleBadge.color}`}>
-                    <Shield className="w-3 h-3 mr-1" />
-                    {roleBadge.label}
-                  </span>
+              {/* Informations personnelles */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+                  <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                    <User className="w-5 h-5 text-blue-600" />
+                    Informations personnelles
+                  </h2>
                 </div>
-                <p className="text-gray-500 text-sm mt-1">{profile.email}</p>
-              </div>
-              <div className="flex gap-2">
-                {!isEditing ? (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                  >
-                    <Edit className="w-4 h-4" />
-                    Modifier
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => setIsEditing(false)}
-                      className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-                    >
-                      <X className="w-4 h-4" />
-                      Annuler
-                    </button>
-                    <button
-                      onClick={handleSaveProfile}
-                      disabled={saving}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50"
-                    >
-                      {saving ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="p-5 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={formData.firstName}
+                          onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        />
                       ) : (
-                        <Save className="w-4 h-4" />
+                        <p className="text-gray-800">{formData.firstName}</p>
                       )}
-                      Enregistrer
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={formData.lastName}
+                          onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        />
+                      ) : (
+                        <p className="text-gray-800">{formData.lastName}</p>
+                      )}
+                    </div>
+                  </div>
 
-        {/* Messages */}
-        {success && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg flex items-center gap-2">
-            <CheckCircle className="w-5 h-5" />
-            <span>{success}</span>
-          </div>
-        )}
-        
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <div className="grid md:grid-cols-3 gap-6">
-          {/* Informations personnelles */}
-          <div className="md:col-span-2">
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Informations personnelles</h2>
-              <div className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        name="firstName"
-                        value={profile.firstName}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{profile.firstName || '-'}</p>
-                    )}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Adresse email</label>
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-gray-400" />
+                      <p className="text-gray-800">{formData.email}</p>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">L'adresse email ne peut pas être modifiée</p>
                   </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-gray-400" />
+                        {isEditing ? (
+                          <input
+                            type="tel"
+                            value={formData.phone}
+                            onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                            placeholder="034 00 000 00"
+                          />
+                        ) : (
+                          <p className="text-gray-800">{formData.phone || 'Non renseigné'}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Région</label>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        {isEditing ? (
+                          <select
+                            value={formData.region}
+                            onChange={(e) => setFormData({...formData, region: e.target.value})}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                          >
+                            <option value="Analamanga">Analamanga</option>
+                            <option value="Atsimo-Andrefana">Atsimo-Andrefana</option>
+                            <option value="Haute Matsiatra">Haute Matsiatra</option>
+                            <option value="Vakinankaratra">Vakinankaratra</option>
+                          </select>
+                        ) : (
+                          <p className="text-gray-800">{formData.region}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Biographie</label>
                     {isEditing ? (
-                      <input
-                        type="text"
-                        name="lastName"
-                        value={profile.lastName}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      <textarea
+                        rows={3}
+                        value={formData.bio}
+                        onChange={(e) => setFormData({...formData, bio: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        placeholder="Parlez-nous de vous..."
                       />
                     ) : (
-                      <p className="text-gray-900">{profile.lastName || '-'}</p>
+                      <p className="text-gray-600">{formData.bio}</p>
                     )}
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-gray-400" />
-                    <p className="text-gray-900">{profile.email}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-gray-400" />
-                    {isEditing ? (
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={profile.phone}
-                        onChange={handleInputChange}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Non renseigné"
-                      />
-                    ) : (
-                      <p className="text-gray-900">{profile.phone || 'Non renseigné'}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Région</label>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-gray-400" />
-                    {isEditing ? (
-                      <select
-                        name="region"
-                        value={profile.region}
-                        onChange={handleInputChange}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Sélectionnez une région</option>
-                        <option value="Analamanga">Analamanga</option>
-                        <option value="Atsinanana">Atsinanana</option>
-                        <option value="Vakinankaratra">Vakinankaratra</option>
-                        <option value="Haute Matsiatra">Haute Matsiatra</option>
-                        <option value="Boeny">Boeny</option>
-                        <option value="Diana">Diana</option>
-                        <option value="Sava">Sava</option>
-                        <option value="Itasy">Itasy</option>
-                      </select>
-                    ) : (
-                      <p className="text-gray-900">{profile.region || 'Non renseigné'}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
-                  {isEditing ? (
-                    <textarea
-                      name="bio"
-                      value={profile.bio}
-                      onChange={handleInputChange}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Parlez-nous de vous..."
-                    />
-                  ) : (
-                    <p className="text-gray-600">{profile.bio || 'Aucune biographie'}</p>
-                  )}
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Sécurité</h2>
-              <button
-                onClick={() => setShowPasswordModal(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-              >
-                <Lock className="w-4 h-4" />
-                Changer le mot de passe
-              </button>
-            </div>
+              {/* Informations professionnelles */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+                  <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                    <Briefcase className="w-5 h-5 text-blue-600" />
+                    Informations professionnelles
+                  </h2>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Poste / Fonction</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={formData.position}
+                          onChange={(e) => setFormData({...formData, position: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        />
+                      ) : (
+                        <p className="text-gray-800">{formData.position}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Département</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={formData.department}
+                          onChange={(e) => setFormData({...formData, department: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        />
+                      ) : (
+                        <p className="text-gray-800">{formData.department}</p>
+                      )}
+                    </div>
+                  </div>
 
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                <LogOut className="w-4 h-4" />
-                Se déconnecter
-              </button>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Compétences</label>
+                    {isEditing ? (
+                      <textarea
+                        rows={2}
+                        value={formData.skills}
+                        onChange={(e) => setFormData({...formData, skills: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        placeholder="Séparez vos compétences par des virgules"
+                      />
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {formData.skills.split(',').map((skill, idx) => (
+                          <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                            {skill.trim()}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Réseaux sociaux */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+                  <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                    <Globe className="w-5 h-5 text-blue-600" />
+                    Réseaux sociaux
+                  </h2>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn</label>
+                    <div className="flex items-center gap-2">
+                      <Linkedin className="w-4 h-4 text-gray-400" />
+                      {isEditing ? (
+                        <input
+                          type="url"
+                          value={formData.socialLinkedin}
+                          onChange={(e) => setFormData({...formData, socialLinkedin: e.target.value})}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                          placeholder="https://linkedin.com/in/..."
+                        />
+                      ) : (
+                        formData.socialLinkedin ? (
+                          <a href={formData.socialLinkedin} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">
+                            {formData.socialLinkedin}
+                          </a>
+                        ) : (
+                          <p className="text-gray-400 text-sm">Non renseigné</p>
+                        )
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Twitter / X</label>
+                    <div className="flex items-center gap-2">
+                      <Twitter className="w-4 h-4 text-gray-400" />
+                      {isEditing ? (
+                        <input
+                          type="url"
+                          value={formData.socialTwitter}
+                          onChange={(e) => setFormData({...formData, socialTwitter: e.target.value})}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        />
+                      ) : (
+                        formData.socialTwitter ? (
+                          <a href={formData.socialTwitter} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">
+                            {formData.socialTwitter}
+                          </a>
+                        ) : (
+                          <p className="text-gray-400 text-sm">Non renseigné</p>
+                        )
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">GitHub</label>
+                    <div className="flex items-center gap-2">
+                      <Github className="w-4 h-4 text-gray-400" />
+                      {isEditing ? (
+                        <input
+                          type="url"
+                          value={formData.socialGithub}
+                          onChange={(e) => setFormData({...formData, socialGithub: e.target.value})}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        />
+                      ) : (
+                        formData.socialGithub ? (
+                          <a href={formData.socialGithub} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">
+                            {formData.socialGithub}
+                          </a>
+                        ) : (
+                          <p className="text-gray-400 text-sm">Non renseigné</p>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sécurité */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+                  <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                    <Lock className="w-5 h-5 text-blue-600" />
+                    Sécurité
+                  </h2>
+                </div>
+                <div className="p-5">
+                  <button 
+                    onClick={() => router.push('/forgot-password')}
+                    className="flex items-center gap-3 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                  >
+                    <Key className="w-4 h-4" />
+                    Changer le mot de passe
+                  </button>
+                  <p className="text-xs text-gray-400 mt-3">
+                    Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe régulièrement.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Modal changement de mot de passe */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Changer le mot de passe</h2>
-              <button
-                onClick={() => {
-                  setShowPasswordModal(false);
-                  setPasswordError('');
-                  setPasswordSuccess('');
-                  setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {passwordError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
-                <AlertCircle className="w-5 h-5" />
-                <span className="text-sm">{passwordError}</span>
-              </div>
-            )}
-
-            {passwordSuccess && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg flex items-center gap-2">
-                <CheckCircle className="w-5 h-5" />
-                <span className="text-sm">{passwordSuccess}</span>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe actuel</label>
-                <div className="relative">
-                  <input
-                    type={showCurrentPassword ? 'text' : 'password'}
-                    value={passwordData.currentPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
-                    placeholder="Entrez votre mot de passe actuel"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  >
-                    {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nouveau mot de passe</label>
-                <div className="relative">
-                  <input
-                    type={showNewPassword ? 'text' : 'password'}
-                    value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
-                    placeholder="Nouveau mot de passe"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  >
-                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Confirmer le mot de passe</label>
-                <input
-                  type="password"
-                  value={passwordData.confirmPassword}
-                  onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Confirmez votre mot de passe"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowPasswordModal(false);
-                    setPasswordError('');
-                    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={handleChangePassword}
-                  disabled={passwordLoading}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-                >
-                  {passwordLoading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
-                  ) : (
-                    'Changer'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+// backend/src/entities/user.entity.ts
 import { 
   Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, 
   UpdateDateColumn, BeforeInsert, Index 
@@ -20,6 +21,10 @@ export enum UserRole {
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  // ✅ Correction: utiliser name: 'avatar_url' pour correspondre à la base
+  @Column({ name: 'avatar_url', type: 'text', nullable: true })
+  avatar_url: string;
 
   @Column({ unique: true })
   email: string;
@@ -44,6 +49,24 @@ export class User {
 
   @Column({ nullable: true })
   region: string;
+
+  @Column({ nullable: true, type: 'varchar', length: 100 })
+  position: string;
+
+  @Column({ nullable: true, type: 'varchar', length: 100 })
+  department: string;
+
+  @Column({ nullable: true, type: 'text' })
+  skills: string;
+
+  @Column({ name: 'social_linkedin', nullable: true, type: 'text' })
+  socialLinkedin: string;
+
+  @Column({ name: 'social_twitter', nullable: true, type: 'text' })
+  socialTwitter: string;
+
+  @Column({ name: 'social_github', nullable: true, type: 'text' })
+  socialGithub: string;
 
   @Column({ type: 'varchar', default: UserRole.VISITOR })
   role: string;
@@ -86,7 +109,7 @@ export class User {
     if (this.password) {
       const saltRounds = this.role === UserRole.SUPER_ADMIN ? 12 : 10;
       this.password = await bcrypt.hash(this.password, saltRounds);
-      console.log('🔐 Hash généré pour:', this.email);
+      console.log('Hash généré pour:', this.email);
     }
   }
 

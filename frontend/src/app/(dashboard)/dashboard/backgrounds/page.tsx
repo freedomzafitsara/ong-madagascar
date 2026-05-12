@@ -3,111 +3,121 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { backgroundService, Background, backgroundPages } from '@/services/backgroundService';
-import { 
-  Image as ImageIcon, Plus, Edit, Trash2, Eye, RefreshCw, Loader2,
-  CheckCircle, XCircle as XCircleIcon, AlertCircle, Upload, Link as LinkIcon
-} from 'lucide-react';
-import NextImage from 'next/image';
+import { backgroundService, BackgroundSettings } from '@/services/backgroundService';
+import ImageUploader from '@/components/admin/ImageUploader';
+import Link from 'next/link';
+import { ArrowLeft, Save, Loader2, AlertCircle, CheckCircle, Palette } from 'lucide-react';
 
-export default function BackgroundsPage() {
+// Liste des pages disponibles avec toutes les pages du site
+const pagesList = [
+  { value: 'home', label: 'Accueil', label_mg: 'Fandraisana' },
+  { value: 'about', label: 'A propos', label_mg: 'Momba anay' },
+  { value: 'projects', label: 'Projets', label_mg: 'Tetikasa' },
+  { value: 'events', label: 'Evenements', label_mg: 'Hetsika' },
+  { value: 'jobs', label: 'Emploi', label_mg: 'Asa' },
+  { value: 'blog', label: 'Blog', label_mg: 'Bitsika' },
+  { value: 'contact', label: 'Contact', label_mg: 'Fifandraisana' },
+  { value: 'join', label: 'Adhesion', label_mg: 'Fandraisana mpikambana' },
+  { value: 'donate', label: 'Faire un don', label_mg: 'Manome fanomezana' },
+  { value: 'login', label: 'Connexion', label_mg: 'Hiditra' },
+  { value: 'register', label: 'Inscription', label_mg: 'Hisoratra anarana' },
+  { value: 'dashboard', label: 'Tableau de bord', label_mg: 'Dashboard' }
+];
+
+export default function BackgroundsManagementPage() {
   const { token, hasRole } = useAuth();
   const { language } = useLanguage();
-  const [backgrounds, setBackgrounds] = useState<Background[]>([]);
+  const [backgrounds, setBackgrounds] = useState<Record<string, BackgroundSettings>>({});
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<Background | null>(null);
-  const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [formData, setFormData] = useState({
-    page: 'home',
-    image_url: '',
-    thumbnail_url: '',
-    mobile_url: '',
-    is_active: true,
-    alt_text: '',
-    overlay_opacity: 0,
-    position: 'center',
-    size: 'cover',
-  });
 
+  // Verification des droits d'acces
+  if (!hasRole('super_admin') && !hasRole('admin')) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-800">Acces non autorise</h1>
+          <p className="text-gray-500 mt-2">Vous n avez pas les droits pour acceder a cette page.</p>
+          <Link href="/dashboard" className="mt-4 inline-flex items-center gap-2 text-blue-600">
+            Retour au tableau de bord
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Chargement de tous les fonds d'ecran
   useEffect(() => {
-    fetchBackgrounds();
+    fetchAllBackgrounds();
   }, []);
 
-  const fetchBackgrounds = async () => {
+  const fetchAllBackgrounds = async () => {
     setLoading(true);
+    setMessage(null);
+    
     try {
-      const data = await backgroundService.getAll(token!);
-      setBackgrounds(data);
+      const loadedBackgrounds: Record<string, BackgroundSettings> = {};
+      
+      // Charger chaque page une par une
+      for (const page of pagesList) {
+        const bg = await backgroundService.getBackground(page.value);
+        if (bg) {
+          loadedBackgrounds[page.value] = bg;
+        } else {
+          // Valeurs par defaut si aucun fond d'ecran n'existe
+          loadedBackgrounds[page.value] = {
+            page: page.value,
+            image_url: '',
+            is_active: false,
+            overlay_opacity: 30,
+            position: 'center',
+            size: 'cover',
+            alt_text: ''
+          };
+        }
+      }
+      
+      setBackgrounds(loadedBackgrounds);
     } catch (error) {
-      console.error('Erreur:', error);
-      setMessage({ type: 'error', text: 'Erreur de chargement' });
+      console.error('Erreur de chargement:', error);
+      setMessage({ type: 'error', text: 'Erreur de chargement des fonds d ecran' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Mise a jour d'un fond d'ecran
+  const updateBackground = async (page: string, data: Partial<BackgroundSettings>) => {
+    setSaving(prev => ({ ...prev, [page]: true }));
+    setMessage(null);
+
     try {
-      if (editing) {
-        await backgroundService.update(token!, editing.id, formData);
-        setMessage({ type: 'success', text: 'Fond d\'écran mis à jour' });
-      } else {
-        await backgroundService.create(token!, formData);
-        setMessage({ type: 'success', text: 'Fond d\'écran créé' });
-      }
-      setShowModal(false);
-      setEditing(null);
-      setFormData({
-        page: 'home',
-        image_url: '',
-        thumbnail_url: '',
-        mobile_url: '',
-        is_active: true,
-        alt_text: '',
-        overlay_opacity: 0,
-        position: 'center',
-        size: 'cover',
+      await backgroundService.updateBackground(page, token!, data);
+      
+      setBackgrounds(prev => ({
+        ...prev,
+        [page]: { ...prev[page], ...data }
+      }));
+      
+      setMessage({ 
+        type: 'success', 
+        text: `Fond d ecran de la page ${page} mis a jour` 
       });
-      fetchBackgrounds();
+      
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
-      setMessage({ type: 'error', text: 'Erreur lors de l\'enregistrement' });
+      console.error('Erreur de mise a jour:', error);
+      setMessage({ type: 'error', text: 'Erreur lors de la mise a jour' });
+    } finally {
+      setSaving(prev => ({ ...prev, [page]: false }));
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Supprimer ce fond d\'écran ?')) return;
-    try {
-      await backgroundService.delete(token!, id);
-      setMessage({ type: 'success', text: 'Fond d\'écran supprimé' });
-      fetchBackgrounds();
-      setTimeout(() => setMessage(null), 3000);
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Erreur lors de la suppression' });
-    }
-  };
-
-  const handleEdit = (background: Background) => {
-    setEditing(background);
-    setFormData({
-      page: background.page,
-      image_url: background.image_url,
-      thumbnail_url: background.thumbnail_url || '',
-      mobile_url: background.mobile_url || '',
-      is_active: background.is_active,
-      alt_text: background.alt_text || '',
-      overlay_opacity: background.overlay_opacity || 0,
-      position: background.position || 'center',
-      size: background.size || 'cover',
-    });
-    setShowModal(true);
-  };
-
-  const getPageLabel = (page: string) => {
-    const found = backgroundPages.find(p => p.value === page);
-    return found ? (language === 'fr' ? found.label : found.label_mg) : page;
+  // Gestion de l'upload d'image
+  const handleImageUpload = (page: string, url: string) => {
+    updateBackground(page, { image_url: url, is_active: true });
   };
 
   if (loading) {
@@ -120,200 +130,182 @@ export default function BackgroundsPage() {
 
   return (
     <div className="space-y-6">
-      {/* En-tête */}
+      {/* En-tete */}
       <div className="flex justify-between items-center">
         <div>
           <div className="flex items-center gap-2">
-            <ImageIcon className="w-6 h-6 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-800">Fonds d'écran</h1>
+            <Palette className="w-6 h-6 text-blue-600" />
+            <h1 className="text-2xl font-bold text-gray-800">Gestion des fonds d ecran</h1>
           </div>
-          <p className="text-gray-500 text-sm mt-1">Gérez les images de fond pour chaque page</p>
+          <p className="text-gray-500 text-sm mt-1">
+            Personnalisez l image de fond de chaque page du site
+          </p>
         </div>
-        <button
-          onClick={() => { setEditing(null); setShowModal(true); }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          Ajouter
-        </button>
+        <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+          <ArrowLeft className="w-4 h-4" /> Retour
+        </Link>
       </div>
 
-      {/* Message */}
+      {/* Message de statut */}
       {message && (
         <div className={`p-3 rounded-lg flex items-center gap-2 ${
-          message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+          message.type === 'success' 
+            ? 'bg-green-50 text-green-700 border border-green-200' 
+            : 'bg-red-50 text-red-700 border border-red-200'
         }`}>
           {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
           {message.text}
         </div>
       )}
 
-      {/* Liste des fonds d'écran */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {backgrounds.map((bg) => (
-          <div key={bg.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="relative h-40 bg-gray-100">
-              {bg.image_url ? (
-                <img src={bg.image_url} alt={bg.alt_text || bg.page} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <ImageIcon className="w-12 h-12 text-gray-300" />
-                </div>
-              )}
-              {bg.is_active && (
-                <div className="absolute top-2 right-2 px-2 py-1 bg-green-500 text-white text-xs rounded-full">Actif</div>
-              )}
-            </div>
-            <div className="p-4">
-              <h3 className="font-semibold text-gray-800">{getPageLabel(bg.page)}</h3>
-              <p className="text-xs text-gray-500 mt-1 truncate">{bg.image_url}</p>
-              <div className="flex justify-end gap-2 mt-3">
-                <button onClick={() => handleEdit(bg)} className="p-1 text-gray-500 hover:text-blue-600">
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button onClick={() => handleDelete(bg.id)} className="p-1 text-gray-500 hover:text-red-600">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Grille des pages */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {pagesList.map((page) => {
+          const bg = backgrounds[page.value];
+          const pageLabel = language === 'fr' ? page.label : page.label_mg;
+          const isSaving = saving[page.value];
 
-      {/* Modal d'ajout/édition */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
-              <h2 className="text-xl font-bold text-gray-800">
-                {editing ? 'Modifier le fond d\'écran' : 'Ajouter un fond d\'écran'}
-              </h2>
-              <button onClick={() => setShowModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
-                <XCircleIcon className="w-6 h-6" />
-              </button>
-            </div>
+          if (!bg) return null;
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Page *</label>
-                <select
-                  required
-                  value={formData.page}
-                  onChange={(e) => setFormData({ ...formData, page: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                >
-                  {backgroundPages.map(page => (
-                    <option key={page.value} value={page.value}>
-                      {language === 'fr' ? page.label : page.label_mg}
-                    </option>
-                  ))}
-                </select>
+          return (
+            <div key={page.value} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              {/* En-tete de la carte */}
+              <div className="p-4 border-b border-gray-200 bg-gray-50">
+                <h2 className="font-semibold text-gray-800">{pageLabel}</h2>
+                <p className="text-xs text-gray-500">Page: /{page.value}</p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">URL de l'image *</label>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    required
-                    value={formData.image_url}
-                    onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
-                    placeholder="https://..."
+              {/* Contenu de la carte */}
+              <div className="p-4 space-y-4">
+                
+                {/* Zone d'upload d'image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Image de fond
+                  </label>
+                  <ImageUploader
+                    onUploadComplete={(url) => handleImageUpload(page.value, url)}
+                    currentImageUrl={bg?.image_url}
+                    pageKey={page.value}
+                    label=""
                   />
-                  {formData.image_url && (
-                    <div className="w-12 h-12 bg-gray-100 rounded border overflow-hidden">
-                      <img src={formData.image_url} alt="Aperçu" className="w-full h-full object-cover" />
+                  <p className="text-xs text-gray-400 mt-2">
+                    Format recommande: 1920x1080px (16:9). JPG, PNG ou WEBP, max 10 Mo.
+                  </p>
+                </div>
+
+                {/* Apercu du rendu */}
+                {bg.image_url && (
+                  <div className="bg-gray-100 rounded-lg p-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Apercu du rendu
+                    </label>
+                    <div className="relative h-32 rounded-lg overflow-hidden">
+                      <img src={bg.image_url} alt="Apercu" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black" style={{ opacity: (bg.overlay_opacity || 0) / 100 }} />
                     </div>
-                  )}
-                </div>
-              </div>
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">URL miniature (optionnel)</label>
-                <input
-                  type="url"
-                  value={formData.thumbnail_url}
-                  onChange={(e) => setFormData({ ...formData, thumbnail_url: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  placeholder="https://..."
-                />
-              </div>
+                {/* Reglages avances (si une image est presente) */}
+                {bg.image_url && (
+                  <>
+                    {/* Opacite */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Assombrissement du fond
+                        </label>
+                        <span className="text-sm text-gray-500">{bg.overlay_opacity || 0}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="80"
+                        value={bg.overlay_opacity || 0}
+                        onChange={(e) => updateBackground(page.value, { overlay_opacity: parseInt(e.target.value) })}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Plus le pourcentage est eleve, plus le texte est lisible
+                      </p>
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">URL mobile (optionnel)</label>
-                <input
-                  type="url"
-                  value={formData.mobile_url}
-                  onChange={(e) => setFormData({ ...formData, mobile_url: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  placeholder="https://..."
-                />
-              </div>
+                    {/* Position et taille */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Position
+                        </label>
+                        <select
+                          value={bg.position || 'center'}
+                          onChange={(e) => updateBackground(page.value, { position: e.target.value as any })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="center">Centre</option>
+                          <option value="top">Haut</option>
+                          <option value="bottom">Bas</option>
+                          <option value="left">Gauche</option>
+                          <option value="right">Droite</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Taille
+                        </label>
+                        <select
+                          value={bg.size || 'cover'}
+                          onChange={(e) => updateBackground(page.value, { size: e.target.value as any })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="cover">Couvrir (cover)</option>
+                          <option value="contain">Contenir (contain)</option>
+                          <option value="auto">Auto</option>
+                        </select>
+                      </div>
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Texte alternatif</label>
-                <input
-                  type="text"
-                  value={formData.alt_text}
-                  onChange={(e) => setFormData({ ...formData, alt_text: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  placeholder="Description de l'image"
-                />
-              </div>
+                    {/* Texte alternatif */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Texte alternatif (SEO)
+                      </label>
+                      <input
+                        type="text"
+                        value={bg.alt_text || ''}
+                        onChange={(e) => updateBackground(page.value, { alt_text: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        placeholder="Description de l image pour les moteurs de recherche"
+                      />
+                    </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Opacité overlay (%)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.overlay_opacity}
-                    onChange={(e) => setFormData({ ...formData, overlay_opacity: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
-                  <select
-                    value={formData.position}
-                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="center">Centre</option>
-                    <option value="top">Haut</option>
-                    <option value="bottom">Bas</option>
-                    <option value="left">Gauche</option>
-                    <option value="right">Droite</option>
-                  </select>
-                </div>
-              </div>
+                    {/* Activation */}
+                    <label className="flex items-center gap-2 cursor-pointer pt-2">
+                      <input
+                        type="checkbox"
+                        checked={bg.is_active || false}
+                        onChange={(e) => updateBackground(page.value, { is_active: e.target.checked })}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        Activer le fond d ecran sur cette page
+                      </span>
+                    </label>
 
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_active}
-                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 rounded"
-                  />
-                  <span className="text-sm text-gray-700">Actif (afficher sur le site)</span>
-                </label>
+                    {/* Indicateur de sauvegarde */}
+                    {isSaving && (
+                      <div className="flex items-center gap-2 text-sm text-blue-600 pt-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Enregistrement en cours...
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-                  Annuler
-                </button>
-                <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                  {editing ? 'Mettre à jour' : 'Créer'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
