@@ -40,7 +40,7 @@
           }
         },
         "responses": {
-          "201": {
+          "200": {
             "description": ""
           }
         },
@@ -53,8 +53,18 @@
       "post": {
         "operationId": "AuthController_forgotPassword",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordDto"
+              }
+            }
+          }
+        },
         "responses": {
-          "201": {
+          "200": {
             "description": ""
           }
         },
@@ -67,8 +77,18 @@
       "post": {
         "operationId": "AuthController_resetPassword",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
         "responses": {
-          "201": {
+          "200": {
             "description": ""
           }
         },
@@ -116,6 +136,44 @@
       "put": {
         "operationId": "AuthController_updateProfile",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/upload-photo": {
+      "post": {
+        "operationId": "AuthController_uploadPhoto",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/photo": {
+      "delete": {
+        "operationId": "AuthController_deletePhoto",
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -130,34 +188,16 @@
       "put": {
         "operationId": "AuthController_changePassword",
         "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
           }
         },
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/api/auth/upload-photo": {
-      "post": {
-        "operationId": "AuthController_uploadProfilePhoto",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/api/auth/photo": {
-      "delete": {
-        "operationId": "AuthController_deleteProfilePhoto",
-        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -1950,6 +1990,109 @@
       "LoginDto": {
         "type": "object",
         "properties": {}
+      },
+      "ForgotPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Token reçu par email"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "Nouveau mot de passe",
+            "minLength": 6
+          }
+        },
+        "required": [
+          "token",
+          "newPassword"
+        ]
+      },
+      "UpdateProfileDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "example": "Jean"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Rakoto"
+          },
+          "phone": {
+            "type": "string",
+            "example": "0341234567"
+          },
+          "region": {
+            "type": "string",
+            "example": "Analamanga"
+          },
+          "bio": {
+            "type": "string",
+            "example": "Développeur fullstack..."
+          },
+          "position": {
+            "type": "string",
+            "example": "Développeur Senior"
+          },
+          "department": {
+            "type": "string",
+            "example": "Technique"
+          },
+          "skills": {
+            "type": "string",
+            "example": "React, Node.js, TypeScript"
+          },
+          "socialLinkedin": {
+            "type": "string",
+            "example": "https://linkedin.com/in/..."
+          },
+          "socialTwitter": {
+            "type": "string",
+            "example": "https://twitter.com/..."
+          },
+          "socialGithub": {
+            "type": "string",
+            "example": "https://github.com/..."
+          },
+          "avatar_url": {
+            "type": "string",
+            "example": "https://cloudinary.com/avatar.jpg"
+          }
+        }
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "description": "Mot de passe actuel de l'utilisateur",
+            "example": "MonAncienMotDePasse123"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "Nouveau mot de passe (minimum 6 caractères)",
+            "example": "MonNouveauMotDePasse456",
+            "minLength": 6
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ]
       },
       "UpdateRoleDto": {
         "type": "object",

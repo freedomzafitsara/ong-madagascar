@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Upload, Trash2, RefreshCw, CheckCircle, AlertCircle, Image as ImageIcon, Eye } from 'lucide-react';
-import { saveLogo, getLogo, deleteLogo } from '@/services/imageDB';
+import { saveLogo, getLogo, deleteLogo } from '@/services/imageService';
 
 export default function LogoPage() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);

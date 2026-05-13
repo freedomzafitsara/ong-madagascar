@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Upload, Trash2, RefreshCw, CheckCircle, AlertCircle, Eye, X } from 'lucide-react';
 import { Image as ImageIcon } from 'lucide-react';
-import { saveBanner, getBanner, deleteBanner } from '@/services/imageDB';
+import { saveBanner, getBanner, deleteBanner } from '@/services/imageService';
 
 export default function BannerPage() {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);

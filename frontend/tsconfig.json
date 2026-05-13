@@ -1,52 +1,123 @@
 {
+  
+  
   "compilerOptions": {
+    // Version ECMAScript cible (ES2017 = moderne mais compatible)
     "target": "ES2017",
+    
+    // Bibliothèques TypeScript à inclure
     "lib": ["dom", "dom.iterable", "esnext"],
+    
+    // Autoriser les fichiers JavaScript dans le projet
     "allowJs": true,
+    
+    // Ignorer la vérification des types des bibliothèques externes
+    // (accélère la compilation)
     "skipLibCheck": true,
+    
+    // Mode strict : active toutes les vérifications de type
     "strict": true,
+    
+    // Forcer la casse cohérente des noms de fichiers
     "forceConsistentCasingInFileNames": true,
+    
+    // Ne pas générer de fichiers de sortie (Next.js s'en occupe)
     "noEmit": true,
+    
+    // Permet d'importer des modules CommonJS correctement
     "esModuleInterop": true,
+    
+    // Système de modules (ES modules pour Next.js)
     "module": "esnext",
+    
+    // Stratégie de résolution des modules (recommandée pour Next.js)
     "moduleResolution": "bundler",
+    
+    // Autoriser l'import de fichiers JSON
     "resolveJsonModule": true,
+    
+    // Isoler les modules (pour compatibilité)
     "isolatedModules": true,
+    
+    // JSX support (preserve = Next.js compile lui-même)
     "jsx": "preserve",
+    
+    // Compilation incrémentale (plus rapide)
     "incremental": true,
+    
+    // Gestion des modules synthétiques
     "verbatimModuleSyntax": false,
+
+    // ============================================================
+    // 2. PLUGINS
+    // ============================================================
     
     "plugins": [
       {
         "name": "next"
       }
     ],
+
+    // ============================================================
+    // 3. ALIAS DE CHEMINS (IMPORTS)
+    // ============================================================
+    // Permet d'utiliser @/ au lieu de ../../../
+    // Exemple: import { Header } from '@/components/Header'
+    // ============================================================
     
     "paths": {
       "@/*": ["./src/*"]
     },
     
+    // Répertoire de base pour résoudre les chemins
     "baseUrl": ".",
+
+    // ============================================================
+    // 4. AMÉLIORATIONS DE LA VÉRIFICATION DES TYPES
+    // ============================================================
     
-    // ========================================
-    // AMÉLIORATIONS TypeScript
-    // ========================================
+    // Variables non utilisées : désactivé (flexibilité)
     "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "strictPropertyInitialization": false,
-    "allowSyntheticDefaultImports": true,
     
-    // ========================================
-    // TYPE CHECKING
-    // ========================================
+    // Paramètres non utilisés : désactivé
+    "noUnusedParameters": false,
+    
+    // Vérifie qu'il n'y a pas de fall-through dans les switch
+    "noFallthroughCasesInSwitch": true,
+    
+    // Vérifie que toutes les fonctions retournent une valeur
+    "noImplicitReturns": true,
+    
+    // Interdit les types 'any' implicites
+    "noImplicitAny": true,
+    
+    // Vérification stricte des valeurs null et undefined
+    "strictNullChecks": true,
+    
+    // Vérification stricte des types de fonctions
+    "strictFunctionTypes": true,
+    
+    // Désactive la vérification stricte des propriétés initialisées
+    // (utile pour les composants React avec props optionnelles)
+    "strictPropertyInitialization": false,
+    
+    // Autorise les imports par défaut même sans export default
+    "allowSyntheticDefaultImports": true,
+
+    // ============================================================
+    // 5. TYPES INCLUS
+    // ============================================================
+    
+    // Types globaux disponibles
     "types": ["node", "react", "react-dom"],
+    
+    // Emplacement des types personnalisés
     "typeRoots": ["./node_modules/@types", "./src/types"]
   },
+
+  // ============================================================
+  // 6. FICHIERS À INCLURE
+  // ============================================================
   
   "include": [
     "next-env.d.ts",
@@ -55,19 +126,23 @@
     "**/*.js",
     "**/*.jsx",
     ".next/types/**/*.ts",
-    "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*.ts",      // Tous les fichiers TypeScript de src
+    "src/**/*.tsx"      // Tous les fichiers TSX de src
   ],
+
+  // ============================================================
+  // 7. FICHIERS À EXCLURE
+  // ============================================================
   
   "exclude": [
-    "node_modules",
-    ".next",
-    "out",
-    "build",
-    "dist",
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "**/*.spec.ts",
-    "**/*.spec.tsx"
+    "node_modules",     // Dépendances
+    ".next",            // Build Next.js
+    "out",              // Export statique
+    "build",            // Build personnalisé
+    "dist",             // Distribution
+    "**/*.test.ts",     // Fichiers de test
+    "**/*.test.tsx",    // Fichiers de test React
+    "**/*.spec.ts",     // Fichiers spec
+    "**/*.spec.tsx"     // Fichiers spec React
   ]
 }

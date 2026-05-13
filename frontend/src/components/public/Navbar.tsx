@@ -1,4 +1,4 @@
-ï»¿// src/components/public/Navbar.tsx
+// src/components/public/Navbar.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -6,14 +6,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X, Heart, LogIn, User, LayoutDashboard, ChevronDown, Home, FolderOpen, Newspaper, Mail, Briefcase, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getLogo } from '@/services/imageDB';
+import { getLogo } from '@/services/imageService';
 import { LanguageSwitcher } from '@/components/common/LanguageSwitcher';
 
 const menuItems = [
   { name: 'Accueil', href: '/', icon: Home },
   { name: 'Projets', href: '/projects', icon: FolderOpen },
   { name: 'Offres', href: '/jobs', icon: Briefcase },
-  { name: 'ActualitÃ©s', href: '/blog', icon: Newspaper },
+  { name: 'Actualités', href: '/blog', icon: Newspaper },
   { name: 'Contact', href: '/contact', icon: Mail },
 ];
 
@@ -126,13 +126,13 @@ export const Navbar: React.FC = () => {
 
             {/* ==================== BOUTONS DROITE ==================== */}
             <div className="hidden lg:flex items-center gap-2">
-              {/* Bouton AdhÃ©rer */}
+              {/* Bouton Adhérer */}
               <Link
                 href="/join"
                 className="bg-blue-600 text-white px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-blue-700 flex items-center gap-1.5"
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                AdhÃ©rer
+                Adhérer
               </Link>
               
               {/* Bouton Don */}
@@ -144,7 +144,7 @@ export const Navbar: React.FC = () => {
                 Don
               </Link>
               
-              {/* SÃ©lecteur de langue */}
+              {/* Sélecteur de langue */}
               <LanguageSwitcher />
               
               {/* Zone utilisateur */}
@@ -179,7 +179,7 @@ export const Navbar: React.FC = () => {
                         className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 border-t"
                       >
                         <LogIn className="w-3 h-3" />
-                        DÃ©connexion
+                        Déconnexion
                       </button>
                     </div>
                   )}
@@ -234,7 +234,7 @@ export const Navbar: React.FC = () => {
                 onClick={() => setIsOpen(false)}
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                AdhÃ©rer
+                Adhérer
               </Link>
               
               <Link
@@ -259,7 +259,7 @@ export const Navbar: React.FC = () => {
                     onClick={() => { logout(); setIsOpen(false); }} 
                     className="text-xs text-red-400 hover:text-red-300"
                   >
-                    DÃ©connexion
+                    Déconnexion
                   </button>
                 </div>
               ) : (

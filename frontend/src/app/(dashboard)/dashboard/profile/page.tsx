@@ -1,5 +1,4 @@
-﻿// frontend/src/app/(dashboard)/dashboard/profile/page.tsx
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,7 +7,6 @@ import {
   User, Mail, Phone, MapPin, Calendar, Shield, Edit2, Save, X, 
   Camera, Loader2, CheckCircle, AlertCircle, Globe, 
   Briefcase, Heart, Award, Clock, LogOut, Lock, Key,
-  Share2, Code, MessageCircle, Building, FileText, Users,
   Linkedin, Twitter, Github
 } from 'lucide-react';
 
@@ -28,7 +26,7 @@ interface ProfileFormData {
 }
 
 export default function ProfilePage() {
-  const { user, logout, token } = useAuth();
+  const { user, token, logout, updateUser } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -40,17 +38,19 @@ export default function ProfilePage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
   const [formData, setFormData] = useState<ProfileFormData>({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
-    email: user?.email || '',
+    firstName: '',
+    lastName: '',
+    email: '',
     phone: '',
     region: 'Analamanga',
-    bio: 'Membre engagé de Y-Mad, passionné par le développement de Madagascar.',
-    position: 'Membre actif',
-    department: 'Programmes',
-    skills: 'Gestion de projet, Communication, Travail d\'équipe',
+    bio: '',
+    position: '',
+    department: '',
+    skills: '',
     socialLinkedin: '',
     socialTwitter: '',
     socialGithub: ''
@@ -59,49 +59,99 @@ export default function ProfilePage() {
   const [originalData, setOriginalData] = useState<ProfileFormData>(formData);
   const [originalImage, setOriginalImage] = useState<string | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
 
-  // Charger les données du profil depuis l'API
-  useEffect(() => {
-    fetchProfileData();
-  }, []);
-
-  const fetchProfileData = async () => {
+  const isValidUrl = (url: string): boolean => {
+    if (!url) return true;
     try {
-      const response = await fetch(`${API_URL}/auth/profile`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setFormData(prev => ({
-          ...prev,
-          firstName: data.firstName || prev.firstName,
-          lastName: data.lastName || prev.lastName,
-          email: data.email || prev.email,
-          phone: data.phone || prev.phone,
-          region: data.region || prev.region,
-          bio: data.bio || prev.bio,
-          position: data.position || prev.position,
-          department: data.department || prev.department,
-          skills: data.skills || prev.skills,
-        }));
-        setOriginalData(formData);
-      }
-    } catch (error) {
-      console.error('Erreur chargement profil:', error);
+      new URL(url);
+      return true;
+    } catch {
+      return false;
     }
   };
 
-  // Charger la photo de profil depuis localStorage
-  useEffect(() => {
-    const savedImage = localStorage.getItem('user_profile_image');
-    if (savedImage) {
-      setProfileImage(savedImage);
-      setOriginalImage(savedImage);
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    
+    if (formData.socialLinkedin && !isValidUrl(formData.socialLinkedin)) {
+      errors.socialLinkedin = 'Veuillez entrer une URL LinkedIn valide';
     }
-  }, []);
+    if (formData.socialTwitter && !isValidUrl(formData.socialTwitter)) {
+      errors.socialTwitter = 'Veuillez entrer une URL Twitter/X valide';
+    }
+    if (formData.socialGithub && !isValidUrl(formData.socialGithub)) {
+      errors.socialGithub = 'Veuillez entrer une URL GitHub valide';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
-  // Upload de la photo
+  const checkToken = () => {
+    if (!token) {
+      console.error('❌ Pas de token disponible');
+      logout();
+      router.push('/login');
+      return false;
+    }
+    return true;
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchProfileData();
+    } else {
+      setLoading(false);
+    }
+  }, [token]);
+
+  const fetchProfileData = async () => {
+    if (!checkToken()) return;
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}/api/auth/profile`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        setFormData({
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          region: data.region || 'Analamanga',
+          bio: data.bio || '',
+          position: data.position || 'Membre',
+          department: data.department || 'Programmes',
+          skills: data.skills || '',
+          socialLinkedin: data.socialLinkedin || '',
+          socialTwitter: data.socialTwitter || '',
+          socialGithub: data.socialGithub || '',
+        });
+        setOriginalData({ ...formData });
+        
+        if (data.avatar_url) {
+          setProfileImage(data.avatar_url);
+          setOriginalImage(data.avatar_url);
+        }
+      } else if (response.status === 401) {
+        logout();
+        router.push('/login');
+      }
+    } catch (error) {
+      console.error('Erreur chargement profil:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -121,15 +171,14 @@ export default function ProfilePage() {
   };
 
   const uploadImage = async (): Promise<string | null> => {
-    if (!imageFile) return null;
+    if (!imageFile || !token) return null;
 
     setIsUploading(true);
     const uploadFormData = new FormData();
     uploadFormData.append('file', imageFile);
-    uploadFormData.append('type', 'profile');
 
     try {
-      const response = await fetch(`${API_URL}/upload/single`, {
+      const response = await fetch(`${API_URL}/api/upload/profile`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -139,8 +188,7 @@ export default function ProfilePage() {
 
       const data = await response.json();
       if (response.ok) {
-        const imageUrl = data.url || data.fileUrl;
-        localStorage.setItem('user_profile_image', imageUrl);
+        const imageUrl = data.url;
         setUploadSuccess(true);
         setTimeout(() => setUploadSuccess(false), 3000);
         return imageUrl;
@@ -149,6 +197,7 @@ export default function ProfilePage() {
         return null;
       }
     } catch (error) {
+      console.error('Upload error:', error);
       setUploadError('Erreur de connexion');
       return null;
     } finally {
@@ -159,19 +208,22 @@ export default function ProfilePage() {
   const removeImage = () => {
     setProfileImage(null);
     setImageFile(null);
-    localStorage.removeItem('user_profile_image');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
+  // ✅ VERSION CORRIGÉE DE handleSave
   const handleSave = async () => {
+    if (!checkToken()) return;
+    if (!validateForm()) return;
+
     setSaving(true);
     setUploadError(null);
     
     try {
-      // Upload de l'image si nécessaire
       let newImageUrl = profileImage;
+      
       if (imageFile) {
         const uploadedUrl = await uploadImage();
         if (uploadedUrl) {
@@ -179,40 +231,64 @@ export default function ProfilePage() {
         }
       }
 
-      // Sauvegarde des données du profil
-      const response = await fetch(`${API_URL}/auth/profile`, {
+      // ✅ Créer un objet avec uniquement les champs non vides
+      const updateData: Record<string, any> = {};
+      
+      if (formData.firstName) updateData.firstName = formData.firstName;
+      if (formData.lastName) updateData.lastName = formData.lastName;
+      if (formData.phone && formData.phone.trim() !== '') updateData.phone = formData.phone;
+      if (formData.region) updateData.region = formData.region;
+      if (formData.bio && formData.bio.trim() !== '') updateData.bio = formData.bio;
+      if (formData.position && formData.position.trim() !== '') updateData.position = formData.position;
+      if (formData.department && formData.department.trim() !== '') updateData.department = formData.department;
+      if (formData.skills && formData.skills.trim() !== '') updateData.skills = formData.skills;
+      if (formData.socialLinkedin && formData.socialLinkedin.trim() !== '') updateData.socialLinkedin = formData.socialLinkedin;
+      if (formData.socialTwitter && formData.socialTwitter.trim() !== '') updateData.socialTwitter = formData.socialTwitter;
+      if (formData.socialGithub && formData.socialGithub.trim() !== '') updateData.socialGithub = formData.socialGithub;
+      if (newImageUrl && newImageUrl.trim() !== '') updateData.avatar_url = newImageUrl;
+
+      console.log('📤 Envoi des données:', updateData);
+
+      const response = await fetch(`${API_URL}/api/auth/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          phone: formData.phone,
-          region: formData.region,
-          bio: formData.bio,
-          position: formData.position,
-          department: formData.department,
-          skills: formData.skills,
-          socialLinkedin: formData.socialLinkedin,
-          socialTwitter: formData.socialTwitter,
-          socialGithub: formData.socialGithub,
-          photo: newImageUrl
-        }),
+        body: JSON.stringify(updateData),
       });
 
       if (response.ok) {
         setSaveSuccess(true);
-        setOriginalData(formData);
+        setOriginalData({ ...formData });
         setOriginalImage(profileImage);
         setIsEditing(false);
+        setValidationErrors({});
+        
+        if (updateUser) {
+          updateUser({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phone,
+            region: formData.region,
+            bio: formData.bio,
+            position: formData.position,
+            department: formData.department,
+            skills: formData.skills,
+            socialLinkedin: formData.socialLinkedin,
+            socialTwitter: formData.socialTwitter,
+            socialGithub: formData.socialGithub,
+            avatar_url: newImageUrl || undefined
+          });
+        }
+        
         setTimeout(() => setSaveSuccess(false), 3000);
       } else {
-        const data = await response.json();
-        setUploadError(data.message || 'Erreur lors de la sauvegarde');
+        const errorData = await response.json().catch(() => ({}));
+        setUploadError(errorData.message || 'Erreur lors de la sauvegarde');
       }
     } catch (error) {
+      console.error('Save error:', error);
       setUploadError('Erreur de connexion');
     } finally {
       setSaving(false);
@@ -221,25 +297,44 @@ export default function ProfilePage() {
 
   const handleCancel = () => {
     setIsEditing(false);
-    setFormData(originalData);
+    setFormData({ ...originalData });
     setProfileImage(originalImage);
     setImageFile(null);
     setUploadError(null);
+    setValidationErrors({});
   };
 
-  const memberSince = "Janvier 2025";
-  const lastLogin = new Date().toLocaleString('fr-FR', { 
-    day: 'numeric', 
-    month: 'long', 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
+
+  const memberSince = user?.createdAt 
+    ? new Date(user.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+    : "Janvier 2025";
+    
+  const lastLogin = user?.lastLogin 
+    ? new Date(user.lastLogin).toLocaleString('fr-FR', { 
+        day: 'numeric', 
+        month: 'long', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })
+    : new Date().toLocaleString('fr-FR', { 
+        day: 'numeric', 
+        month: 'long', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
 
   const stats = [
-    { label: 'Projets suivis', value: '8', icon: Briefcase, color: 'blue' },
-    { label: 'Bénéficiaires', value: '156', icon: Heart, color: 'rose' },
-    { label: 'Heures de bénévolat', value: '42', icon: Clock, color: 'green' },
-    { label: 'Certifications', value: '2', icon: Award, color: 'purple' },
+    { label: 'Projets suivis', value: '8', icon: Briefcase },
+    { label: 'Bénéficiaires', value: '156', icon: Heart },
+    { label: 'Heures de bénévolat', value: '42', icon: Clock },
+    { label: 'Certifications', value: '2', icon: Award },
   ];
 
   const getRoleLabel = () => {
@@ -312,7 +407,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Messages de notification */}
+        {/* Messages */}
         {saveSuccess && (
           <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2">
             <CheckCircle className="w-5 h-5" />
@@ -334,10 +429,8 @@ export default function ProfilePage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* ==================== COLONNE GAUCHE ==================== */}
+          {/* Colonne Gauche - Carte de profil */}
           <div className="space-y-5">
-            
-            {/* Carte de profil */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="relative h-24 bg-gradient-to-r from-blue-600 to-blue-700">
                 <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2">
@@ -396,7 +489,6 @@ export default function ProfilePage() {
                   <Shield className="w-3 h-3" />
                   {getRoleLabel()}
                 </div>
-                
                 {isUploading && (
                   <div className="mt-3 flex items-center justify-center gap-2 text-sm text-blue-600">
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -421,22 +513,25 @@ export default function ProfilePage() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Statistiques</h3>
               <div className="space-y-3">
-                {stats.map((stat, idx) => (
-                  <div key={idx} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-8 h-8 rounded-lg bg-${stat.color}-100 flex items-center justify-center`}>
-                        <stat.icon className={`w-4 h-4 text-${stat.color}-600`} />
+                {stats.map((stat, idx) => {
+                  const Icon = stat.icon;
+                  return (
+                    <div key={idx} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                          <Icon className="w-4 h-4 text-gray-500" />
+                        </div>
+                        <span className="text-sm text-gray-600">{stat.label}</span>
                       </div>
-                      <span className="text-sm text-gray-600">{stat.label}</span>
+                      <span className="font-semibold text-gray-800">{stat.value}</span>
                     </div>
-                    <span className="font-semibold text-gray-800">{stat.value}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
 
-          {/* ==================== COLONNE DROITE ==================== */}
+          {/* Colonne Droite - Informations */}
           <div className="lg:col-span-2 space-y-5">
             
             {/* Informations personnelles */}
@@ -456,10 +551,10 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.firstName}
                         onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                       />
                     ) : (
-                      <p className="text-gray-800">{formData.firstName}</p>
+                      <p className="text-gray-800">{formData.firstName || 'Non renseigné'}</p>
                     )}
                   </div>
                   <div>
@@ -469,10 +564,10 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.lastName}
                         onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                       />
                     ) : (
-                      <p className="text-gray-800">{formData.lastName}</p>
+                      <p className="text-gray-800">{formData.lastName || 'Non renseigné'}</p>
                     )}
                   </div>
                 </div>
@@ -481,17 +576,7 @@ export default function ProfilePage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Adresse email</label>
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-gray-400" />
-                    {isEditing ? (
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({...formData, email: e.target.value})}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        disabled
-                      />
-                    ) : (
-                      <p className="text-gray-800">{formData.email}</p>
-                    )}
+                    <p className="text-gray-800">{formData.email}</p>
                   </div>
                   <p className="text-xs text-gray-400 mt-1">L'adresse email ne peut pas être modifiée</p>
                 </div>
@@ -506,7 +591,7 @@ export default function ProfilePage() {
                           type="tel"
                           value={formData.phone}
                           onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                           placeholder="034 00 000 00"
                         />
                       ) : (
@@ -522,15 +607,18 @@ export default function ProfilePage() {
                         <select
                           value={formData.region}
                           onChange={(e) => setFormData({...formData, region: e.target.value})}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                         >
                           <option value="Analamanga">Analamanga</option>
                           <option value="Atsimo-Andrefana">Atsimo-Andrefana</option>
                           <option value="Haute Matsiatra">Haute Matsiatra</option>
                           <option value="Vakinankaratra">Vakinankaratra</option>
+                          <option value="Boeny">Boeny</option>
+                          <option value="Sava">Sava</option>
+                          <option value="Diana">Diana</option>
                         </select>
                       ) : (
-                        <p className="text-gray-800">{formData.region}</p>
+                        <p className="text-gray-800">{formData.region || 'Non renseignée'}</p>
                       )}
                     </div>
                   </div>
@@ -543,11 +631,11 @@ export default function ProfilePage() {
                       rows={3}
                       value={formData.bio}
                       onChange={(e) => setFormData({...formData, bio: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                       placeholder="Parlez-nous de vous..."
                     />
                   ) : (
-                    <p className="text-gray-600">{formData.bio}</p>
+                    <p className="text-gray-600">{formData.bio || 'Aucune biographie renseignée'}</p>
                   )}
                 </div>
               </div>
@@ -570,10 +658,10 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.position}
                         onChange={(e) => setFormData({...formData, position: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                       />
                     ) : (
-                      <p className="text-gray-800">{formData.position}</p>
+                      <p className="text-gray-800">{formData.position || 'Non renseigné'}</p>
                     )}
                   </div>
                   <div>
@@ -583,10 +671,10 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.department}
                         onChange={(e) => setFormData({...formData, department: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                       />
                     ) : (
-                      <p className="text-gray-800">{formData.department}</p>
+                      <p className="text-gray-800">{formData.department || 'Non renseigné'}</p>
                     )}
                   </div>
                 </div>
@@ -598,17 +686,21 @@ export default function ProfilePage() {
                       rows={2}
                       value={formData.skills}
                       onChange={(e) => setFormData({...formData, skills: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                       placeholder="Séparez vos compétences par des virgules"
                     />
                   ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {formData.skills.split(',').map((skill, idx) => (
-                        <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                          {skill.trim()}
-                        </span>
-                      ))}
-                    </div>
+                    formData.skills ? (
+                      <div className="flex flex-wrap gap-2">
+                        {formData.skills.split(',').map((skill, idx) => (
+                          <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                            {skill.trim()}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400">Aucune compétence renseignée</p>
+                    )
                   )}
                 </div>
               </div>
@@ -628,13 +720,23 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-2">
                     <Linkedin className="w-4 h-4 text-gray-400" />
                     {isEditing ? (
-                      <input
-                        type="url"
-                        value={formData.socialLinkedin}
-                        onChange={(e) => setFormData({...formData, socialLinkedin: e.target.value})}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="https://linkedin.com/in/..."
-                      />
+                      <div className="flex-1">
+                        <input
+                          type="url"
+                          value={formData.socialLinkedin}
+                          onChange={(e) => {
+                            setFormData({...formData, socialLinkedin: e.target.value});
+                            setValidationErrors({...validationErrors, socialLinkedin: ''});
+                          }}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
+                            validationErrors.socialLinkedin ? 'border-red-500' : 'border-gray-300'
+                          }`}
+                          placeholder="https://linkedin.com/in/username"
+                        />
+                        {validationErrors.socialLinkedin && (
+                          <p className="text-xs text-red-500 mt-1">{validationErrors.socialLinkedin}</p>
+                        )}
+                      </div>
                     ) : (
                       formData.socialLinkedin ? (
                         <a href={formData.socialLinkedin} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">
@@ -646,17 +748,29 @@ export default function ProfilePage() {
                     )}
                   </div>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Twitter / X</label>
                   <div className="flex items-center gap-2">
                     <Twitter className="w-4 h-4 text-gray-400" />
                     {isEditing ? (
-                      <input
-                        type="url"
-                        value={formData.socialTwitter}
-                        onChange={(e) => setFormData({...formData, socialTwitter: e.target.value})}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      />
+                      <div className="flex-1">
+                        <input
+                          type="url"
+                          value={formData.socialTwitter}
+                          onChange={(e) => {
+                            setFormData({...formData, socialTwitter: e.target.value});
+                            setValidationErrors({...validationErrors, socialTwitter: ''});
+                          }}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
+                            validationErrors.socialTwitter ? 'border-red-500' : 'border-gray-300'
+                          }`}
+                          placeholder="https://twitter.com/username"
+                        />
+                        {validationErrors.socialTwitter && (
+                          <p className="text-xs text-red-500 mt-1">{validationErrors.socialTwitter}</p>
+                        )}
+                      </div>
                     ) : (
                       formData.socialTwitter ? (
                         <a href={formData.socialTwitter} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">
@@ -668,17 +782,29 @@ export default function ProfilePage() {
                     )}
                   </div>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">GitHub</label>
                   <div className="flex items-center gap-2">
                     <Github className="w-4 h-4 text-gray-400" />
                     {isEditing ? (
-                      <input
-                        type="url"
-                        value={formData.socialGithub}
-                        onChange={(e) => setFormData({...formData, socialGithub: e.target.value})}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      />
+                      <div className="flex-1">
+                        <input
+                          type="url"
+                          value={formData.socialGithub}
+                          onChange={(e) => {
+                            setFormData({...formData, socialGithub: e.target.value});
+                            setValidationErrors({...validationErrors, socialGithub: ''});
+                          }}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
+                            validationErrors.socialGithub ? 'border-red-500' : 'border-gray-300'
+                          }`}
+                          placeholder="https://github.com/username"
+                        />
+                        {validationErrors.socialGithub && (
+                          <p className="text-xs text-red-500 mt-1">{validationErrors.socialGithub}</p>
+                        )}
+                      </div>
                     ) : (
                       formData.socialGithub ? (
                         <a href={formData.socialGithub} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">
@@ -703,7 +829,7 @@ export default function ProfilePage() {
               </div>
               <div className="p-5">
                 <button 
-                  onClick={() => router.push('/forgot-password')}
+                  onClick={() => router.push('/auth/forgot-password')}
                   className="flex items-center gap-3 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
                 >
                   <Key className="w-4 h-4" />

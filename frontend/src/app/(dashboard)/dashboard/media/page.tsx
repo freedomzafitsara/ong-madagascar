@@ -1,4 +1,4 @@
-Ôªø// src/app/dashboard/media/page.tsx
+// src/app/dashboard/media/page.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -15,7 +15,7 @@ import {
   ArrowRight,
   X
 } from 'lucide-react';
-import { getBanner, saveBanner, deleteBanner } from '@/services/imageDB';
+import { getBanner, saveBanner, deleteBanner } from '@/services/imageService';
 
 export default function MediaPage() {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
@@ -26,11 +26,11 @@ export default function MediaPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Charger la banni√®re au chargement
+  // Charger la banniËre au chargement
   useEffect(() => {
     loadBanner();
     
-    // √âcouter les mises √† jour
+    // …couter les mises ‡ jour
     const handleUpdate = () => loadBanner();
     window.addEventListener('banner-updated', handleUpdate);
     return () => window.removeEventListener('banner-updated', handleUpdate);
@@ -53,7 +53,7 @@ export default function MediaPage() {
         setBannerUrl(banner.url);
       }
     } catch (error) {
-      console.error('Erreur chargement banni√®re:', error);
+      console.error('Erreur chargement banniËre:', error);
     } finally {
       setIsLoading(false);
     }
@@ -105,14 +105,14 @@ export default function MediaPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // V√©rifications
+    // VÈrifications
     if (!file.type.startsWith('image/')) {
-      showMessage('Veuillez s√©lectionner une image', 'error');
+      showMessage('Veuillez sÈlectionner une image', 'error');
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      showMessage('L\'image ne doit pas d√©passer 5 Mo', 'error');
+      showMessage('L\'image ne doit pas dÈpasser 5 Mo', 'error');
       return;
     }
 
@@ -123,7 +123,7 @@ export default function MediaPage() {
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      showMessage('S√©lectionnez d\'abord une image', 'error');
+      showMessage('SÈlectionnez d\'abord une image', 'error');
       return;
     }
 
@@ -133,13 +133,13 @@ export default function MediaPage() {
       // Compression de l'image
       const compressedFile = await compressImage(selectedFile, 1200, 0.7);
       
-      // Supprimer l'ancienne banni√®re
+      // Supprimer l'ancienne banniËre
       if (bannerUrl) {
         await deleteBanner();
       }
       
-      // Sauvegarder la nouvelle banni√®re
-      const url = await saveBanner(compressedFile, 'Banni√®re Y-Mad');
+      // Sauvegarder la nouvelle banniËre
+      const url = await saveBanner(compressedFile, 'BanniËre Y-Mad');
       
       setBannerUrl(url);
       setPreviewUrl(null);
@@ -147,9 +147,9 @@ export default function MediaPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-      showMessage('‚úÖ Banni√®re mise √† jour avec succ√®s !', 'success');
+      showMessage('? BanniËre mise ‡ jour avec succËs !', 'success');
       
-      // D√©clencher l'√©v√©nement
+      // DÈclencher l'ÈvÈnement
       window.dispatchEvent(new Event('banner-updated'));
       
     } catch (error) {
@@ -161,14 +161,14 @@ export default function MediaPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('‚ö†Ô∏è Supprimer d√©finitivement la banni√®re ? Cette action est irr√©versible.')) return;
+    if (!confirm('?? Supprimer dÈfinitivement la banniËre ? Cette action est irrÈversible.')) return;
 
     try {
       await deleteBanner();
       setBannerUrl(null);
       setPreviewUrl(null);
       setSelectedFile(null);
-      showMessage('Banni√®re supprim√©e avec succ√®s', 'success');
+      showMessage('BanniËre supprimÈe avec succËs', 'success');
       window.dispatchEvent(new Event('banner-updated'));
     } catch (error) {
       showMessage('Erreur lors de la suppression', 'error');
@@ -188,15 +188,15 @@ export default function MediaPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {/* En-t√™te */}
+      {/* En-tÍte */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 bg-ymad-blue-100 rounded-xl flex items-center justify-center">
             <Camera className="w-5 h-5 text-ymad-blue-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-ymad-gray-800">Gestion des m√©dias</h1>
-            <p className="text-ymad-gray-500 mt-1">G√©rez la banni√®re d'accueil du site Y-Mad</p>
+            <h1 className="text-2xl font-bold text-ymad-gray-800">Gestion des mÈdias</h1>
+            <p className="text-ymad-gray-500 mt-1">GÈrez la banniËre d'accueil du site Y-Mad</p>
           </div>
         </div>
       </div>
@@ -216,7 +216,7 @@ export default function MediaPage() {
         </div>
       )}
 
-      {/* √âtat de chargement */}
+      {/* …tat de chargement */}
       {isLoading && (
         <div className="flex items-center justify-center py-12">
           <div className="w-10 h-10 border-4 border-ymad-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -226,24 +226,24 @@ export default function MediaPage() {
 
       {!isLoading && (
         <>
-          {/* Aper√ßu de la banni√®re actuelle */}
+          {/* AperÁu de la banniËre actuelle */}
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-ymad-gray-100">
             <h2 className="text-lg font-semibold text-ymad-gray-800 mb-4 flex items-center gap-2">
               <Eye className="w-5 h-5 text-ymad-blue-600" />
-              Banni√®re actuelle
+              BanniËre actuelle
             </h2>
             <div className="relative w-full h-56 bg-ymad-gray-100 rounded-lg overflow-hidden border border-ymad-gray-200">
               {bannerUrl ? (
                 <img 
                   src={bannerUrl} 
-                  alt="Banni√®re Y-Mad" 
+                  alt="BanniËre Y-Mad" 
                   className="w-full h-full object-cover"
                   onError={() => setBannerUrl(null)}
                 />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-ymad-gray-400">
                   <ImageIcon className="w-16 h-16 mb-3 opacity-50" />
-                  <p className="font-medium">Aucune banni√®re configur√©e</p>
+                  <p className="font-medium">Aucune banniËre configurÈe</p>
                   <p className="text-sm mt-1">Utilisez le formulaire ci-dessous pour en ajouter une</p>
                 </div>
               )}
@@ -272,7 +272,7 @@ export default function MediaPage() {
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-ymad-gray-100">
             <h2 className="text-lg font-semibold text-ymad-gray-800 mb-4 flex items-center gap-2">
               <Upload className="w-5 h-5 text-ymad-blue-600" />
-              Changer la banni√®re
+              Changer la banniËre
             </h2>
             
             {/* Preview avant upload */}
@@ -280,14 +280,14 @@ export default function MediaPage() {
               <div className="mb-4 p-4 bg-ymad-blue-50 rounded-lg border border-ymad-blue-200">
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-sm font-medium text-ymad-blue-700 flex items-center gap-2">
-                    <RefreshCw className="w-4 h-4" /> Aper√ßu de la nouvelle image
+                    <RefreshCw className="w-4 h-4" /> AperÁu de la nouvelle image
                   </p>
                   <button onClick={cancelPreview} className="text-ymad-gray-400 hover:text-ymad-gray-600">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="relative w-full h-40 rounded-lg overflow-hidden bg-white">
-                  <img src={previewUrl} alt="Aper√ßu" className="w-full h-full object-cover" />
+                  <img src={previewUrl} alt="AperÁu" className="w-full h-full object-cover" />
                 </div>
               </div>
             )}
@@ -308,7 +308,7 @@ export default function MediaPage() {
                 {isUploading ? (
                   <div className="flex flex-col items-center gap-3">
                     <div className="w-12 h-12 border-4 border-ymad-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-ymad-gray-700 font-medium">T√©l√©chargement en cours...</p>
+                    <p className="text-ymad-gray-700 font-medium">TÈlÈchargement en cours...</p>
                     <p className="text-sm text-ymad-gray-500">Compression et optimisation de l'image</p>
                   </div>
                 ) : (
@@ -316,12 +316,12 @@ export default function MediaPage() {
                     <div className="w-20 h-20 bg-ymad-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                       <Upload className="w-8 h-8 text-ymad-blue-600" />
                     </div>
-                    <p className="text-ymad-gray-700 font-medium">Cliquez pour s√©lectionner une image</p>
+                    <p className="text-ymad-gray-700 font-medium">Cliquez pour sÈlectionner une image</p>
                     <p className="text-sm text-ymad-gray-500 mt-1">
-                      JPEG, PNG, WebP ‚Ä¢ Max 5 Mo
+                      JPEG, PNG, WebP ï Max 5 Mo
                     </p>
                     <p className="text-xs text-ymad-gray-400 mt-2">
-                      Format paysage recommand√© : 1920 x 1080 pixels
+                      Format paysage recommandÈ : 1920 x 1080 pixels
                     </p>
                   </div>
                 )}
@@ -335,33 +335,33 @@ export default function MediaPage() {
                   className="w-full bg-ymad-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-ymad-blue-700 transition flex items-center justify-center gap-2"
                 >
                   <Upload className="w-4 h-4" />
-                  Appliquer cette banni√®re
+                  Appliquer cette banniËre
                 </button>
               </div>
             )}
           </div>
 
-          {/* Aper√ßu sur le site */}
+          {/* AperÁu sur le site */}
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-ymad-gray-100">
             <h2 className="text-lg font-semibold text-ymad-gray-800 mb-4 flex items-center gap-2">
               <RefreshCw className="w-5 h-5 text-ymad-blue-600" />
-              Aper√ßu sur le site
+              AperÁu sur le site
             </h2>
             <div className="relative h-40 bg-gradient-to-r from-ymad-gray-800 to-ymad-gray-900 rounded-xl overflow-hidden">
               {(bannerUrl || previewUrl) && (
                 <img 
                   src={previewUrl || bannerUrl || ''} 
-                  alt="Aper√ßu banni√®re" 
+                  alt="AperÁu banniËre" 
                   className="absolute inset-0 w-full h-full object-cover opacity-40"
                 />
               )}
               <div className="relative z-10 flex flex-col items-center justify-center h-full text-center px-4">
                 <h3 className="text-white font-bold text-xl">Y-Mad Madagascar</h3>
-                <p className="text-ymad-blue-200 text-sm">Jeunesse Malgache en Action pour le D√©veloppement</p>
+                <p className="text-ymad-blue-200 text-sm">Jeunesse Malgache en Action pour le DÈveloppement</p>
               </div>
             </div>
             <p className="text-xs text-ymad-gray-400 mt-3 text-center flex items-center justify-center gap-1">
-              <Info className="w-3 h-3" /> L'aper√ßu montre comment la banni√®re s'affichera sur la page d'accueil
+              <Info className="w-3 h-3" /> L'aperÁu montre comment la banniËre s'affichera sur la page d'accueil
             </p>
           </div>
 
@@ -369,35 +369,35 @@ export default function MediaPage() {
           <div className="bg-ymad-blue-50 rounded-xl p-5 border border-ymad-blue-100">
             <h3 className="font-semibold text-ymad-blue-800 mb-3 flex items-center gap-2">
               <Info className="w-5 h-5" />
-              Conseils pour la banni√®re
+              Conseils pour la banniËre
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
-                  <span className="text-ymad-blue-600">üìê</span>
-                  <span><strong className="text-ymad-gray-700">Format recommand√© :</strong> 1920 x 1080 pixels (paysage)</span>
+                  <span className="text-ymad-blue-600">??</span>
+                  <span><strong className="text-ymad-gray-700">Format recommandÈ :</strong> 1920 x 1080 pixels (paysage)</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-ymad-blue-600">‚öñÔ∏è</span>
+                  <span className="text-ymad-blue-600">??</span>
                   <span><strong className="text-ymad-gray-700">Poids maximum :</strong> 5 Mo</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-ymad-blue-600">üñºÔ∏è</span>
-                  <span><strong className="text-ymad-gray-700">Formats accept√©s :</strong> JPG, PNG, WebP</span>
+                  <span className="text-ymad-blue-600">???</span>
+                  <span><strong className="text-ymad-gray-700">Formats acceptÈs :</strong> JPG, PNG, WebP</span>
                 </li>
               </ul>
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
-                  <span className="text-ymad-blue-600">üéØ</span>
-                  <span><strong className="text-ymad-gray-700">Th√®me :</strong> Actions terrain, jeunesse malgache</span>
+                  <span className="text-ymad-blue-600">??</span>
+                  <span><strong className="text-ymad-gray-700">ThËme :</strong> Actions terrain, jeunesse malgache</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-ymad-blue-600">üé®</span>
-                  <span><strong className="text-ymad-gray-700">Qualit√© :</strong> Image haute r√©solution sans texte</span>
+                  <span className="text-ymad-blue-600">??</span>
+                  <span><strong className="text-ymad-gray-700">QualitÈ :</strong> Image haute rÈsolution sans texte</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-ymad-blue-600">üí°</span>
-                  <span><strong className="text-ymad-gray-700">Astuce :</strong> √âvitez les textes sur l'image</span>
+                  <span className="text-ymad-blue-600">??</span>
+                  <span><strong className="text-ymad-gray-700">Astuce :</strong> …vitez les textes sur l'image</span>
                 </li>
               </ul>
             </div>

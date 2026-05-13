@@ -1,3 +1,5 @@
+// frontend/src/hooks/useTranslation.ts
+
 'use client';
 
 import { useLanguage } from '@/contexts/LanguageContext';

@@ -1,7 +1,7 @@
 ﻿// frontend/src/types/index.ts
 
 // ========================================
-// TYPES D'UTILISATEUR
+// 1. TYPES D'UTILISATEUR
 // ========================================
 
 export interface User {
@@ -14,6 +14,15 @@ export interface User {
   language?: 'fr' | 'mg';
   phone?: string;
   avatarUrl?: string;
+  avatar_url?: string;
+  photo?: string;
+  bio?: string;
+  position?: string;
+  department?: string;
+  skills?: string;
+  socialLinkedin?: string;
+  socialTwitter?: string;
+  socialGithub?: string;
   isActive: boolean;
   emailVerified: boolean;
   lastLogin?: string;
@@ -37,7 +46,7 @@ export interface RegisterData {
 }
 
 // ========================================
-// TYPES DE RÉPONSES API
+// 2. TYPES DE RÉPONSES API
 // ========================================
 
 export interface ApiResponse<T = any> {
@@ -56,7 +65,39 @@ export interface PaginatedResponse<T> {
 }
 
 // ========================================
-// TYPES DES OFFRES D'EMPLOI
+// 3. TYPES DES BÉNÉFICIAIRES
+// ========================================
+
+export interface Beneficiary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  birthDate?: string;
+  gender?: 'male' | 'female' | 'other';
+  email?: string;
+  phone?: string;
+  region?: string;
+  commune?: string;
+  fokontany?: string;
+  educationLevel?: 'primaire' | 'ceg' | 'lycee' | 'universite' | 'aucun';
+  employmentStatus?: 'chomeur' | 'etudiant' | 'employe' | 'entrepreneur';
+  beforeYmAd?: string;
+  afterYmAd?: string;
+  userId?: string;
+  user?: User;
+  projects?: Project[];
+  createdAt: string;
+}
+
+export interface BeneficiaryImpactStats {
+  total: number;
+  withBeforeAfter: number;
+  improved: number;
+  impactRate: number;
+}
+
+// ========================================
+// 4. TYPES DES OFFRES D'EMPLOI
 // ========================================
 
 export interface JobOffer {
@@ -109,8 +150,17 @@ export interface JobApplication {
   updatedAt: string;
 }
 
+export interface JobStats {
+  total: number;
+  active: number;
+  applications: number;
+  pending: number;
+  accepted: number;
+  rejected: number;
+}
+
 // ========================================
-// TYPES DES PROJETS
+// 5. TYPES DES PROJETS
 // ========================================
 
 export interface Project {
@@ -120,11 +170,13 @@ export interface Project {
   description: string;
   descriptionMg?: string;
   budget?: number;
+  spent?: number;
   region?: string;
   location?: string;
   category?: string;
   progress: number;
-  status: 'planning' | 'active' | 'completed' | 'suspended';
+  beneficiariesCount?: number;
+  status: 'planning' | 'active' | 'completed' | 'suspended' | 'draft' | 'cancelled';
   startDate?: string;
   endDate?: string;
   imageUrl?: string;
@@ -132,13 +184,22 @@ export interface Project {
   youthImpact: number;
   jobsCreated: number;
   isFeatured: boolean;
+  managerId?: string;
   manager?: User;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface ProjectStats {
+  total: number;
+  active: number;
+  completed: number;
+  budgetTotal: number;
+  budgetSpent: number;
+}
+
 // ========================================
-// TYPES DES ÉVÉNEMENTS
+// 6. TYPES DES ÉVÉNEMENTS
 // ========================================
 
 export interface Event {
@@ -181,7 +242,7 @@ export interface EventRegistration {
 }
 
 // ========================================
-// TYPES DU BLOG
+// 7. TYPES DU BLOG
 // ========================================
 
 export interface BlogPost {
@@ -198,6 +259,7 @@ export interface BlogPost {
   featuredImage?: string;
   views: number;
   status: 'draft' | 'published';
+  authorId?: string;
   author?: User;
   beneficiaryId?: string;
   publishedAt?: string;
@@ -205,8 +267,15 @@ export interface BlogPost {
   updatedAt: string;
 }
 
+export interface BlogStats {
+  total: number;
+  published: number;
+  draft: number;
+  totalViews: number;
+}
+
 // ========================================
-// TYPES DES MEMBRES
+// 8. TYPES DES MEMBRES
 // ========================================
 
 export interface Member {
@@ -226,8 +295,15 @@ export interface Member {
   updatedAt: string;
 }
 
+export interface MemberStats {
+  total: number;
+  active: number;
+  expired: number;
+  pending: number;
+}
+
 // ========================================
-// TYPES DES BÉNÉVOLES
+// 9. TYPES DES BÉNÉVOLES
 // ========================================
 
 export interface Volunteer {
@@ -245,8 +321,15 @@ export interface Volunteer {
   updatedAt: string;
 }
 
+export interface VolunteerStats {
+  total: number;
+  active: number;
+  pending: number;
+  totalHours: number;
+}
+
 // ========================================
-// TYPES DES PARTENAIRES
+// 10. TYPES DES PARTENAIRES
 // ========================================
 
 export interface Partner {
@@ -267,7 +350,7 @@ export interface Partner {
 }
 
 // ========================================
-// TYPES DES DONS
+// 11. TYPES DES DONS
 // ========================================
 
 export interface Donation {
@@ -292,8 +375,15 @@ export interface Donation {
   createdAt: string;
 }
 
+export interface DonationStats {
+  total: number;
+  monthly: number;
+  count: number;
+  average: number;
+}
+
 // ========================================
-// TYPES DU FOOTER
+// 12. TYPES DU FOOTER
 // ========================================
 
 export interface FooterSection {
@@ -342,14 +432,51 @@ export interface FooterData {
 }
 
 // ========================================
-// TYPES D'AUDIT
+// 13. TYPES DES PAGES (CONTENU DYNAMIQUE) - CORRIGÉ
+// ========================================
+
+export interface PageContent {
+  id: string;
+  page: string;
+  content: string;
+  contentMg?: string;
+  updatedAt: string;
+}
+
+// Version CORRIGÉE de PageBackground (compatible avec votre code)
+export interface PageBackground {
+  id: string;
+  page: string;
+  image_url: string;           // Note: snake_case pour correspondre à l'API
+  mobile_url?: string;         // Optionnel
+  thumbnail_url?: string;      // Optionnel
+  alt_text?: string;           // Optionnel
+  is_active: boolean;
+  overlay_opacity: number;
+  position: string;
+  size: string;
+  created_at: string;          // snake_case
+  updated_at: string;          // snake_case
+}
+
+// Alias pour compatibilité avec les deux conventions (camelCase et snake_case)
+export type PageBackgroundCompat = PageBackground & {
+  imageUrl?: string;
+  isActive?: boolean;
+  overlayOpacity?: number;
+  updatedAt?: string;
+  createdAt?: string;
+};
+
+// ========================================
+// 14. TYPES D'AUDIT
 // ========================================
 
 export interface AuditLog {
   id: string;
   userId?: string;
   user?: User;
-  action: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'EXPORT';
   entityType: string;
   entityId?: string;
   oldData?: any;
@@ -360,7 +487,23 @@ export interface AuditLog {
 }
 
 // ========================================
-// TYPES UTILITAIRES
+// 15. TYPES DES CONTACTS
+// ========================================
+
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  subject: string;
+  message: string;
+  status: 'new' | 'read' | 'replied' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ========================================
+// 16. TYPES UTILITAIRES
 // ========================================
 
 export interface Stats {
@@ -376,6 +519,26 @@ export interface Stats {
   treesPlanted: number;
   regionsCovered: number;
   partnersCount: number;
+}
+
+export interface DashboardStats {
+  totalUsers: number;
+  totalMembers: number;
+  activeMembers: number;
+  totalProjects: number;
+  activeProjects: number;
+  totalEvents: number;
+  upcomingEvents: number;
+  totalJobs: number;
+  activeJobs: number;
+  totalApplications: number;
+  pendingApplications: number;
+  totalDonations: number;
+  monthlyDonations: number;
+  totalVolunteers: number;
+  activeVolunteers: number;
+  totalBeneficiaries: number;
+  impactRate: number;
 }
 
 export interface ChartData {
@@ -397,4 +560,50 @@ export interface FilterParams {
   category?: string;
   sortBy?: string;
   sortOrder?: 'ASC' | 'DESC';
+}
+
+// ========================================
+// 17. TYPES DES CHARGEMENTS (UPLOAD)
+// ========================================
+
+export interface UploadResponse {
+  url: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+}
+
+// ========================================
+// 18. TYPES DES NEWSLETTER
+// ========================================
+
+export interface NewsletterSubscription {
+  id: string;
+  email: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface NewsletterSendResult {
+  success: boolean;
+  totalSent: number;
+  failed: number;
+  message: string;
+}
+
+// ========================================
+// 19. TYPES DES RAPPORTS
+// ========================================
+
+export interface Report {
+  id: string;
+  title: string;
+  type: 'activity' | 'financial' | 'impact' | 'project' | 'event';
+  periodStart?: string;
+  periodEnd?: string;
+  projectId?: string;
+  fileUrl: string;
+  generatedBy?: User;
+  isPublic: boolean;
+  createdAt: string;
 }

@@ -1,3 +1,5 @@
+// frontend/src/services/pageService.ts
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
 
 // ============================================
@@ -134,10 +136,10 @@ export const defaultBackground: Omit<PageBackground, 'id' | 'created_at' | 'upda
 
 export const defaultPageContent: Omit<PageContent, 'id' | 'created_at' | 'updated_at'> = {
   page: '',
-  hero: defaultHero,
+  hero: { ...defaultHero },
   sections: [],
   stats: [],
-  cta: defaultCta,
+  cta: { ...defaultCta },
   seo_title: '',
   seo_description: '',
   seo_keywords: '',
@@ -196,28 +198,49 @@ export function getPageLabel(pageValue: string, language: 'fr' | 'mg'): string {
 // ============================================
 
 export const pageService = {
+  // ==========================================
+  // CONTENU DES PAGES
+  // ==========================================
+
+  /**
+   * Récupère toutes les pages (admin uniquement)
+   */
   async getAll(token: string): Promise<PageContent[]> {
-    const response = await fetch(`${API_URL}/pages`, {
+    const response = await fetch(`${API_URL}/api/pages`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) throw new Error('Erreur chargement des pages');
     return response.json();
   },
 
+  /**
+   * Récupère le contenu public d'une page (sans authentification)
+   */
   async getPublic(page: string): Promise<PageContent | null> {
-    const response = await fetch(`${API_URL}/pages/public/${page}`);
-    if (!response.ok) return null;
-    return response.json();
+    try {
+      const response = await fetch(`${API_URL}/api/pages/public/${page}`);
+      if (!response.ok) return null;
+      return response.json();
+    } catch (error) {
+      console.error(`Erreur chargement page ${page}:`, error);
+      return null;
+    }
   },
 
+  /**
+   * Récupère une page pour l'administration (avec token)
+   */
   async getForAdmin(page: string, token: string): Promise<PageContent> {
-    const response = await fetch(`${API_URL}/pages/${page}`, {
+    const response = await fetch(`${API_URL}/api/pages/${page}`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) throw new Error('Erreur chargement de la page');
     return response.json();
   },
 
+  /**
+   * Met à jour le contenu d'une page
+   */
   async update(page: string, token: string, data: Partial<PageContent>): Promise<PageContent> {
     const updateData = {
       ...data,
@@ -227,7 +250,7 @@ export const pageService = {
       stats: data.stats || [],
     };
     
-    const response = await fetch(`${API_URL}/pages/${page}`, {
+    const response = await fetch(`${API_URL}/api/pages/${page}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -239,23 +262,56 @@ export const pageService = {
     return response.json();
   },
 
+  // ==========================================
+  // FONDS D'ÉCRAN
+  // ==========================================
+
+  /**
+   * Récupère tous les fonds d'écran (admin uniquement)
+   */
   async getAllBackgrounds(token: string): Promise<PageBackground[]> {
-    const response = await fetch(`${API_URL}/pages/backgrounds/all`, {
+    const response = await fetch(`${API_URL}/api/pages/backgrounds/all`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) throw new Error('Erreur chargement des fonds d\'écran');
     return response.json();
   },
 
+  /**
+   * Récupère le fond d'écran d'une page (public)
+   */
   async getBackground(page: string): Promise<PageBackground | null> {
-    const response = await fetch(`${API_URL}/pages/backgrounds/${page}`);
-    if (!response.ok) return null;
-    return response.json();
+    try {
+      const response = await fetch(`${API_URL}/api/pages/backgrounds/${page}`);
+      if (!response.ok) return null;
+      const data = await response.json();
+      
+      // S'assurer que les propriétés optionnelles existent
+      return {
+        ...data,
+        mobile_url: data.mobile_url || '',
+        thumbnail_url: data.thumbnail_url || '',
+        alt_text: data.alt_text || '',
+      };
+    } catch (error) {
+      console.error(`Erreur chargement fond d'écran ${page}:`, error);
+      return null;
+    }
   },
 
+  /**
+   * Met à jour le fond d'écran d'une page
+   */
   async updateBackground(page: string, token: string, data: Partial<PageBackground>): Promise<PageBackground> {
-    const updateData = { ...defaultBackground, ...data, page };
-    const response = await fetch(`${API_URL}/pages/backgrounds/${page}`, {
+    const updateData = { 
+      ...defaultBackground, 
+      ...data, 
+      page,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    const response = await fetch(`${API_URL}/api/pages/backgrounds/${page}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -267,19 +323,58 @@ export const pageService = {
     return response.json();
   },
 
+  /**
+   * Supprime un fond d'écran par son ID
+   */
   async deleteBackground(id: string, token: string): Promise<void> {
-    const response = await fetch(`${API_URL}/pages/backgrounds/${id}`, {
+    const response = await fetch(`${API_URL}/api/pages/backgrounds/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) throw new Error('Erreur suppression du fond d\'écran');
   },
 
+  /**
+   * Crée un nouveau fond d'écran
+   */
+  async createBackground(token: string, data: Partial<PageBackground>): Promise<PageBackground> {
+    const createData = { 
+      ...defaultBackground, 
+      ...data,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    const response = await fetch(`${API_URL}/api/pages/backgrounds`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(createData),
+    });
+    if (!response.ok) throw new Error('Erreur création du fond d\'écran');
+    return response.json();
+  },
+
+  // ==========================================
+  // INITIALISATION
+  // ==========================================
+
+  /**
+   * Initialise les pages par défaut (admin uniquement)
+   */
   async initializePages(token: string): Promise<void> {
-    const response = await fetch(`${API_URL}/pages/initialize`, {
+    const response = await fetch(`${API_URL}/api/pages/initialize`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) throw new Error('Erreur initialisation des pages');
   },
 };
+
+// ============================================
+// EXPORT PAR DÉFAUT
+// ============================================
+
+export default pageService;

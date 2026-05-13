@@ -1,8 +1,10 @@
-// src/hooks/useAuth.ts
+// frontend/src/hooks/useAuth.ts
+
 'use client';
 
 import { useContext } from 'react';
 import { AuthContext } from '@/contexts/AuthContext';
+import type { AuthContextType } from '@/contexts/AuthContext';
 
 /**
  * Hook personnalisé pour accéder au contexte d'authentification
@@ -17,13 +19,20 @@ import { AuthContext } from '@/contexts/AuthContext';
  * if (user) {
  *   console.log('Bonjour', user.firstName);
  * }
+ * 
+ * if (isAuthenticated) {
+ *   // Afficher le contenu protégé
+ * }
  * ```
  */
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   
   if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
+    throw new Error(
+      'useAuth doit être utilisé à l\'intérieur d\'un AuthProvider. ' +
+      'Assurez-vous que votre composant est enveloppé par <AuthProvider>.'
+    );
   }
   
   return context;

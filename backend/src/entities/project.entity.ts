@@ -1,9 +1,13 @@
+// ✅ VERSION CORRECTE DE project.entity.ts
+
 import { 
   Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, 
-  UpdateDateColumn, ManyToOne, JoinColumn, Index 
+  UpdateDateColumn, ManyToOne, JoinColumn, Index, ManyToMany 
 } from 'typeorm';
 import { User } from './user.entity';
+import { Beneficiary } from './beneficiary.entity';  // ← Ajoute ceci si tu as la relation
 
+// Garde l'enum ici (ne l'importe pas)
 export enum ProjectStatus {
   ACTIVE = 'active',
   COMPLETED = 'completed',
@@ -45,7 +49,6 @@ export class Project {
   @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
   budget: number;
 
-  // ✅ SUPPRIMER "spent" ou le garder avec name
   @Column({ name: 'spent', type: 'decimal', precision: 15, scale: 2, default: 0, nullable: true })
   spent: number;
 
@@ -82,6 +85,10 @@ export class Project {
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'manager_id' })
   manager: User;
+
+  // ✅ Relation avec Beneficiary (si tu l'as ajoutée)
+  @ManyToMany(() => Beneficiary, (beneficiary) => beneficiary.projects)
+  beneficiaries: Beneficiary[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

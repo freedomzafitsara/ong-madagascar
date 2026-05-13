@@ -1,9 +1,41 @@
-﻿/* src/app/globals.css */
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ==================== BASE ==================== */
+/* ============================================================
+   1. VARIABLES CSS (COULEURS OFFICIELLES Y-Mad)
+   ============================================================ */
+
+:root {
+  /* Bleu Y-Mad - Couleur principale */
+  --ymad-blue-50: #eff6ff;
+  --ymad-blue-100: #dbeafe;
+  --ymad-blue-200: #bfdbfe;
+  --ymad-blue-300: #93c5fd;
+  --ymad-blue-400: #60a5fa;
+  --ymad-blue-500: #3b82f6;
+  --ymad-blue-600: #1A69EB;   /* Bleu officiel Y-Mad */
+  --ymad-blue-700: #0D4CA8;   /* Bleu foncé Y-Mad */
+  --ymad-blue-800: #07307a;
+  --ymad-blue-900: #041a47;
+  
+  /* Gris Y-Mad - Couleur secondaire */
+  --ymad-gray-50: #f8fafc;
+  --ymad-gray-100: #f1f5f9;
+  --ymad-gray-200: #e2e8f0;
+  --ymad-gray-300: #cbd5e1;
+  --ymad-gray-400: #94a3b8;
+  --ymad-gray-500: #64748b;
+  --ymad-gray-600: #475569;
+  --ymad-gray-700: #334155;
+  --ymad-gray-800: #1e293b;
+  --ymad-gray-900: #0f172a;
+}
+
+/* ============================================================
+   2. STYLES DE BASE
+   ============================================================ */
+
 @layer base {
   body {
     @apply bg-ymad-gray-50 text-ymad-gray-800 font-sans antialiased;
@@ -23,48 +55,158 @@
   }
 }
 
-/* ==================== SCROLLBAR PERSONNALISÉE ==================== */
+/* ============================================================
+   3. GESTION DES FONDS D'ÉCRAN
+   ============================================================ */
+
+/* Fond d'écran fixe pour toute la page */
+.page-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* Overlay pour améliorer la lisibilité du texte */
+.page-background-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Contenu principal au-dessus du fond d'écran */
+.page-content {
+  position: relative;
+  z-index: 2;
+}
+
+/* Hero section avec fond d'écran intégré */
+.hero-section {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.hero-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.hero-background-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: 2rem;
+}
+
+/* Section avec fond d'écran intégré */
+.section-with-bg {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.section-with-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1;
+}
+
+.section-with-bg > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ============================================================
+   4. SCROLLBAR PERSONNALISÉE
+   ============================================================ */
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--ymad-gray-100);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1A69EB;  /* Bleu Y-Mad */
+  background: var(--ymad-blue-600);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #0D4CA8;  /* Bleu foncé Y-Mad */
+  background: var(--ymad-blue-700);
 }
 
-/* Pour Firefox */
+/* Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #1A69EB #f1f5f9;
+  scrollbar-color: var(--ymad-blue-600) var(--ymad-gray-100);
 }
 
-/* ==================== SELECTION TEXTE ==================== */
+/* ============================================================
+   5. SÉLECTION DE TEXTE
+   ============================================================ */
+
 ::selection {
-  background: #1A69EB;  /* Bleu Y-Mad */
+  background: var(--ymad-blue-600);
   color: #ffffff;
 }
 
 ::-moz-selection {
-  background: #1A69EB;
+  background: var(--ymad-blue-600);
   color: #ffffff;
 }
 
-/* ==================== ANIMATIONS SIMPLES ==================== */
+/* ============================================================
+   6. ANIMATIONS
+   ============================================================ */
+
 @keyframes fadeIn {
   from {
     opacity: 0;
     transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
   }
   to {
     opacity: 1;
@@ -92,8 +234,24 @@
   }
 }
 
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Classes d'animation */
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
 }
 
 .animate-pulse-slow {
@@ -104,9 +262,16 @@
   animation: slideIn 0.3s ease-out forwards;
 }
 
-/* ==================== COMPOSANTS UTILITAIRES ==================== */
+.animate-zoom-in {
+  animation: zoomIn 0.3s ease-out forwards;
+}
+
+/* ============================================================
+   7. COMPOSANTS RÉUTILISABLES
+   ============================================================ */
+
 @layer components {
-  /* Boutons Y-Mad - Version Bleu */
+  /* ---------- BOUTONS ---------- */
   .btn-primary {
     @apply bg-ymad-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold 
            hover:bg-ymad-blue-700 transition-all duration-200 shadow-sm hover:shadow-md;
@@ -122,12 +287,15 @@
            hover:bg-ymad-blue-600 hover:text-white transition-all duration-200;
   }
   
-  .btn-danger {
-    @apply bg-red-600 text-white px-6 py-2.5 rounded-lg font-semibold 
-           hover:bg-red-700 transition-all duration-200;
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
   }
   
-  /* Cartes */
+  .btn-lg {
+    @apply px-8 py-3 text-lg;
+  }
+
+  /* ---------- CARTES ---------- */
   .card {
     @apply bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all duration-300;
   }
@@ -136,7 +304,11 @@
     @apply hover:-translate-y-1 transition-transform duration-300;
   }
   
-  /* Inputs */
+  .card-gradient {
+    @apply bg-gradient-to-br from-white to-ymad-gray-50;
+  }
+
+  /* ---------- CHAMPS DE SAISIE ---------- */
   .input {
     @apply w-full px-4 py-2.5 border border-ymad-gray-300 rounded-lg 
            focus:ring-2 focus:ring-ymad-blue-500 focus:border-transparent 
@@ -147,33 +319,25 @@
     @apply border-red-500 focus:ring-red-400;
   }
   
-  /* Conteneur */
+  .input-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
+  /* ---------- CONTENEUR ---------- */
   .container-custom {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
-  
-  /* Badges */
+
+  /* ---------- BADGES ---------- */
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
-  }
-  
-  .badge-success {
-    @apply bg-green-100 text-green-800;
-  }
-  
-  .badge-warning {
-    @apply bg-yellow-100 text-yellow-800;
-  }
-  
-  .badge-error {
-    @apply bg-red-100 text-red-800;
   }
   
   .badge-info {
     @apply bg-ymad-blue-100 text-ymad-blue-700;
   }
-  
-  /* Sidebar et navigation */
+
+  /* ---------- SIDEBAR ---------- */
   .nav-link {
     @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-ymad-gray-600 
            hover:bg-ymad-gray-100 hover:text-ymad-blue-600 transition-all duration-200;
@@ -182,8 +346,8 @@
   .nav-link-active {
     @apply bg-ymad-blue-50 text-ymad-blue-700 font-medium;
   }
-  
-  /* Tableaux */
+
+  /* ---------- TABLEAUX ---------- */
   .table-container {
     @apply bg-white rounded-xl shadow-sm overflow-hidden;
   }
@@ -196,7 +360,11 @@
     @apply px-4 py-3 text-sm text-ymad-gray-600 border-b;
   }
   
-  /* Modals */
+  .table-row-hover:hover {
+    @apply bg-ymad-gray-50 transition-colors;
+  }
+
+  /* ---------- MODALES ---------- */
   .modal-overlay {
     @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4;
   }
@@ -212,9 +380,35 @@
   .modal-footer {
     @apply sticky bottom-0 bg-white p-4 border-t flex justify-end gap-3;
   }
+
+  /* ---------- PAGINATION ---------- */
+  .pagination {
+    @apply flex justify-center gap-2 mt-8;
+  }
+  
+  .pagination-item {
+    @apply px-3 py-1.5 rounded-lg border border-ymad-gray-300 text-ymad-gray-600 
+           hover:bg-ymad-gray-100 transition;
+  }
+  
+  .pagination-item-active {
+    @apply bg-ymad-blue-600 text-white border-ymad-blue-600 hover:bg-ymad-blue-700;
+  }
+
+  /* ---------- CHARGEMENT ---------- */
+  .spinner {
+    @apply w-12 h-12 border-4 border-ymad-blue-200 border-t-ymad-blue-600 rounded-full animate-spin;
+  }
+  
+  .skeleton {
+    @apply bg-ymad-gray-200 animate-pulse rounded;
+  }
 }
 
-/* ==================== UTILITAIRES SUPPLÉMENTAIRES ==================== */
+/* ============================================================
+   8. UTILITAIRES PERSONNALISÉS
+   ============================================================ */
+
 @layer utilities {
   /* Texte avec dégradé bleu */
   .text-gradient {
@@ -226,7 +420,7 @@
     @apply w-16 h-1 bg-ymad-blue-600 rounded-full mx-auto my-4;
   }
   
-  /* Masque de ligne pour textes longs */
+  /* Limitation de lignes pour les textes longs */
   .line-clamp-1 {
     display: -webkit-box;
     -webkit-line-clamp: 1;
@@ -248,28 +442,70 @@
     overflow: hidden;
   }
   
-  /* Transitions */
+  /* Transition fluide */
   .transition-smooth {
     transition: all 0.2s ease-in-out;
   }
+  
+  /* Ombre spécifique Y-Mad */
+  .shadow-ymad {
+    box-shadow: 0 4px 14px rgba(26, 105, 235, 0.15);
+  }
+  
+  /* Bordure supérieure bleue */
+  .border-top-blue {
+    border-top: 3px solid var(--ymad-blue-600);
+  }
 }
 
-/* ==================== RESPONSIVE ==================== */
+/* ============================================================
+   9. STYLES RESPONSIVES
+   ============================================================ */
+
+/* Mobile (jusqu'à 640px) */
 @media (max-width: 640px) {
   .container-custom {
     @apply px-4;
   }
   
-  .btn-primary, .btn-secondary, .btn-outline, .btn-danger {
+  .btn-primary, .btn-secondary, .btn-outline {
     @apply px-4 py-2 text-sm;
   }
   
   .modal-container {
     @apply max-w-[95%] mx-2;
   }
+  
+  h1 {
+    @apply text-2xl;
+  }
+  
+  h2 {
+    @apply text-xl;
+  }
 }
 
-/* ==================== DARK MODE SUPPORT (optionnel) ==================== */
-@media (prefers-color-scheme: dark) {
-  /* Styles optionnels pour dark mode */
+/* Tablette (641px - 768px) */
+@media (min-width: 641px) and (max-width: 768px) {
+  .container-custom {
+    @apply px-6;
+  }
 }
+
+/* ============================================================
+   10. MODE SOMBRE (optionnel - désactivé par défaut)
+   ============================================================ */
+
+/* 
+   Pour activer le mode sombre, décommentez ce bloc
+   
+@media (prefers-color-scheme: dark) {
+  body {
+    @apply bg-ymad-gray-900 text-ymad-gray-200;
+  }
+  
+  .card {
+    @apply bg-ymad-gray-800;
+  }
+}
+*/

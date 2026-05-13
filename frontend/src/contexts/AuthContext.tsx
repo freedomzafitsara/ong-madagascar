@@ -1,27 +1,57 @@
-﻿// frontend/src/contexts/AuthContext.tsx
-'use client';
+﻿'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface User {
+// ============================================================
+// 1. TYPES ET ENUMS
+// ============================================================
+
+export enum UserRole {
+  SUPER_ADMIN = 'super_admin',
+  ADMIN = 'admin',
+  STAFF = 'staff',
+  MEMBER = 'member',
+  VOLUNTEER = 'volunteer',
+  PARTNER = 'partner',
+  VISITOR = 'visitor',
+}
+
+export interface User {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
-  role: string;
+  role: UserRole;
   isActive: boolean;
+  avatar_url?: string;
+  phone?: string;
+  region?: string;
+  bio?: string;
+  position?: string;
+  department?: string;
+  skills?: string;
+  socialLinkedin?: string;
+  socialTwitter?: string;
+  socialGithub?: string;
+  createdAt?: string;
+  lastLogin?: string;
+  updatedAt?: string;
+  email_verified?: boolean;
+  language?: string;
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (userData: RegisterData) => Promise<void>;
-  hasRole: (roles: string | string[]) => boolean;
+  hasRole: (roles: UserRole[]) => boolean;
   isAuthenticated: boolean;
+  updateUser: (data: Partial<User>) => void;
+  refreshToken: () => Promise<boolean>;
 }
 
 interface RegisterData {
@@ -32,10 +62,25 @@ interface RegisterData {
   phone?: string;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+interface LoginResponse {
+  access_token?: string;
+  token?: string;
+  user: User;
+  message?: string;
+  statusCode?: number;
+}
 
-// URL de l'API
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+// ============================================================
+// 2. CONSTANTES
+// ============================================================
+
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+
+// ============================================================
+// 3. PROVIDER
+// ============================================================
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -45,106 +90,157 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Charger la session au démarrage
   useEffect(() => {
-    const storedToken = localStorage.getItem('access_token');
+    const storedToken = localStorage.getItem('access_token') || localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
     
+    console.log('🔍 Chargement session - Token présent:', !!storedToken);
+    console.log('🔍 Chargement session - User présent:', !!storedUser);
+    
     if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      try {
+        const parsedUser = JSON.parse(storedUser) as User;
+        setToken(storedToken);
+        setUser(parsedUser);
+        console.log('✅ Session chargée avec succès');
+      } catch (error) {
+        console.error('❌ Erreur lors du chargement de la session:', error);
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    } else {
+      console.log('⚠️ Aucune session trouvée');
     }
     setLoading(false);
   }, []);
 
-  // Fonction de connexion
-  const login = async (email: string, password: string) => {
+  // Mettre à jour l'utilisateur dans le contexte
+  const updateUser = (data: Partial<User>) => {
+    if (user) {
+      const updatedUser = { ...user, ...data };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      console.log('✅ Utilisateur mis à jour');
+    }
+  };
+
+  // Vérifier si l'utilisateur a un ou plusieurs rôles
+  const hasRole = (roles: UserRole[]): boolean => {
+    if (!user) return false;
+    return roles.includes(user.role);
+  };
+
+  // Rafraîchir le token
+  const refreshToken = async (): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const refreshTokenValue = localStorage.getItem('refresh_token');
+      if (!refreshTokenValue) return false;
+      
+      const response = await fetch(`${API_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshTokenValue }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const newToken = data.access_token || data.token;
+        if (newToken) {
+          localStorage.setItem('access_token', newToken);
+          localStorage.setItem('token', newToken);
+          setToken(newToken);
+          console.log('✅ Token rafraîchi avec succès');
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ Erreur lors du rafraîchissement du token:', error);
+      return false;
+    }
+  };
+
+  // Fonction de connexion
+  const login = async (email: string, password: string): Promise<void> => {
+    try {
+      console.log('🔐 Tentative de connexion pour:', email);
+      
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      const data: LoginResponse = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Erreur de connexion');
+        const errorMsg = data.message || 'Email ou mot de passe incorrect';
+        console.error('❌ Échec de connexion:', errorMsg);
+        throw new Error(errorMsg);
       }
 
-      console.log('Réponse API:', data);
-
-      // Extraire le token et l'utilisateur (adaptez selon votre API)
-      let authToken: string | null = null;
-      let userData: User | null = null;
-
-      // Cas 1: token dans data.token
-      if (data.token) {
-        authToken = data.token;
-        userData = data.user;
-      }
-      // Cas 2: token dans data.access_token
-      else if (data.access_token) {
-        authToken = data.access_token;
-        userData = data.user;
-      }
-      // Cas 3: success avec token dans data
-      else if (data.success && data.user) {
-        // Votre API retourne token? Regardons la réponse complète
-        console.log('Structure de la réponse:', data);
-        
-        // Si votre API retourne le token dans une autre propriété
-        // Ajoutez ici la logique adaptée
+      // Extraire le token
+      const authToken = data.access_token || data.token;
+      
+      if (!authToken || !data.user) {
+        throw new Error('Impossible de récupérer les informations de connexion');
       }
 
-      if (!authToken && data.user) {
-        // Si votre API ne retourne pas de token, vous devez en générer un
-        console.warn('Token non trouvé dans la réponse');
-        authToken = 'temp_token_' + Date.now();
-        userData = data.user;
-      }
+      console.log('✅ Connexion réussie, token obtenu');
 
-      if (!authToken || !userData) {
-        console.error('Structure de la réponse:', data);
-        throw new Error('Token ou utilisateur manquant dans la réponse');
-      }
+      // Enrichir les données utilisateur
+      const enrichedUserData: User = {
+        ...data.user,
+        role: data.user.role as UserRole,
+        createdAt: data.user.createdAt || new Date().toISOString(),
+        lastLogin: data.user.lastLogin || new Date().toISOString(),
+        phone: data.user.phone || '',
+        region: data.user.region || 'Analamanga',
+        bio: data.user.bio || '',
+        position: data.user.position || 'Membre',
+        department: data.user.department || 'Programmes',
+        skills: data.user.skills || '',
+        socialLinkedin: data.user.socialLinkedin || '',
+        socialTwitter: data.user.socialTwitter || '',
+        socialGithub: data.user.socialGithub || '',
+      };
 
       // Stocker dans localStorage
       localStorage.setItem('access_token', authToken);
       localStorage.setItem('token', authToken);
-      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('user', JSON.stringify(enrichedUserData));
       
       // Mettre à jour l'état
       setToken(authToken);
-      setUser(userData);
+      setUser(enrichedUserData);
       
-      console.log('✅ Connexion réussie, token stocké');
+      // Rediriger vers le tableau de bord
+      router.push('/dashboard');
       
     } catch (error) {
-      console.error('Erreur de connexion:', error);
+      console.error('❌ Erreur de connexion:', error);
       throw error;
     }
   };
 
   // Fonction de déconnexion
-  const logout = () => {
+  const logout = (): void => {
+    console.log('🔓 Déconnexion');
     localStorage.removeItem('access_token');
     localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
     router.push('/login');
   };
 
-  // Vérifier les rôles
-  const hasRole = (roles: string | string[]): boolean => {
-    if (!user) return false;
-    const roleList = Array.isArray(roles) ? roles : [roles];
-    return roleList.includes(user.role);
-  };
-
   // Fonction d'inscription
-  const register = async (userData: RegisterData) => {
+  const register = async (userData: RegisterData): Promise<void> => {
     try {
-      const response = await fetch(`${API_URL}/auth/register`, {
+      console.log('📝 Tentative d\'inscription pour:', userData.email);
+      
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
@@ -153,37 +249,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Erreur d\'inscription');
+        throw new Error(data.message || 'Erreur lors de l\'inscription');
       }
 
-      router.push('/login');
+      console.log('✅ Inscription réussie');
+      router.push('/login?registered=true');
       
     } catch (error) {
-      console.error('Erreur d\'inscription:', error);
+      console.error('❌ Erreur d\'inscription:', error);
       throw error;
     }
   };
 
+  // Valeur du contexte
+  const contextValue: AuthContextType = {
+    user,
+    token,
+    loading,
+    login,
+    logout,
+    register,
+    hasRole,
+    isAuthenticated: !!token && !!user && user.isActive === true,
+    updateUser,
+    refreshToken,
+  };
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      token,
-      loading,
-      login,
-      logout,
-      register,
-      hasRole,
-      isAuthenticated: !!token && !!user,
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export const useAuth = () => {
+// ============================================================
+// 4. HOOK PERSONNALISÉ
+// ============================================================
+
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth doit être utilisé à l\'intérieur d\'un AuthProvider');
   }
   return context;
 };

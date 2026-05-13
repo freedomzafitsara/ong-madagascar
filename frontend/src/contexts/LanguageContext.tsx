@@ -11,7 +11,7 @@ interface LanguageContextType {
 }
 
 // Toutes les traductions du site
-const translations: Record<Language, Record<string, string>> = {
+export const translations: Record<Language, Record<string, string>> = {
   fr: {
     // ==================== NAVIGATION ====================
     'nav.home': 'Accueil',
@@ -617,9 +617,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     }
   }, [language, isLoaded]);
 
+  // Fonction de traduction avec gestion des clés manquantes
   const t = (key: string): string => {
     const translation = translations[language][key];
-    return translation || key;
+    if (!translation) {
+      console.warn(`Traduction manquante pour la clé: ${key} (langue: ${language})`);
+      return key;
+    }
+    return translation;
   };
 
   if (!isLoaded) {

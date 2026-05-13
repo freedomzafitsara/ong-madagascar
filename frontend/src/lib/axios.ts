@@ -1,10 +1,12 @@
 // src/lib/axios.ts
+
 import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
 
+// ✅ CORRECTION: Ajouter /api au baseURL
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: `${API_URL}/api`,  // ← AJOUTER /api ICI
   headers: {
     'Content-Type': 'application/json',
   },
@@ -15,7 +17,7 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('access_token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -32,6 +34,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('access_token');
+        localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';
       }

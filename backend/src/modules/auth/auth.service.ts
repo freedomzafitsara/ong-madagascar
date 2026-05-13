@@ -1,11 +1,15 @@
 ﻿// backend/src/modules/auth/auth.service.ts
+// Version finale complète - Soutenance DTS 2025
+
 import { 
   Injectable, 
   NotFoundException, 
   BadRequestException, 
   ConflictException, 
   UnauthorizedException,
-  ForbiddenException
+  ForbiddenException,
+  InternalServerErrorException,
+  Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -18,73 +22,80 @@ import * as path from 'path';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private jwtService: JwtService,
   ) {}
 
-  /**
-   * Inscription d'un nouvel utilisateur
-   */
+  // ============================================================
+  // 1. INSCRIPTION
+  // ============================================================
+
   async register(registerDto: RegisterDto, ip: string): Promise<{ success: boolean; message: string }> {
     const { email, password, firstName, lastName, phone } = registerDto;
 
-    // Vérifier si l'email existe déjà
     const existingUser = await this.userRepository.findOne({ where: { email } });
     if (existingUser) {
       throw new ConflictException('Cet email est déjà utilisé');
     }
 
-    // Hacher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 10);
-    const verificationToken = Math.random().toString(36).substring(2, 15);
+    const verificationToken = this.generateRandomToken();
 
-    // Créer l'utilisateur
     const user = this.userRepository.create({
       email,
       password: hashedPassword,
       firstName,
       lastName,
-      phone,
+      phone: phone || null,
       role: UserRole.MEMBER,
       verificationToken,
       isActive: true,
       emailVerified: false,
+      lastIp: ip,
     });
 
     await this.userRepository.save(user);
+    this.logger.log(`✅ Nouvel utilisateur inscrit: ${email}`);
 
     return {
       success: true,
-      message: 'Compte créé avec succès. Veuillez vérifier votre email.',
+      message: 'Compte créé avec succès.',
     };
   }
 
-  /**
-   * Connexion d'un utilisateur
-   */
+  // ============================================================
+  // 2. CONNEXION
+  // ============================================================
+
   async login(loginDto: LoginDto, ip: string): Promise<{ access_token: string; user: any }> {
     const { email, password } = loginDto;
 
-    // Rechercher l'utilisateur
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.userRepository.findOne({
+      where: { email },
+      select: ['id', 'email', 'password', 'role', 'firstName', 'lastName', 'avatar_url', 'isActive', 'emailVerified']
+    });
+
     if (!user) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
 
-    // Vérifier si le compte est actif
     if (!user.isActive) {
-      throw new UnauthorizedException('Votre compte est désactivé. Contactez l\'administrateur.');
+      throw new UnauthorizedException('Votre compte est désactivé');
     }
 
-    // Vérifier le mot de passe
+    if (!user.password) {
+      throw new InternalServerErrorException('Configuration du compte invalide');
+    }
+
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
 
-    // Générer le token JWT
     const payload = {
       sub: user.id,
       email: user.email,
@@ -94,13 +105,13 @@ export class AuthService {
     };
     const access_token = this.jwtService.sign(payload);
 
-    // Mettre à jour la dernière connexion
     await this.userRepository.update(user.id, {
       lastLogin: new Date(),
       lastIp: ip,
     });
 
-    // Retourner le token et les informations utilisateur
+    this.logger.log(`✅ Connexion réussie: ${email}`);
+
     return {
       access_token,
       user: {
@@ -109,16 +120,24 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        avatar_url: user.avatar_url,
+        avatar_url: user.avatar_url || null,
         isActive: user.isActive,
+        emailVerified: user.emailVerified,
+        createdAt: user.createdAt,
+        lastLogin: new Date(),
       },
     };
   }
 
-  /**
-   * Récupérer le profil d'un utilisateur
-   */
+  // ============================================================
+  // 3. PROFIL UTILISATEUR
+  // ============================================================
+
   async getProfile(userId: string): Promise<any> {
+    if (!userId) {
+      throw new BadRequestException('Identifiant utilisateur requis');
+    }
+
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
@@ -130,10 +149,10 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role,
-      avatar_url: user.avatar_url,
-      phone: user.phone,
-      region: user.region,
-      bio: user.bio,
+      avatar_url: user.avatar_url || null,
+      phone: user.phone || '',
+      region: user.region || '',
+      bio: user.bio || '',
       position: user.position || '',
       department: user.department || '',
       skills: user.skills || '',
@@ -144,138 +163,83 @@ export class AuthService {
       emailVerified: user.emailVerified,
       lastLogin: user.lastLogin,
       createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     };
   }
 
-  /**
-   * Mettre à jour le profil d'un utilisateur (CORRIGÉ)
-   */
   async updateProfile(userId: string, updateData: any): Promise<any> {
-    // Vérifier que l'utilisateur existe
+    if (!userId) {
+      throw new BadRequestException('Identifiant utilisateur requis');
+    }
+
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
-    // Vérifier que updateData est un objet et non vide
-    if (!updateData || typeof updateData !== 'object') {
+    if (!updateData || Object.keys(updateData).length === 0) {
       return this.getProfile(userId);
     }
 
-    // Construire l'objet de mise à jour avec les champs fournis uniquement
-    const updateFields: any = {};
-
-    // Liste des champs modifiables
     const modifiableFields = [
       'firstName', 'lastName', 'phone', 'region', 'bio',
       'position', 'department', 'skills',
       'socialLinkedin', 'socialTwitter', 'socialGithub'
     ];
 
-    // Parcourir les champs modifiables
+    const updateFields: any = {};
     for (const field of modifiableFields) {
       if (updateData[field] !== undefined && updateData[field] !== null) {
         updateFields[field] = updateData[field];
       }
     }
 
-    // Gérer spécifiquement avatar_url (nom différent dans la base)
-    if (updateData.avatar_url !== undefined && updateData.avatar_url !== null) {
+    if (updateData.avatar_url !== undefined) {
       updateFields.avatar_url = updateData.avatar_url;
     }
 
-    // 🔴 IMPORTANT: Si aucun champ à mettre à jour, on ne fait rien
-    if (Object.keys(updateFields).length === 0) {
-      console.log('Aucun champ à mettre à jour pour userId:', userId);
-      return this.getProfile(userId);
+    if (Object.keys(updateFields).length > 0) {
+      await this.userRepository.update(userId, updateFields);
+      this.logger.log(`✏️ Profil mis à jour: ${user.email}`);
     }
 
-    // Appliquer les modifications
-    await this.userRepository.update(userId, updateFields);
-    
-    // Retourner le profil mis à jour
     return this.getProfile(userId);
   }
 
-  /**
-   * Mettre à jour la photo de profil
-   */
-  async updateUserPhoto(userId: string, photoUrl: string): Promise<any> {
-    // Vérifier que l'utilisateur existe
+  // ============================================================
+  // 4. GESTION DE LA PHOTO
+  // ============================================================
+
+  async updateUserPhoto(userId: string, photoUrl: string | null): Promise<any> {
+    if (!userId) {
+      throw new BadRequestException('Identifiant utilisateur requis');
+    }
+
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
-    // Vérifier que photoUrl est valide
-    if (!photoUrl) {
-      throw new BadRequestException('URL de photo invalide');
-    }
-
-    // Supprimer l'ancienne photo du disque (si elle existe)
-    if (user.avatar_url) {
-      try {
-        const oldFilePath = path.join(process.cwd(), 'uploads', 'profiles', path.basename(user.avatar_url));
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
-          console.log(`Ancienne photo supprimée: ${oldFilePath}`);
-        }
-      } catch (error) {
-        console.error(`Erreur lors de la suppression: ${error.message}`);
-      }
-    }
-
-    // Mettre à jour la nouvelle photo
     await this.userRepository.update(userId, { avatar_url: photoUrl });
+    this.logger.log(`📸 Photo mise à jour: ${user.email}`);
     
     return this.getProfile(userId);
   }
 
-  /**
-   * Supprimer la photo de profil
-   */
-  async deleteUserPhoto(userId: string): Promise<any> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    // Supprimer le fichier du disque
-    if (user.avatar_url) {
-      try {
-        const oldFilePath = path.join(process.cwd(), 'uploads', 'profiles', path.basename(user.avatar_url));
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
-        }
-      } catch (error) {
-        console.error(`Erreur lors de la suppression: ${error.message}`);
-      }
-    }
-
-    // Supprimer la référence en base
-    await this.userRepository.update(userId, { avatar_url: null });
-    
-    return this.getProfile(userId);
-  }
-
-  /**
-   * Changer le mot de passe
-   */
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const user = await this.userRepository.findOne({ where: { id: userId }, select: ['id', 'password', 'email'] });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
-    // Vérifier l'ancien mot de passe
     const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
     if (!isPasswordValid) {
       throw new BadRequestException('Mot de passe actuel incorrect');
     }
 
-    // Hacher le nouveau mot de passe
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.userRepository.update(userId, { password: hashedPassword });
+    this.logger.log(`🔒 Mot de passe modifié: ${user.email}`);
 
     return {
       success: true,
@@ -283,21 +247,28 @@ export class AuthService {
     };
   }
 
+  // ============================================================
+  // 5. MOT DE PASSE OUBLIÉ (NOUVELLES MÉTHODES)
+  // ============================================================
+
   /**
-   * Mot de passe oublié - Envoi d'un email de réinitialisation
+   * ✅ Génère un token de réinitialisation de mot de passe
+   * @param email - Email de l'utilisateur
    */
   async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
     const user = await this.userRepository.findOne({ where: { email } });
+    
+    // Pour des raisons de sécurité, on retourne le même message même si l'email n'existe pas
     if (!user) {
-      // Pour des raisons de sécurité, on ne confirme pas si l'email existe
+      this.logger.warn(`🔐 Demande de réinitialisation pour email inexistant: ${email}`);
       return {
         success: true,
         message: 'Si cet email existe, vous recevrez un lien de réinitialisation.',
       };
     }
 
-    // Générer un token unique
-    const resetToken = Math.random().toString(36).substring(2, 15);
+    // Génération du token (expiration 1 heure)
+    const resetToken = this.generateRandomToken();
     const resetExpires = new Date();
     resetExpires.setHours(resetExpires.getHours() + 1);
 
@@ -306,26 +277,42 @@ export class AuthService {
       resetPasswordExpires: resetExpires,
     });
 
+    this.logger.log(`📧 Token de réinitialisation généré pour: ${email}`);
+    // TODO: Envoyer l'email avec le token (intégration Brevo)
+
     return {
       success: true,
-      message: 'Email de réinitialisation envoyé',
+      message: 'Si cet email existe, vous recevrez un lien de réinitialisation.',
     };
   }
 
   /**
-   * Réinitialiser le mot de passe avec un token
+   * ✅ Réinitialise le mot de passe avec un token valide
+   * @param token - Token de réinitialisation
+   * @param newPassword - Nouveau mot de passe
    */
   async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    if (!token) {
+      throw new BadRequestException('Token requis');
+    }
+
     const user = await this.userRepository.findOne({
       where: { resetPasswordToken: token },
     });
 
-    // Vérifier que le token est valide et non expiré
-    if (!user || user.resetPasswordExpires < new Date()) {
-      throw new BadRequestException('Token invalide ou expiré');
+    if (!user) {
+      throw new BadRequestException('Token invalide');
     }
 
-    // Hacher le nouveau mot de passe
+    if (!user.resetPasswordExpires || user.resetPasswordExpires < new Date()) {
+      throw new BadRequestException('Token expiré. Veuillez refaire une demande');
+    }
+
+    // Validation du nouveau mot de passe
+    if (newPassword.length < 6) {
+      throw new BadRequestException('Le mot de passe doit contenir au moins 6 caractères');
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.userRepository.update(user.id, {
       password: hashedPassword,
@@ -333,16 +320,27 @@ export class AuthService {
       resetPasswordExpires: null,
     });
 
+    this.logger.log(`🔓 Mot de passe réinitialisé: ${user.email}`);
+
     return {
       success: true,
       message: 'Mot de passe réinitialisé avec succès',
     };
   }
 
+  // ============================================================
+  // 6. VÉRIFICATION D'EMAIL (NOUVELLE MÉTHODE)
+  // ============================================================
+
   /**
-   * Vérifier l'email avec un token
+   * ✅ Vérifie l'email de l'utilisateur avec un token
+   * @param token - Token de vérification
    */
   async verifyEmail(token: string): Promise<{ success: boolean; message: string }> {
+    if (!token) {
+      throw new BadRequestException('Token requis');
+    }
+
     const user = await this.userRepository.findOne({
       where: { verificationToken: token },
     });
@@ -356,26 +354,26 @@ export class AuthService {
       verificationToken: null,
     });
 
+    this.logger.log(`✅ Email vérifié: ${user.email}`);
+
     return {
       success: true,
       message: 'Email vérifié avec succès',
     };
   }
 
-  /**
-   * Récupérer tous les utilisateurs (admin seulement)
-   */
-  async getAllUsers(currentUserRole: UserRole): Promise<User[]> {
+  // ============================================================
+  // 7. ADMINISTRATION
+  // ============================================================
+
+  async getAllUsers(): Promise<User[]> {
     return this.userRepository.find({
       select: ['id', 'email', 'firstName', 'lastName', 'role', 'isActive', 'avatar_url', 'lastLogin', 'createdAt'],
       order: { createdAt: 'DESC' },
     });
   }
 
-  /**
-   * Récupérer un utilisateur par son ID (admin seulement)
-   */
-  async getUserById(id: string, currentUserRole: UserRole, currentUserId: string): Promise<User> {
+  async getUserById(id: string): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
@@ -383,69 +381,62 @@ export class AuthService {
     return user;
   }
 
-  /**
-   * Mettre à jour le rôle d'un utilisateur (super admin seulement)
-   */
-  async updateUserRole(id: string, newRole: UserRole, currentUserRole: UserRole, currentUserId: string): Promise<User> {
+  async updateUserRole(id: string, newRole: UserRole): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    // Un simple admin ne peut pas modifier un super admin
-    if (user.role === UserRole.SUPER_ADMIN && currentUserRole !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Vous ne pouvez pas modifier le rôle d\'un super administrateur');
     }
 
     await this.userRepository.update(id, { role: newRole });
+    this.logger.log(`👑 Rôle modifié: ${user.email} → ${newRole}`);
+
     return this.userRepository.findOne({ where: { id } });
   }
 
-  /**
-   * Activer/Désactiver un utilisateur (admin+)
-   */
-  async toggleUserStatus(id: string, currentUserRole: UserRole, currentUserId: string): Promise<User> {
+  async toggleUserStatus(id: string): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
-    // Un simple admin ne peut pas désactiver un super admin
-    if (user.role === UserRole.SUPER_ADMIN && currentUserRole !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Vous ne pouvez pas désactiver un super administrateur');
-    }
+    const newStatus = !user.isActive;
+    await this.userRepository.update(id, { isActive: newStatus });
+    this.logger.log(`🔁 Statut modifié: ${user.email} → ${newStatus ? 'Activé' : 'Désactivé'}`);
 
-    // Inverser le statut actif/inactif
-    await this.userRepository.update(id, { isActive: !user.isActive });
     return this.userRepository.findOne({ where: { id } });
   }
 
-  /**
-   * Supprimer un utilisateur (super admin seulement)
-   */
-  async deleteUser(id: string, currentUserRole: UserRole, currentUserId: string): Promise<{ success: boolean; message: string }> {
+  async deleteUser(id: string): Promise<{ success: boolean; message: string }> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
-    // Un simple admin ne peut pas supprimer un super admin
-    if (user.role === UserRole.SUPER_ADMIN && currentUserRole !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Vous ne pouvez pas supprimer un super administrateur');
-    }
-
-    // Supprimer la photo de profil si elle existe
-    if (user.avatar_url) {
-      const oldFilePath = path.join(process.cwd(), 'uploads', 'profiles', path.basename(user.avatar_url));
-      if (fs.existsSync(oldFilePath)) {
-        fs.unlinkSync(oldFilePath);
+    if (user.avatar_url && user.avatar_url.startsWith('/uploads/')) {
+      try {
+        const oldFilePath = path.join(process.cwd(), user.avatar_url);
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+        }
+      } catch (error) {
+        this.logger.error(`Erreur suppression photo: ${error.message}`);
       }
     }
 
     await this.userRepository.delete(id);
+    this.logger.log(`🗑️ Utilisateur supprimé: ${user.email}`);
+
     return {
       success: true,
       message: 'Utilisateur supprimé avec succès',
     };
+  }
+
+  // ============================================================
+  // 8. MÉTHODES UTILITAIRES
+  // ============================================================
+
+  private generateRandomToken(): string {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   }
 }

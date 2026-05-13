@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getAllProjects, getMainImageUrl, getProjectImages } from '@/services/imageDB';
+import { api } from '@/lib/api';
 import { pageService, PageBackground } from '@/services/pageService';
 import { 
   Search, MapPin, Calendar, Heart, X, Image as ImageIcon, 
@@ -16,45 +16,43 @@ import { useTranslation } from '@/hooks/useTranslation';
 interface Project {
   id: string;
   title: string;
+  title_mg?: string;
   description: string;
+  description_mg?: string;
   location: string;
   category: string;
-  mainImageId: string;
+  image_url?: string;
+  cover_image_url?: string;
+  gallery_images?: string[];
   createdAt: string;
-  status?: 'active' | 'completed' | 'draft';
-}
-
-interface ProjectImage {
-  id: string;
-  url: string;
-  isMain: boolean;
+  status?: 'active' | 'completed' | 'draft' | 'planning';
 }
 
 // Categories avec icones professionnelles Lucide
 const categories = [
-  { value: 'Education', labelFr: 'Education', labelMg: 'Fampianarana', icon: GraduationCap },
-  { value: 'Sante', labelFr: 'Sante', labelMg: 'Fahasalamana', icon: Stethoscope },
-  { value: 'Environnement', labelFr: 'Environnement', labelMg: 'Tontolo iainana', icon: Leaf },
-  { value: 'Agriculture', labelFr: 'Agriculture', labelMg: 'Fambolena', icon: Sprout },
-  { value: 'Social', labelFr: 'Social', labelMg: 'Sosialy', icon: Handshake },
-  { value: 'Culture', labelFr: 'Culture', labelMg: 'Kolontsaina', icon: Palette },
+  { value: 'education', labelFr: 'Éducation', labelMg: 'Fampianarana', icon: GraduationCap },
+  { value: 'sante', labelFr: 'Santé', labelMg: 'Fahasalamana', icon: Stethoscope },
+  { value: 'environnement', labelFr: 'Environnement', labelMg: 'Tontolo iainana', icon: Leaf },
+  { value: 'agriculture', labelFr: 'Agriculture', labelMg: 'Fambolena', icon: Sprout },
+  { value: 'social', labelFr: 'Social', labelMg: 'Sosialy', icon: Handshake },
+  { value: 'culture', labelFr: 'Culture', labelMg: 'Kolontsaina', icon: Palette },
+  { value: 'emploi', labelFr: 'Emploi', labelMg: 'Asa', icon: Briefcase },
+  { value: 'formation', labelFr: 'Formation', labelMg: 'Fampiofanana', icon: UsersRound },
 ];
 
 export default function ProjectsPage() {
   const { t, language } = useTranslation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
-  const [projectImages, setProjectImages] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [projectGallery, setProjectGallery] = useState<ProjectImage[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
 
-  // Chargement du fond d'ecran depuis l'espace super-admin
+  // Chargement du fond d'écran et des projets
   useEffect(() => {
     loadPageBackground();
     loadProjects();
@@ -67,24 +65,20 @@ export default function ProjectsPage() {
         setPageBackground(background);
       }
     } catch (error) {
-      console.error('Erreur chargement fond d ecran:', error);
+      console.error('Erreur chargement fond d\'écran:', error);
     }
   };
 
   const loadProjects = async () => {
     setLoading(true);
     try {
-      const allProjects = await getAllProjects();
-      const activeProjects = allProjects.filter(p => p.status !== 'draft');
+      const response = await api.get('/projects');
+      let allProjects = response.data.data || response.data || [];
+      
+      // Filtrer les projets non draft
+      const activeProjects = allProjects.filter((p: Project) => p.status !== 'draft');
       setProjects(activeProjects);
       setFilteredProjects(activeProjects);
-      
-      const imagesMap: Record<string, string> = {};
-      for (const project of activeProjects) {
-        const mainImage = await getMainImageUrl(project.id);
-        if (mainImage) imagesMap[project.id] = mainImage;
-      }
-      setProjectImages(imagesMap);
     } catch (error) {
       console.error('Erreur chargement projets:', error);
     } finally {
@@ -92,36 +86,45 @@ export default function ProjectsPage() {
     }
   };
 
-  const openProjectGallery = async (project: Project) => {
+  const openProjectDetails = (project: Project) => {
     setSelectedProject(project);
-    try {
-      const images = await getProjectImages(project.id);
-      setProjectGallery(images.map(img => ({ id: img.id, url: img.url, isMain: img.isMain })));
-      setShowModal(true);
-    } catch (error) {
-      console.error('Erreur chargement galerie:', error);
-    }
+    setShowModal(true);
   };
 
+  // Filtrer les projets
   useEffect(() => {
     let filtered = [...projects];
+    
     if (searchTerm) {
+      const term = searchTerm.toLowerCase();
       filtered = filtered.filter(p => 
-        p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.location.toLowerCase().includes(searchTerm.toLowerCase())
+        p.title.toLowerCase().includes(term) ||
+        (p.title_mg && p.title_mg.toLowerCase().includes(term)) ||
+        p.description.toLowerCase().includes(term) ||
+        (p.description_mg && p.description_mg.toLowerCase().includes(term)) ||
+        p.location.toLowerCase().includes(term)
       );
     }
+    
     if (selectedCategory) {
       filtered = filtered.filter(p => p.category === selectedCategory);
     }
+    
     setFilteredProjects(filtered);
   }, [searchTerm, selectedCategory, projects]);
 
+  const getMainImageUrl = (project: Project): string => {
+    return project.image_url || project.cover_image_url || '/images/placeholder-project.jpg';
+  };
+
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
-      year: 'numeric', month: 'long', day: 'numeric'
-    });
+    try {
+      return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+    } catch {
+      return '';
+    }
   };
 
   const getCategoryIcon = (categoryValue: string) => {
@@ -136,13 +139,21 @@ export default function ProjectsPage() {
     return language === 'fr' ? cat.labelFr : cat.labelMg;
   };
 
+  const getProjectTitle = (project: Project) => {
+    return language === 'fr' ? project.title : (project.title_mg || project.title);
+  };
+
+  const getProjectDescription = (project: Project) => {
+    return language === 'fr' ? project.description : (project.description_mg || project.description);
+  };
+
   const stats = {
     total: projects.length,
     categories: new Set(projects.map(p => p.category)).size,
     locations: new Set(projects.map(p => p.location).filter(Boolean)).size,
   };
 
-  // Style du fond d ecran dynamique
+  // Style du fond d'écran dynamique
   const backgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundImage: `url(${pageBackground.image_url})`,
     backgroundPosition: pageBackground.position || 'center',
@@ -166,7 +177,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Section Hero avec fond d ecran dynamique */}
+      {/* Section Hero avec fond d'écran dynamique */}
       <section className="relative h-screen w-full overflow-hidden">
         <div className="absolute inset-0">
           {backgroundStyle.backgroundImage ? (
@@ -194,17 +205,17 @@ export default function ProjectsPage() {
           
           <p className="text-lg md:text-xl text-white max-w-2xl mx-auto mb-8 drop-shadow-md">
             {language === 'fr' 
-              ? 'Decouvrez comment nous transformons les defis en opportunites pour la jeunesse malgache'
+              ? 'Découvrez comment nous transformons les défis en opportunités pour la jeunesse malgache'
               : 'Jereo ny fomba hanovanay ny fanamby ho fahafahana ho an\'ny tanora malagasy'}
           </p>
           
           <div className="flex gap-4 justify-center flex-wrap">
-            <Link 
+            <a 
               href="#projects-list" 
               className="inline-flex items-center gap-2 bg-white text-blue-900 px-8 py-3 rounded-full font-semibold hover:bg-gray-100 transition shadow-lg hover:shadow-xl"
             >
-              {language === 'fr' ? 'Decouvrir nos actions' : 'Hijery ny asantsika'} <ArrowRight className="w-5 h-5" />
-            </Link>
+              {language === 'fr' ? 'Découvrir nos actions' : 'Hijery ny asantsika'} <ArrowRight className="w-5 h-5" />
+            </a>
             <Link 
               href="/donate" 
               className="inline-flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-700 transition shadow-lg"
@@ -237,7 +248,7 @@ export default function ProjectsPage() {
                   <TrendingUp className="w-8 h-8 text-blue-600 group-hover:text-white transition-colors" />
                 </div>
                 <p className="text-4xl font-bold text-gray-800 mb-2">{stats.total || 0}</p>
-                <p className="text-gray-500 font-medium">{language === 'fr' ? 'Projets realises' : 'Tetikasa vita'}</p>
+                <p className="text-gray-500 font-medium">{language === 'fr' ? 'Projets réalisés' : 'Tetikasa vita'}</p>
               </div>
               <div className="text-center group">
                 <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-600 transition-colors">
@@ -251,7 +262,7 @@ export default function ProjectsPage() {
                   <Globe className="w-8 h-8 text-blue-600 group-hover:text-white transition-colors" />
                 </div>
                 <p className="text-4xl font-bold text-gray-800 mb-2">{stats.locations || 0}</p>
-                <p className="text-gray-500 font-medium">{language === 'fr' ? 'Regions couvertes' : 'Faritra voarakotra'}</p>
+                <p className="text-gray-500 font-medium">{language === 'fr' ? 'Régions couvertes' : 'Faritra voarakotra'}</p>
               </div>
             </div>
           </div>
@@ -267,7 +278,7 @@ export default function ProjectsPage() {
           <div className="w-24 h-1 bg-blue-600 mx-auto rounded-full"></div>
           <p className="text-gray-500 mt-4 max-w-2xl mx-auto">
             {language === 'fr' 
-              ? 'Decouvrez les projets qui transforment concretement la vie des jeunes Malgaches'
+              ? 'Découvrez les projets qui transforment concrètement la vie des jeunes Malgaches'
               : 'Jereo ny tetikasa izay manova ny fiainan\'ny tanora Malagasy'}
           </p>
         </div>
@@ -293,7 +304,7 @@ export default function ProjectsPage() {
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className="px-5 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer"
               >
-                <option value="">{language === 'fr' ? 'Toutes les categories' : 'Sokajy rehetra'}</option>
+                <option value="">{language === 'fr' ? 'Toutes les catégories' : 'Sokajy rehetra'}</option>
                 {categories.map(cat => {
                   const Icon = cat.icon;
                   return (
@@ -359,11 +370,11 @@ export default function ProjectsPage() {
           )}
         </div>
 
-        {/* Resultats */}
+        {/* Résultats */}
         <div className="mb-6">
           <p className="text-gray-600">
             <span className="font-semibold text-blue-600">{filteredProjects.length}</span> 
-            {language === 'fr' ? ' projet(s) trouve(s)' : ' tetikasa hita'}
+            {language === 'fr' ? ' projet(s) trouvé(s)' : ' tetikasa hita'}
           </p>
         </div>
 
@@ -371,8 +382,8 @@ export default function ProjectsPage() {
         {filteredProjects.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-lg p-20 text-center">
             <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-xl mb-2">{language === 'fr' ? 'Aucun projet trouve' : 'Tsy misy tetikasa hita'}</p>
-            <p className="text-gray-400">{language === 'fr' ? 'Essayez de modifier vos criteres de recherche' : 'Andramo hanova ny fikarohanao'}</p>
+            <p className="text-gray-500 text-xl mb-2">{language === 'fr' ? 'Aucun projet trouvé' : 'Tsy misy tetikasa hita'}</p>
+            <p className="text-gray-400">{language === 'fr' ? 'Essayez de modifier vos critères de recherche' : 'Andramo hanova ny fikarohanao'}</p>
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -382,19 +393,19 @@ export default function ProjectsPage() {
                 <div 
                   key={project.id}
                   className="group bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-500 cursor-pointer transform hover:-translate-y-2"
-                  onClick={() => openProjectGallery(project)}
+                  onClick={() => openProjectDetails(project)}
                 >
                   <div className="relative h-64 overflow-hidden bg-gray-100">
-                    {projectImages[project.id] ? (
+                    {getMainImageUrl(project) !== '/images/placeholder-project.jpg' ? (
                       <img 
-                        src={projectImages[project.id]} 
-                        alt={project.title} 
+                        src={getMainImageUrl(project)} 
+                        alt={getProjectTitle(project)} 
                         className="w-full h-full object-cover group-hover:scale-110 transition duration-700"
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                         <ImageIcon className="w-16 h-16 text-gray-300 mb-2" />
-                        <span className="text-sm text-gray-400">{language === 'fr' ? 'Image a venir' : 'Sary ho avy'}</span>
+                        <span className="text-sm text-gray-400">{language === 'fr' ? 'Image à venir' : 'Sary ho avy'}</span>
                       </div>
                     )}
                     
@@ -413,7 +424,7 @@ export default function ProjectsPage() {
                   
                   <div className="p-6">
                     <h3 className="font-bold text-xl text-gray-800 mb-2 line-clamp-1 group-hover:text-blue-600 transition">
-                      {project.title}
+                      {getProjectTitle(project)}
                     </h3>
                     
                     <div className="flex items-center gap-3 text-sm text-gray-500 mb-3">
@@ -427,13 +438,13 @@ export default function ProjectsPage() {
                     </div>
                     
                     <p className="text-gray-600 line-clamp-2 mb-4 leading-relaxed">
-                      {project.description}
+                      {getProjectDescription(project)}
                     </p>
                     
                     <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                       <div className="flex items-center gap-1 text-sm text-blue-600">
                         <Heart className="w-4 h-4" /> 
-                        <span>{language === 'fr' ? 'A decouvrir' : 'Hojerena'}</span>
+                        <span>{language === 'fr' ? 'À découvrir' : 'Hojerena'}</span>
                       </div>
                       <span className="text-sm text-gray-400 group-hover:text-blue-600 transition flex items-center gap-1">
                         {language === 'fr' ? 'En savoir plus' : 'Hamaky bebe kokoa'} <ArrowRight className="w-4 h-4" />
@@ -452,13 +463,13 @@ export default function ProjectsPage() {
                 <div 
                   key={project.id}
                   className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col md:flex-row border border-gray-100"
-                  onClick={() => openProjectGallery(project)}
+                  onClick={() => openProjectDetails(project)}
                 >
                   <div className="md:w-56 h-48 bg-gray-100 relative overflow-hidden">
-                    {projectImages[project.id] ? (
+                    {getMainImageUrl(project) !== '/images/placeholder-project.jpg' ? (
                       <img 
-                        src={projectImages[project.id]} 
-                        alt={project.title} 
+                        src={getMainImageUrl(project)} 
+                        alt={getProjectTitle(project)} 
                         className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                       />
                     ) : (
@@ -474,13 +485,13 @@ export default function ProjectsPage() {
                   </div>
                   <div className="flex-1 p-6">
                     <h3 className="font-bold text-xl text-gray-800 mb-2 group-hover:text-blue-600 transition">
-                      {project.title}
+                      {getProjectTitle(project)}
                     </h3>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-3">
                       <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {project.location || 'Madagascar'}</span>
                       <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {formatDate(project.createdAt)}</span>
                     </div>
-                    <p className="text-gray-600 line-clamp-2 mb-4">{project.description}</p>
+                    <p className="text-gray-600 line-clamp-2 mb-4">{getProjectDescription(project)}</p>
                     <div className="flex items-center gap-4">
                       <span className="text-sm text-blue-600 flex items-center gap-1 font-medium">
                         <Heart className="w-4 h-4" /> {language === 'fr' ? 'Soutenir' : 'Hanohana'}
@@ -523,7 +534,7 @@ export default function ProjectsPage() {
               href="/volunteers" 
               className="inline-flex items-center gap-2 bg-blue-500/30 backdrop-blur-sm text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-500/50 transition border border-white/30"
             >
-              <Users className="w-5 h-5" /> {language === 'fr' ? 'Devenir benevole' : 'Mpanao asa soa'} <ArrowRight className="w-5 h-5" />
+              <Users className="w-5 h-5" /> {language === 'fr' ? 'Devenir bénévole' : 'Mpanao asa soa'} <ArrowRight className="w-5 h-5" />
             </Link>
             <Link 
               href="/contact" 
@@ -535,13 +546,13 @@ export default function ProjectsPage() {
         </div>
       </section>
 
-      {/* Modal Galerie */}
+      {/* Modal Détails Projet */}
       {showModal && selectedProject && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-white p-5 border-b flex justify-between items-center rounded-t-2xl">
               <div>
-                <h2 className="text-2xl font-bold text-gray-800">{selectedProject.title}</h2>
+                <h2 className="text-2xl font-bold text-gray-800">{getProjectTitle(selectedProject)}</h2>
                 <p className="text-sm text-gray-500">{selectedProject.location}</p>
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition">
@@ -550,43 +561,35 @@ export default function ProjectsPage() {
             </div>
 
             <div className="p-6">
-              {projectGallery.length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
-                  <ImageIcon className="w-24 h-24 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">{language === 'fr' ? 'Aucune image disponible' : 'Tsy misy sary'}</p>
-                </div>
-              ) : (
-                <>
-                  <div className="mb-6">
-                    <img 
-                      src={projectGallery[0]?.url} 
-                      alt={selectedProject.title}
-                      className="w-full h-[500px] object-cover rounded-xl shadow-lg"
-                    />
-                  </div>
-                  {projectGallery.length > 1 && (
-                    <div className="grid grid-cols-5 gap-3 mb-6">
-                      {projectGallery.slice(0, 5).map((img, idx) => (
-                        <img key={img.id} src={img.url} alt="" className="w-full h-24 object-cover rounded-lg cursor-pointer hover:opacity-80 transition" />
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
+              <img 
+                src={getMainImageUrl(selectedProject)} 
+                alt={getProjectTitle(selectedProject)}
+                className="w-full h-[400px] object-cover rounded-xl shadow-lg"
+              />
             </div>
 
             <div className="p-6 border-t bg-gray-50">
               <h3 className="font-semibold text-lg text-gray-800 mb-3">
                 {language === 'fr' ? 'Description du projet' : 'Famaritana ny tetikasa'}
               </h3>
-              <p className="text-gray-600 leading-relaxed">{selectedProject.description}</p>
+              <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">
+                {getProjectDescription(selectedProject)}
+              </p>
             </div>
 
             <div className="p-6 border-t flex justify-center gap-4">
-              <Link href="/donate" className="bg-blue-600 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-700 transition flex items-center gap-2 shadow-lg">
+              <Link 
+                href="/donate" 
+                className="bg-blue-600 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-700 transition flex items-center gap-2 shadow-lg"
+                onClick={() => setShowModal(false)}
+              >
                 <Heart className="w-5 h-5" /> {language === 'fr' ? 'Soutenir ce projet' : 'Hanohana ity tetikasa ity'}
               </Link>
-              <Link href="/contact" className="border-2 border-gray-300 text-gray-700 px-8 py-3 rounded-full font-semibold hover:bg-gray-50 transition">
+              <Link 
+                href="/contact" 
+                className="border-2 border-gray-300 text-gray-700 px-8 py-3 rounded-full font-semibold hover:bg-gray-50 transition"
+                onClick={() => setShowModal(false)}
+              >
                 {language === 'fr' ? 'Nous contacter' : 'Mifandraisa aminay'}
               </Link>
             </div>

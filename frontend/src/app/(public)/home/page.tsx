@@ -193,7 +193,7 @@ export default function HomePage() {
   const socialLinks = [
     { icon: Facebook, href: 'https://facebook.com/ymadorg', label: 'Facebook', bg: '#1877F2' },
     { icon: Instagram, href: 'https://instagram.com/ymad_mg', label: 'Instagram', bg: '#E4405F' },
-    { icon: Linkedin, href: 'https://linkedin.com/company/ymad', label: 'LinkedIn', bg: '#0A66C2' },
+    { icon: Linkedin, href: 'https://linkedin.com/company/ymad', label: 'LinkedIn', bg: '#0a7df0' },
     { icon: Twitter, href: 'https://twitter.com/ymad_mg', label: 'Twitter', bg: '#1DA1F2' },
     { icon: Youtube, href: 'https://youtube.com/@ymad', label: 'YouTube', bg: '#FF0000' },
   ];
@@ -223,7 +223,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
-      {/* ==================== BANNIÈRE PRINCIPALE (HERO) AVEC DESIGN AMÉLIORÉ ==================== */}
+      {/* ==================== BANNIÈRE PRINCIPALE (HERO)  ==================== */}
       <section className="relative min-h-screen w-full overflow-hidden">
         {/* Fond d'écran dynamique */}
         {backgroundStyle.backgroundImage ? (
@@ -240,22 +240,22 @@ export default function HomePage() {
           
           {/* Badge d'association */}
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8 animate-fade-in-up">
-            <Award className="w-4 h-4 text-blue-200" />
+            <Award className="w-4 h-4 text-blue-400" />
             <span className="text-sm font-medium tracking-wide text-white">
               {getText('Association reconnue - Depuis 2015', 'Fikambanana ekena - Nanomboka 2015')}
             </span>
           </div>
           
           {/* Titre principal en grand format */}
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 leading-tight drop-shadow-2xl animate-fade-in-up">
-            {pageHero ? (language === 'fr' ? pageHero.title : (pageHero.title_mg || pageHero.title)) : 'Y-Mad Madagascar'}
-            <span className="block text-2xl md:text-3xl lg:text-4xl text-blue-200 mt-4 font-light tracking-wide">
-              {getText('Jeunesse Malgache en Action', 'Tanora Malagasy miasa ho an\'ny Fivoarana')}
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-blue-400 mb-6 leading-tight drop-shadow-2xl animate-fade-in-up">
+             Y-MAD
+            <span className="block text-2xl md:text-3xl lg:text-4xl text-blue-100 mt-4 font-light tracking-wide">
+              {getText('" Young for Madagascar Development "', '" Tanora Malagasy miasa ho an\'ny Fivoaran\'i Madagasikara "')}
             </span>
           </h1>
           
           {/* Sous-titre avec meilleure lisibilité */}
-          <p className="text-lg md:text-xl lg:text-2xl text-blue-100 max-w-3xl mx-auto mb-10 leading-relaxed drop-shadow-lg animate-fade-in-up animation-delay-200">
+          <p className="text-lg md:text-2xl lg:text-3xl text-blue-100 max-w-3xl mx-auto mb-10 leading-relaxed drop-shadow-lg animate-fade-in-up animation-delay-200">
             {pageHero ? (language === 'fr' ? pageHero.subtitle : (pageHero.subtitle_mg || pageHero.subtitle)) : 
               getText('Ensemble pour un développement durable et l\'autonomisation des communautés malgaches', 
                       'Miara-miasa ho an\'ny fampandrosoana maharitra sy fanomezana hery ny vondrom-piarahamonina malagasy')}
@@ -265,7 +265,7 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row gap-5 justify-center animate-fade-in-up animation-delay-400">
             <Link 
               href={pageHero?.buttonLink || '/donate'} 
-              className="group inline-flex items-center gap-2 bg-white text-blue-800 px-8 py-4 rounded-full font-semibold hover:bg-gray-100 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+              className="group inline-flex items-center gap-2 bg-blue-400 text-white px-8 py-4 rounded-full font-semiboldtransition-all "
             >
               <Heart className="w-5 h-5 group-hover:scale-110 transition-transform" /> 
               <span>{pageHero ? (language === 'fr' ? pageHero.buttonText : (pageHero.buttonText_mg || pageHero.buttonText)) : getText('Faire un don', 'Hanome')}</span>

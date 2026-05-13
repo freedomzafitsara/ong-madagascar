@@ -13,7 +13,8 @@ import { EventsModule } from './modules/events/events.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { UploadModule } from './modules/upload/upload.module';
-import { PagesModule } from './modules/pages/pages.module';  // ✅ AJOUTÉ
+import { PagesModule } from './modules/pages/pages.module';
+import { BeneficiariesModule } from './modules/beneficiaries/beneficiaries.module'; // ← AJOUTÉ
 
 // Guards
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -34,7 +35,8 @@ import { FooterLink } from './modules/footer/entities/footer-link.entity';
 import { FooterContact } from './modules/footer/entities/footer-contact.entity';
 import { FooterLegalLink } from './modules/footer/entities/footer-legal-link.entity';
 import { PageContent } from './entities/page-content.entity';  
-import { PageBackground } from './entities/page-background.entity'; 
+import { PageBackground } from './entities/page-background.entity';
+import { Beneficiary } from './entities/beneficiary.entity'; // ← AJOUTÉ
 
 @Module({
   imports: [
@@ -69,9 +71,10 @@ import { PageBackground } from './entities/page-background.entity';
           FooterContact,
           FooterLegalLink,
           PageContent,     
-          PageBackground,  
+          PageBackground,
+          Beneficiary, // ← AJOUTÉ (l'entité)
         ],
-        synchronize: false,
+        synchronize: false,  // ← Mettre à true pour la première fois (puis repasser à false)
         logging: true,
       }),
       inject: [ConfigService],
@@ -87,7 +90,8 @@ import { PageBackground } from './entities/page-background.entity';
     JobsModule,
     BlogModule,
     UploadModule,
-    PagesModule,  
+    PagesModule,
+    BeneficiariesModule, // ← AJOUTÉ (le module)
   ],
   providers: [
     {

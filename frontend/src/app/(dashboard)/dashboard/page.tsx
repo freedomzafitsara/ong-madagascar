@@ -1,13 +1,15 @@
 ﻿// frontend/src/app/(dashboard)/dashboard/page.tsx
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link';
 import { 
   Users, FolderOpen, Calendar, Briefcase, FileText, Heart, 
   Gift, TrendingUp, ArrowRight, Settings, Globe, CheckCircle,
-  Loader2, Award, Target, HandHeart, Sparkles
+  Loader2, Award, Target, HandHeart, Sparkles, GraduationCap
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -25,18 +27,138 @@ interface DashboardStats {
   monthlyDonations: number;
   totalVolunteers: number;
   activeVolunteers: number;
+  totalBeneficiaries: number;
+  impactRate: number;
 }
+
+// ==================== TRADUCTIONS ====================
+const translations = {
+  fr: {
+    // En-tête
+    dashboard: 'Tableau de bord',
+    welcome: 'Bienvenue,',
+    hereIsOverview: 'Voici un aperçu de votre activité.',
+    lastUpdate: 'Dernière mise à jour aujourd\'hui',
+    
+    // Cartes principales
+    members: 'Membres',
+    active: 'actifs',
+    projects: 'Projets',
+    events: 'Événements',
+    upcoming: 'à venir',
+    jobOffers: 'Offres emploi',
+    open: 'ouvertes',
+    
+    // Cartes secondaires
+    applications: 'Candidatures',
+    pending: 'en attente',
+    donations: 'Dons (mois)',
+    volunteers: 'Bénévoles',
+    beneficiaries: 'Bénéficiaires',
+    impactRate: 'Taux impact',
+    
+    // Section Impact
+    yourImpact: 'Votre impact',
+    impactDescription: 'Grâce à votre engagement, Y-Mad continue de transformer des vies à Madagascar.',
+    peopleImpacted: 'Personnes impactées',
+    activeProjects: 'Projets actifs',
+    regionsCovered: 'Régions couvertes',
+    
+    // Actions rapides
+    quickActions: 'Actions rapides',
+    newMember: 'Nouveau membre',
+    newProject: 'Nouveau projet',
+    newEvent: 'Nouvel événement',
+    newJob: 'Nouvelle offre',
+    newArticle: 'Nouvel article',
+    generateReport: 'Générer rapport',
+    newBeneficiary: 'Nouveau bénéficiaire',
+    
+    // Gestion du site
+    siteManagement: 'Gestion du site',
+    siteManagementDesc: 'Personnalisez l\'apparence et le contenu du site',
+    managePages: 'Gérer les pages',
+    manageBackgrounds: 'Gérer les fonds d\'écran',
+    
+    // Actions
+    viewDetails: 'Voir les détails',
+    seeImpact: 'Voir le détail de l\'impact',
+    loading: 'Chargement de votre tableau de bord...',
+    
+    // Badges
+    admin: 'Admin',
+  },
+  mg: {
+    // En-tête
+    dashboard: 'Takila fampisehoana',
+    welcome: 'Tonga soa,',
+    hereIsOverview: 'Ity ny famintinana ny asanao.',
+    lastUpdate: 'Fanavaozana farany androany',
+    
+    // Cartes principales
+    members: 'Mpikambana',
+    active: 'mavitrika',
+    projects: 'Tetikasa',
+    events: 'Hetsika',
+    upcoming: 'ho avy',
+    jobOffers: 'Asa atolotra',
+    open: 'misokatra',
+    
+    // Cartes secondaires
+    applications: 'Fangatahana',
+    pending: 'miandry',
+    donations: 'Fanomezana (volana)',
+    volunteers: 'Mpanao an-tsitrapo',
+    beneficiaries: 'Tompondaka',
+    impactRate: 'Tahan\'ny fiantraikany',
+    
+    // Section Impact
+    yourImpact: 'Ny fiantraikanao',
+    impactDescription: 'Noho ny fandraisanao anjara, Y-Mad dia manohy manova ny fiainan\'ny olona eto Madagasikara.',
+    peopleImpacted: 'Olona voatafika',
+    activeProjects: 'Tetikasa mavitrika',
+    regionsCovered: 'Faritra voarakotra',
+    
+    // Actions rapides
+    quickActions: 'Hetsika haingana',
+    newMember: 'Mpikambana vaovao',
+    newProject: 'Tetikasa vaovao',
+    newEvent: 'Hetsika vaovao',
+    newJob: 'Asa vaovao',
+    newArticle: 'Lahatsoratra vaovao',
+    generateReport: 'Mamorona tatitra',
+    newBeneficiary: 'Tompondaka vaovao',
+    
+    // Gestion du site
+    siteManagement: 'Fitantanan-tranonkala',
+    siteManagementDesc: 'Amboary ny endrika sy ny atiny',
+    managePages: 'Hitantana pejy',
+    manageBackgrounds: 'Hitantana sary ambadika',
+    
+    // Actions
+    viewDetails: 'Jereo antsipirihany',
+    seeImpact: 'Jereo ny antsipirihan\'ny fiantraikany',
+    loading: 'Fandefasana ny takilanao...',
+    
+    // Badges
+    admin: 'Mpandrindra',
+  }
+};
 
 export default function DashboardHome() {
   const { user, token } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language as keyof typeof translations] || translations.fr;
+  
   const [stats, setStats] = useState<DashboardStats>({
-    totalMembers: 156, activeMembers: 142,
-    totalProjects: 12, activeProjects: 8,
-    totalEvents: 15, upcomingEvents: 5,
-    totalJobs: 8, activeJobs: 6,
-    totalApplications: 45, pendingApplications: 12,
-    totalDonations: 12500000, monthlyDonations: 3250000,
-    totalVolunteers: 32, activeVolunteers: 28,
+    totalMembers: 0, activeMembers: 0,
+    totalProjects: 0, activeProjects: 0,
+    totalEvents: 0, upcomingEvents: 0,
+    totalJobs: 0, activeJobs: 0,
+    totalApplications: 0, pendingApplications: 0,
+    totalDonations: 0, monthlyDonations: 0,
+    totalVolunteers: 0, activeVolunteers: 0,
+    totalBeneficiaries: 0, impactRate: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -47,13 +169,83 @@ export default function DashboardHome() {
   const fetchStats = async () => {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
-      const response = await fetch(`${API_URL}/dashboard/stats`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
+      
+      // Appels parallèles pour toutes les stats
+      const [membersRes, projectsRes, eventsRes, jobsRes, donationsRes, volunteersRes, beneficiariesRes] = await Promise.allSettled([
+        fetch(`${API_URL}/members/stats/all`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/projects/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/events`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/jobs/offers/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/donations/stats/all`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/volunteers/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/beneficiaries/stats/impact`, { headers: { 'Authorization': `Bearer ${token}` } }),
+      ]);
+
+      // Membres
+      if (membersRes.status === 'fulfilled' && membersRes.value.ok) {
+        const data = await membersRes.value.json();
+        setStats(prev => ({ ...prev, 
+          totalMembers: data.total || 0, 
+          activeMembers: data.active || 0 
+        }));
       }
+
+      // Projets
+      if (projectsRes.status === 'fulfilled' && projectsRes.value.ok) {
+        const data = await projectsRes.value.json();
+        setStats(prev => ({ ...prev, 
+          totalProjects: data.total || 0,
+          activeProjects: data.active || 0
+        }));
+      }
+
+      // Événements
+      if (eventsRes.status === 'fulfilled' && eventsRes.value.ok) {
+        const data = await eventsRes.value.json();
+        const upcoming = data.filter((e: any) => e.status === 'published' && new Date(e.start_datetime) > new Date()).length;
+        setStats(prev => ({ ...prev, 
+          totalEvents: data.length || 0,
+          upcomingEvents: upcoming
+        }));
+      }
+
+      // Offres emploi
+      if (jobsRes.status === 'fulfilled' && jobsRes.value.ok) {
+        const data = await jobsRes.value.json();
+        setStats(prev => ({ ...prev, 
+          totalJobs: data.total || 0,
+          activeJobs: data.active || 0,
+          totalApplications: data.applications || 0,
+          pendingApplications: data.pending || 0
+        }));
+      }
+
+      // Dons
+      if (donationsRes.status === 'fulfilled' && donationsRes.value.ok) {
+        const data = await donationsRes.value.json();
+        setStats(prev => ({ ...prev, 
+          monthlyDonations: data.monthly || 0
+        }));
+      }
+
+      // Bénévoles
+      if (volunteersRes.status === 'fulfilled' && volunteersRes.value.ok) {
+        const data = await volunteersRes.value.json();
+        setStats(prev => ({ ...prev, 
+          totalVolunteers: data.total || 0,
+          activeVolunteers: data.active || 0
+        }));
+      }
+
+      // Bénéficiaires
+      if (beneficiariesRes.status === 'fulfilled' && beneficiariesRes.value.ok) {
+        const data = await beneficiariesRes.value.json();
+        setStats(prev => ({ ...prev, 
+          totalBeneficiaries: data.total || 0,
+          impactRate: data.impactRate || 0
+        }));
+      }
+
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -61,28 +253,30 @@ export default function DashboardHome() {
     }
   };
 
-  // Nombre total de personnes impactées
-  const totalImpacted = stats.totalMembers + stats.totalVolunteers;
+  const totalImpacted = stats.totalMembers + stats.totalVolunteers + stats.totalBeneficiaries;
   const totalDonationsMillions = (stats.monthlyDonations / 1000000).toFixed(1);
+  const donationsFormatted = new Intl.NumberFormat('fr-MG').format(stats.monthlyDonations);
 
   // Cartes principales
   const mainStatCards = [
-    { title: 'Membres', value: stats.totalMembers, subValue: `${stats.activeMembers} actifs`, icon: Users, href: '/dashboard/members', color: 'blue' },
-    { title: 'Projets', value: stats.totalProjects, subValue: `${stats.activeProjects} actifs`, icon: FolderOpen, href: '/dashboard/projects', color: 'blue' },
-    { title: 'Événements', value: stats.totalEvents, subValue: `${stats.upcomingEvents} à venir`, icon: Calendar, href: '/dashboard/events', color: 'blue' },
-    { title: 'Offres emploi', value: stats.totalJobs, subValue: `${stats.activeJobs} ouvertes`, icon: Briefcase, href: '/dashboard/jobs', color: 'blue' },
+    { title: t.members, value: stats.totalMembers, subValue: `${stats.activeMembers} ${t.active}`, icon: Users, href: '/dashboard/members' },
+    { title: t.projects, value: stats.totalProjects, subValue: `${stats.activeProjects} ${t.active}`, icon: FolderOpen, href: '/dashboard/projects' },
+    { title: t.events, value: stats.totalEvents, subValue: `${stats.upcomingEvents} ${t.upcoming}`, icon: Calendar, href: '/dashboard/events' },
+    { title: t.jobOffers, value: stats.totalJobs, subValue: `${stats.activeJobs} ${t.open}`, icon: Briefcase, href: '/dashboard/jobs' },
   ];
 
   const secondaryStatCards = [
-    { title: 'Candidatures', value: stats.totalApplications, subValue: `${stats.pendingApplications} en attente`, icon: FileText, href: '/dashboard/applications', color: 'blue' },
-    { title: 'Dons (mois)', value: `${totalDonationsMillions}M`, subValue: 'Ariary', icon: Gift, href: '/dashboard/donations', color: 'blue' },
-    { title: 'Bénévoles', value: stats.totalVolunteers, subValue: `${stats.activeVolunteers} actifs`, icon: Heart, href: '/dashboard/volunteers', color: 'blue' },
+    { title: t.applications, value: stats.totalApplications, subValue: `${stats.pendingApplications} ${t.pending}`, icon: FileText, href: '/dashboard/jobs/applications' },
+    { title: t.donations, value: `${donationsFormatted} Ar`, subValue: 'Ariary', icon: Gift, href: '/dashboard/donations' },
+    { title: t.volunteers, value: stats.totalVolunteers, subValue: `${stats.activeVolunteers} ${t.active}`, icon: Heart, href: '/dashboard/volunteers' },
+    { title: t.beneficiaries, value: stats.totalBeneficiaries, subValue: `${t.impactRate}: ${stats.impactRate}%`, icon: GraduationCap, href: '/dashboard/beneficiaries' },
   ];
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+        <p className="text-gray-500">{t.loading}</p>
       </div>
     );
   }
@@ -96,15 +290,15 @@ export default function DashboardHome() {
             <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center">
               <TrendingUp className="w-4 h-4 text-blue-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-800">Tableau de bord</h1>
+            <h1 className="text-2xl font-bold text-gray-800">{t.dashboard}</h1>
           </div>
           <p className="text-gray-500">
-            Bienvenue, <span className="font-semibold text-gray-700">{user?.firstName || 'Super'} {user?.lastName || 'Admin'}</span> ! Voici un aperçu de votre activité.
+            {t.welcome} <span className="font-semibold text-gray-700">{user?.firstName || 'Super'} {user?.lastName || t.admin}</span> ! {t.hereIsOverview}
           </p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full">
           <Sparkles className="w-4 h-4 text-blue-600" />
-          <span className="text-xs text-blue-700 font-medium">Dernière mise à jour aujourd'hui</span>
+          <span className="text-xs text-blue-700 font-medium">{t.lastUpdate}</span>
         </div>
       </div>
 
@@ -130,7 +324,7 @@ export default function DashboardHome() {
               </div>
               <div className="mt-4 pt-2 border-t border-gray-50">
                 <div className="flex items-center gap-1 text-xs text-blue-600 font-medium">
-                  Voir les détails <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                  {t.viewDetails} <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
             </Link>
@@ -138,8 +332,8 @@ export default function DashboardHome() {
         })}
       </div>
 
-      {/* ==================== CARTES SECONDAIRES (3) + STATS RAPIDES ==================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* ==================== CARTES SECONDAIRES (4) ==================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {secondaryStatCards.map((card, index) => {
           const Icon = card.icon;
           return (
@@ -151,7 +345,7 @@ export default function DashboardHome() {
               <div className="flex justify-between items-start">
                 <div>
                   <p className="text-sm text-gray-500">{card.title}</p>
-                  <p className="text-3xl font-bold text-gray-800 mt-1">{card.value}</p>
+                  <p className="text-2xl font-bold text-gray-800 mt-1">{card.value}</p>
                   <p className="text-xs text-gray-400 mt-1">{card.subValue}</p>
                 </div>
                 <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center group-hover:bg-blue-600 transition-colors duration-300">
@@ -160,7 +354,7 @@ export default function DashboardHome() {
               </div>
               <div className="mt-4 pt-2 border-t border-gray-50">
                 <div className="flex items-center gap-1 text-xs text-blue-600 font-medium">
-                  Voir les détails <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                  {t.viewDetails} <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
             </Link>
@@ -177,23 +371,23 @@ export default function DashboardHome() {
             <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
               <Award className="w-4 h-4 text-white" />
             </div>
-            <h3 className="font-semibold text-white">Votre impact</h3>
+            <h3 className="font-semibold text-white">{t.yourImpact}</h3>
           </div>
           <p className="text-blue-100 text-sm mb-5">
-            Grâce à votre engagement, Y-Mad continue de transformer des vies à Madagascar.
+            {t.impactDescription}
           </p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="text-center">
               <p className="text-2xl font-bold text-white">{totalImpacted}</p>
-              <p className="text-xs text-blue-200">Personnes impactées</p>
+              <p className="text-xs text-blue-200">{t.peopleImpacted}</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-white">{stats.activeProjects}</p>
-              <p className="text-xs text-blue-200">Projets actifs</p>
+              <p className="text-xs text-blue-200">{t.activeProjects}</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-white">22</p>
-              <p className="text-xs text-blue-200">Régions couvertes</p>
+              <p className="text-2xl font-bold text-white">{stats.impactRate || 0}%</p>
+              <p className="text-xs text-blue-200">{t.impactRate}</p>
             </div>
           </div>
         </div>
@@ -204,15 +398,16 @@ export default function DashboardHome() {
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
               <Target className="w-4 h-4 text-blue-600" />
             </div>
-            <h2 className="text-lg font-semibold text-gray-800">Actions rapides</h2>
+            <h2 className="text-lg font-semibold text-gray-800">{t.quickActions}</h2>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <QuickAction href="/dashboard/members/new" label="Nouveau membre" />
-            <QuickAction href="/dashboard/projects/new" label="Nouveau projet" />
-            <QuickAction href="/dashboard/events/new" label="Nouvel événement" />
-            <QuickAction href="/dashboard/jobs/new" label="Nouvelle offre" />
-            <QuickAction href="/dashboard/blog/new" label="Nouvel article" />
-            <QuickAction href="/dashboard/reports" label="Générer rapport" />
+            <QuickAction href="/dashboard/members/new" label={t.newMember} />
+            <QuickAction href="/dashboard/projects/new" label={t.newProject} />
+            <QuickAction href="/dashboard/events/new" label={t.newEvent} />
+            <QuickAction href="/dashboard/jobs/offers/new" label={t.newJob} />
+            <QuickAction href="/dashboard/beneficiaries/new" label={t.newBeneficiary} />
+            <QuickAction href="/dashboard/blog/new" label={t.newArticle} />
+            <QuickAction href="/dashboard/reports" label={t.generateReport} />
           </div>
         </div>
       </div>
@@ -223,10 +418,10 @@ export default function DashboardHome() {
           <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
             <Globe className="w-4 h-4 text-blue-600" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-800">Gestion du site</h2>
+          <h2 className="text-lg font-semibold text-gray-800">{t.siteManagement}</h2>
         </div>
         <p className="text-sm text-gray-500 mb-5">
-          Personnalisez l'apparence et le contenu du site
+          {t.siteManagementDesc}
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Link
@@ -235,7 +430,7 @@ export default function DashboardHome() {
           >
             <div className="flex items-center gap-2">
               <Settings className="w-4 h-4" />
-              <span className="font-medium">Gérer les pages</span>
+              <span className="font-medium">{t.managePages}</span>
             </div>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>
@@ -245,7 +440,7 @@ export default function DashboardHome() {
           >
             <div className="flex items-center gap-2">
               <Globe className="w-4 h-4" />
-              <span className="font-medium">Gérer les fonds d'écran</span>
+              <span className="font-medium">{t.manageBackgrounds}</span>
             </div>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>

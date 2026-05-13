@@ -1,174 +1,175 @@
 ﻿// backend/src/modules/auth/auth.controller.ts
-import { 
-  Controller, 
-  Post, 
-  Body, 
-  Get, 
-  Put, 
-  Delete, 
-  Param, 
-  UseGuards, 
-  Req, 
-  ForbiddenException,
-  UseInterceptors,
-  UploadedFile,
-  BadRequestException
+
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Request,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  BadRequestException,
+  NotFoundException
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { v4 as uuidv4 } from 'uuid';
-import * as path from 'path';
-import * as fs from 'fs';
 import { AuthService } from './auth.service';
-import { LoginDto, RegisterDto, UpdateRoleDto } from './dto';
-import { Public } from './decorators/public.decorator';
+import {
+  LoginDto,
+  RegisterDto,
+  UpdateRoleDto,
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  UpdateProfileDto
+} from './dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { UserRole } from '../../entities/user.entity';
 
+// ✅ CORRECTION : Supprimer "api/" car le préfixe global est déjà défini dans main.ts
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // ==================== ROUTES PUBLIQUES ====================
-  
-  @Public()
+  // ============================================================
+  // ROUTES PUBLIQUES (sans authentification)
+  // ============================================================
+
   @Post('register')
-  async register(@Body() registerDto: RegisterDto, @Req() req: any) {
-    const ip = req.ip || req.socket?.remoteAddress;
+  @HttpCode(HttpStatus.CREATED)
+  async register(@Body() registerDto: RegisterDto, @Request() req) {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     return this.authService.register(registerDto, ip);
   }
 
-  @Public()
   @Post('login')
-  async login(@Body() loginDto: LoginDto, @Req() req: any) {
-    const ip = req.ip || req.socket?.remoteAddress;
+  @HttpCode(HttpStatus.OK)
+  async login(@Body() loginDto: LoginDto, @Request() req) {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     return this.authService.login(loginDto, ip);
   }
 
-  @Public()
   @Post('forgot-password')
-  async forgotPassword(@Body('email') email: string) {
-    return this.authService.forgotPassword(email);
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto.email);
   }
 
-  @Public()
   @Post('reset-password')
-  async resetPassword(@Body('token') token: string, @Body('password') password: string) {
-    return this.authService.resetPassword(token, password);
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetPasswordDto.token, resetPasswordDto.newPassword);
   }
 
-  @Public()
   @Get('verify-email/:token')
+  @HttpCode(HttpStatus.OK)
   async verifyEmail(@Param('token') token: string) {
     return this.authService.verifyEmail(token);
   }
 
-  // ==================== ROUTES PROTÉGÉES ====================
+  // ============================================================
+  // ROUTES PROTÉGÉES (authentification requise)
+  // ============================================================
 
-  @UseGuards(JwtAuthGuard)
   @Get('profile')
-  async getProfile(@Req() req: any) {
-    return this.authService.getProfile(req.user.sub);
+  @UseGuards(JwtAuthGuard)
+  async getProfile(@Request() req) {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) {
+      throw new BadRequestException('Utilisateur non identifié');
+    }
+    return this.authService.getProfile(userId);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Put('profile')
-  async updateProfile(@Req() req: any, @Body() updateData: any) {
-    return this.authService.updateProfile(req.user.sub, updateData);
+  @UseGuards(JwtAuthGuard)
+  async updateProfile(@Request() req, @Body() updateProfileDto: UpdateProfileDto) {
+    const userId = this.extractUserId(req);
+    return this.authService.updateProfile(userId, updateProfileDto);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Put('change-password')
-  async changePassword(
-    @Req() req: any,
-    @Body('currentPassword') currentPassword: string,
-    @Body('newPassword') newPassword: string
-  ) {
-    return this.authService.changePassword(req.user.sub, currentPassword, newPassword);
-  }
-
-  @UseGuards(JwtAuthGuard)
   @Post('upload-photo')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const uploadPath = path.join(process.cwd(), 'uploads', 'profiles');
-          if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath, { recursive: true });
-          }
-          cb(null, uploadPath);
-        },
-        filename: (req, file, cb) => {
-          const uniqueName = `profile_${uuidv4()}${path.extname(file.originalname)}`;
-          cb(null, uniqueName);
-        },
-      }),
-      limits: { fileSize: 5 * 1024 * 1024 },
-      fileFilter: (req, file, cb) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
-          return cb(new BadRequestException('Format non supporté'), false);
-        }
-        cb(null, true);
-      },
-    }),
-  )
-  async uploadProfilePhoto(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
-    if (!file) {
-      throw new BadRequestException('Aucun fichier fourni');
-    }
-    const baseUrl = process.env.API_URL || 'http://localhost:4001';
-    const fileUrl = `${baseUrl}/uploads/profiles/${file.filename}`;
-    return this.authService.updateUserPhoto(req.user.sub, fileUrl);
-  }
-
   @UseGuards(JwtAuthGuard)
+  async uploadPhoto(@Request() req, @Body('photoUrl') photoUrl: string) {
+    const userId = this.extractUserId(req);
+    if (!photoUrl) {
+      throw new BadRequestException('URL de photo requise');
+    }
+    return this.authService.updateUserPhoto(userId, photoUrl);
+  }
+
   @Delete('photo')
-  async deleteProfilePhoto(@Req() req: any) {
-    return this.authService.deleteUserPhoto(req.user.sub);
+  @UseGuards(JwtAuthGuard)
+  async deletePhoto(@Request() req) {
+    const userId = this.extractUserId(req);
+    return this.authService.updateUserPhoto(userId, null);
   }
 
-  // ==================== ROUTES ADMIN ====================
+  @Put('change-password')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async changePassword(@Request() req, @Body() changePasswordDto: ChangePasswordDto) {
+    const userId = this.extractUserId(req);
+    return this.authService.changePassword(
+      userId,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword
+    );
+  }
 
-  @Roles(UserRole.SUPER_ADMIN)
+  // ============================================================
+  // ROUTES ADMINISTRATION (avec vérification des rôles)
+  // ============================================================
+
   @Get('users')
-  async getAllUsers(@Req() req: any) {
-    return this.authService.getAllUsers(req.user.role);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  async getAllUsers() {
+    return this.authService.getAllUsers();
   }
 
-  @Roles(UserRole.SUPER_ADMIN)
   @Get('users/:id')
-  async getUserById(@Param('id') id: string, @Req() req: any) {
-    return this.authService.getUserById(id, req.user.role, req.user.sub);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  async getUserById(@Param('id') id: string) {
+    return this.authService.getUserById(id);
   }
 
-  @Roles(UserRole.SUPER_ADMIN)
   @Put('users/:id/role')
-  async updateUserRole(
-    @Param('id') id: string,
-    @Body() updateRoleDto: UpdateRoleDto,
-    @Req() req: any
-  ) {
-    if (id === req.user.sub) {
-      throw new ForbiddenException('Vous ne pouvez pas modifier votre propre rôle');
-    }
-    return this.authService.updateUserRole(id, updateRoleDto.role, req.user.role, req.user.sub);
-  }
-
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
-  @Put('users/:id/toggle-status')
-  async toggleUserStatus(@Param('id') id: string, @Req() req: any) {
-    return this.authService.toggleUserStatus(id, req.user.role, req.user.sub);
-  }
-
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
+  async updateUserRole(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
+    return this.authService.updateUserRole(id, updateRoleDto.role);
+  }
+
+  @Put('users/:id/toggle-status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  async toggleUserStatus(@Param('id') id: string) {
+    return this.authService.toggleUserStatus(id);
+  }
+
   @Delete('users/:id')
-  async deleteUser(@Param('id') id: string, @Req() req: any) {
-    if (id === req.user.sub) {
-      throw new ForbiddenException('Vous ne pouvez pas supprimer votre propre compte');
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async deleteUser(@Param('id') id: string) {
+    return this.authService.deleteUser(id);
+  }
+
+  // ============================================================
+  // MÉTHODE UTILITAIRE PRIVÉE
+  // ============================================================
+
+  private extractUserId(req: any): string {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) {
+      throw new BadRequestException('Utilisateur non identifié');
     }
-    return this.authService.deleteUser(id, req.user.role, req.user.sub);
+    return userId;
   }
 }
