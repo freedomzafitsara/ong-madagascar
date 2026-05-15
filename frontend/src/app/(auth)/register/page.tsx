@@ -89,7 +89,7 @@ export default function RegisterPage() {
       console.log('📤 Envoi des données au backend:', registerData);
 
       // Appel API direct (fallback si useAuth ne fonctionne pas)
-      const response = await fetch('http://localhost:4001/auth/register', {
+      const response = await fetch('http://localhost:4001/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

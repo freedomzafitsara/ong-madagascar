@@ -1,4 +1,5 @@
-﻿// backend/src/modules/auth/auth.controller.ts
+// backend/src/modules/auth/auth.controller.ts
+// VERSION CORRIG�E - AVEC @Public() SUR TOUTES LES ROUTES PUBLIQUES
 
 import {
   Controller,
@@ -28,9 +29,9 @@ import {
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
+import { Public } from './decorators/public.decorator';
 import { UserRole } from '../../entities/user.entity';
 
-// ✅ CORRECTION : Supprimer "api/" car le préfixe global est déjà défini dans main.ts
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -39,14 +40,16 @@ export class AuthController {
   // ROUTES PUBLIQUES (sans authentification)
   // ============================================================
 
-  @Post('register')
-  @HttpCode(HttpStatus.CREATED)
-  async register(@Body() registerDto: RegisterDto, @Request() req) {
+ @Post('register')
+@Public()
+@HttpCode(HttpStatus.CREATED)
+async register(@Body() registerDto: RegisterDto, @Request() req) {
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     return this.authService.register(registerDto, ip);
   }
 
   @Post('login')
+  @Public()  // ? AJOUT CRITIQUE
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto, @Request() req) {
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -54,25 +57,28 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @Public()  // ? AJOUT CRITIQUE
   @HttpCode(HttpStatus.OK)
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto.email);
   }
 
   @Post('reset-password')
+  @Public()  // ? AJOUT CRITIQUE
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto.token, resetPasswordDto.newPassword);
   }
 
   @Get('verify-email/:token')
+  @Public()  // ? AJOUT CRITIQUE
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Param('token') token: string) {
     return this.authService.verifyEmail(token);
   }
 
   // ============================================================
-  // ROUTES PROTÉGÉES (authentification requise)
+  // ROUTES PROT�G�ES (authentification requise)
   // ============================================================
 
   @Get('profile')
@@ -80,7 +86,7 @@ export class AuthController {
   async getProfile(@Request() req) {
     const userId = req.user?.id || req.user?.sub;
     if (!userId) {
-      throw new BadRequestException('Utilisateur non identifié');
+      throw new BadRequestException('Utilisateur non identifi�');
     }
     return this.authService.getProfile(userId);
   }
@@ -122,7 +128,7 @@ export class AuthController {
   }
 
   // ============================================================
-  // ROUTES ADMINISTRATION (avec vérification des rôles)
+  // ROUTES ADMINISTRATION
   // ============================================================
 
   @Get('users')
@@ -162,13 +168,13 @@ export class AuthController {
   }
 
   // ============================================================
-  // MÉTHODE UTILITAIRE PRIVÉE
+  // M�THODE UTILITAIRE PRIV�E
   // ============================================================
 
   private extractUserId(req: any): string {
     const userId = req.user?.id || req.user?.sub;
     if (!userId) {
-      throw new BadRequestException('Utilisateur non identifié');
+      throw new BadRequestException('Utilisateur non identifi�');
     }
     return userId;
   }

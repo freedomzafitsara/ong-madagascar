@@ -1,4 +1,335 @@
-# .gitignore
-next-env.d.ts
+# =====================================================
+# FILE: .gitignore
+# =====================================================
+# Y-Mad Frontend - Configuration Git ignore
+# Version: 2.0.0 - Production Ready
+# =====================================================
+
+# =====================================================
+# DEPENDANCES
+# =====================================================
+
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# =====================================================
+# BUILD & OUTPUT
+# =====================================================
+
+# Next.js builds
 .next/
-node_modules
+out/
+build/
+dist/
+.vercel/
+.netlify/
+
+# Build outputs
+*.tsbuildinfo
+.next-build
+.next-server
+.next-export
+.next-serverless
+
+# =====================================================
+# CACHE & TEMP
+# =====================================================
+
+# Cache directories
+.cache/
+.parcel-cache/
+.turbo/
+.rollup.cache/
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# Temp files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.bak
+
+# =====================================================
+# ENVIRONNEMENT & CONFIGURATION
+# =====================================================
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+!.env.example
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-*
+*.code-workspace
+
+# =====================================================
+# NEXT.JS SPECIFIQUE
+# =====================================================
+
+# TypeScript Next.js files
+next-env.d.ts
+
+# Next.js specific
+.next/
+out/
+.nft.json
+*.nft.json
+
+# Webpack stats
+stats.json
+webpack-stats.json
+
+# =====================================================
+# TESTING
+# =====================================================
+
+# Coverage directories
+coverage/
+.nyc_output/
+.latest_run
+
+# Test logs
+*.log
+test-results/
+jest-results.json
+junit.xml
+
+# =====================================================
+# RAPPORTS & DOCUMENTS
+# =====================================================
+
+# Rapports de performance
+performance-report.json
+lighthouse-report.html
+web-vitals.json
+
+# Documentation générée
+docs/
+api-docs/
+typedoc/
+*.pdf
+*.docx
+
+# =====================================================
+# CERTIFICATS & SECURITE
+# =====================================================
+
+# Certificats SSL
+*.pem
+*.crt
+*.key
+*.p12
+*.pfx
+*.csr
+
+# Secrets
+.secrets/
+secrets.json
+*.secret
+*.private
+
+# =====================================================
+# BACKUP & ARCHIVES
+# =====================================================
+
+# Backup files
+*.backup
+*.old
+*.orig
+*.rej
+*.sav
+*.save
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# =====================================================
+# LOGS & MONITORING
+# =====================================================
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Monitoring
+.sentryclirc
+sentry.properties
+
+# =====================================================
+# OUTILS DE DEVELOPPEMENT
+# =====================================================
+
+# Debug
+chrome-user-data/
+.vscode-test/
+
+# Docker
+docker-compose.override.yml
+*.dockerignore
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# =====================================================
+# MEDIA & ASSETS
+# =====================================================
+
+# Uploads (ne pas versionner les fichiers uploades)
+public/uploads/
+uploads/
+storage/
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Images generees
+*.webp.tmp
+*.avif.tmp
+
+# =====================================================
+# DEPENDANCES SPECIFIQUES
+# =====================================================
+
+# Storybook
+storybook-static/
+*.stories.mdx
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+
+# =====================================================
+# PWA & SERVICE WORKERS
+# =====================================================
+
+# Service workers generes
+sw.js
+workbox-*.js
+fallback-*.js
+precache-*.js
+
+# =====================================================
+# PERFORMANCE & ANALYSE
+# =====================================================
+
+# Bundle analysis
+.next/analyze/
+reports/
+.bundle-stats.json
+
+# =====================================================
+# FICHIERS PERSONNELS
+# =====================================================
+
+# Personal notes
+*.notes
+TODO.md
+PERSONAL_*
+
+# Local scripts
+scripts/local/
+*.local.js
+*.local.ts
+
+# =====================================================
+# BASE DE DONNEES
+# =====================================================
+
+# Base de donnees locales
+*.db
+*.sqlite
+*.sqlite3
+data.db
+
+# =====================================================
+# FICHIERS SPECIFIQUES AU PROJET
+# =====================================================
+
+# Y-Mad specific
+dump.rdb
+temp-*.json
+export-*.csv
+import-*.csv
+
+# Rapports generes
+reports-export/
+exports/
+
+# Backups des donnees
+backup-data/
+
+# =====================================================
+# EXCEPTIONS (fichiers a garder malgre les regles)
+# =====================================================
+
+# Garder les fichiers example
+!.env.example
+!.gitkeep
+!**/.gitkeep
+
+# Garder les configurations par defaut
+!*.default.js
+!*.default.ts
+!*.config.example.js
+
+# =====================================================
+# NOTE: Ne pas versionner les fichiers sensibles
+# =====================================================
+
+# Les fichiers suivants ne doivent JAMAIS etre commites:
+# - .env.local (contient les cles API)
+# - *.pem (certificats)
+# - node_modules/ (trop lourd)
+# - .next/ (genere automatiquement)
+# - package-lock.json (optionnel, selon politique d'equipe)
