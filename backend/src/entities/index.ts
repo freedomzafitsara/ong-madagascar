@@ -7,3 +7,6 @@ export { EventRegistration, RegistrationStatus } from './event-registration.enti
 export { JobOffer, JobType, JobStatus } from './job-offer.entity';
 export { JobApplication, ApplicationStatus } from './job-application.entity';
 export { BlogPost, PostType } from './blog-post.entity';
+export { Volunteer } from './volunteer.entity';
+export { Partner } from './partner.entity';
+export { NewsletterSubscriber } from './newsletter-subscriber.entity';

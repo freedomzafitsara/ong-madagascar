@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { 
   ArrowRight, Heart, Users, Globe, MapPin, Award,
   Target, HandHeart, GraduationCap, Leaf, ChevronRight, Eye,
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { pageService, PageBackground } from '@/services/pageService';
+import { blogApi, projectsApi, jobsApi } from '@/lib/api';
 
 // ============================================================
 // DÉFINITION DES TYPES
@@ -107,19 +109,15 @@ export default function HomePage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [postsRes, projectsRes, jobsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/blog?status=published&limit=3`),
-        fetch(`${API_BASE_URL}/projects?status=active&limit=3`),
-        fetch(`${API_BASE_URL}/jobs/offers?status=published&limit=3`),
+      const [postsData, projectsData, jobsData] = await Promise.all([
+        blogApi.getAll(1, 3).catch(() => ({ data: [] })),
+        projectsApi.getAll(1, 3).catch(() => ({ data: [] })),
+        jobsApi.getAll(1, 3).catch(() => ({ data: [] })),
       ]);
 
-      const postsData = postsRes.ok ? (await postsRes.json()).data || [] : [];
-      const projectsData = projectsRes.ok ? (await projectsRes.json()).data || [] : [];
-      const jobsData = jobsRes.ok ? (await jobsRes.json()).data || [] : [];
-
-      setRecentPosts(Array.isArray(postsData) ? postsData : []);
-      setFeaturedProjects(Array.isArray(projectsData) ? projectsData : []);
-      setRecentJobs(Array.isArray(jobsData) ? jobsData : []);
+      setRecentPosts(Array.isArray(postsData?.data) ? postsData.data : []);
+      setFeaturedProjects(Array.isArray(projectsData?.data) ? projectsData.data : []);
+      setRecentJobs(Array.isArray(jobsData?.data) ? jobsData.data : []);
       
       await loadPageContent();
     } catch (error) {
@@ -127,7 +125,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [API_BASE_URL, loadPageContent]);
+  }, [loadPageContent]);
 
   useEffect(() => {
     loadData();
@@ -162,13 +160,16 @@ export default function HomePage() {
         });
       }
     } catch (error) {
-      setNewsletterStatus({ type: 'error', message: getText('Erreur de connexion.', 'Nisy hadisoana tamin\'ny fifandraisana.') });
+      setNewsletterStatus({ 
+        type: 'error', 
+        message: getText('Erreur de connexion.', 'Nisy hadisoana tamin\'ny fifandraisana.') 
+      });
     } finally {
       setNewsletterLoading(false);
     }
   };
 
-  // Données statiques
+  // Données statiques avec valeurs réelles Y-Mad
   const stats = [
     { value: '50+', labelFr: 'Projets réalisés', labelMg: 'Tetikasa vita', icon: Target },
     { value: '12 450+', labelFr: 'Bénéficiaires', labelMg: 'Tompondaka', icon: Users },
@@ -191,14 +192,14 @@ export default function HomePage() {
   ];
 
   const socialLinks = [
-    { icon: Facebook, href: 'https://facebook.com/ymadorg', label: 'Facebook', bg: '#1877F2' },
-    { icon: Instagram, href: 'https://instagram.com/ymad_mg', label: 'Instagram', bg: '#E4405F' },
-    { icon: Linkedin, href: 'https://linkedin.com/company/ymad', label: 'LinkedIn', bg: '#0a7df0' },
+    { icon: Facebook, href: 'https://facebook.com/ymad.mg', label: 'Facebook', bg: '#1877F2' },
+    { icon: Instagram, href: 'https://instagram.com/ymad.mg', label: 'Instagram', bg: '#E4405F' },
+    { icon: Linkedin, href: 'https://linkedin.com/company/ymad-mg', label: 'LinkedIn', bg: '#0A66C2' },
     { icon: Twitter, href: 'https://twitter.com/ymad_mg', label: 'Twitter', bg: '#1DA1F2' },
     { icon: Youtube, href: 'https://youtube.com/@ymad', label: 'YouTube', bg: '#FF0000' },
   ];
 
-  // Styles du fond d'écran avec overlay amélioré pour la lisibilité
+  // Styles du fond d'écran
   const backgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundImage: `url(${pageBackground.image_url})`,
     backgroundPosition: pageBackground.position || 'center',
@@ -223,9 +224,8 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
-      {/* ==================== BANNIÈRE PRINCIPALE (HERO)  ==================== */}
+      {/* ==================== HERO SECTION ==================== */}
       <section className="relative min-h-screen w-full overflow-hidden">
-        {/* Fond d'écran dynamique */}
         {backgroundStyle.backgroundImage ? (
           <>
             <div className="absolute inset-0" style={backgroundStyle} />
@@ -235,10 +235,7 @@ export default function HomePage() {
           <div className="absolute inset-0 bg-gradient-to-br from-blue-700 to-blue-900" />
         )}
         
-        {/* Contenu avec design professionnel */}
         <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-20">
-          
-          {/* Badge d'association */}
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8 animate-fade-in-up">
             <Award className="w-4 h-4 text-blue-400" />
             <span className="text-sm font-medium tracking-wide text-white">
@@ -246,29 +243,26 @@ export default function HomePage() {
             </span>
           </div>
           
-          {/* Titre principal en grand format */}
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-blue-400 mb-6 leading-tight drop-shadow-2xl animate-fade-in-up">
-             Y-MAD
-            <span className="block text-2xl md:text-3xl lg:text-4xl text-blue-100 mt-4 font-light tracking-wide">
-              {getText('" Young for Madagascar Development "', '" Tanora Malagasy miasa ho an\'ny Fivoaran\'i Madagasikara "')}
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 leading-tight drop-shadow-2xl animate-fade-in-up">
+            Y-MAD
+            <span className="block text-2xl md:text-3xl lg:text-4xl text-blue-300 mt-4 font-light tracking-wide">
+              {getText('" Young for Madagascar Development "', '" Tanora Malagasy miasa ho an\'ny Fivoarana "')}
             </span>
           </h1>
           
-          {/* Sous-titre avec meilleure lisibilité */}
-          <p className="text-lg md:text-2xl lg:text-3xl text-blue-100 max-w-3xl mx-auto mb-10 leading-relaxed drop-shadow-lg animate-fade-in-up animation-delay-200">
+          <p className="text-lg md:text-xl lg:text-2xl text-blue-100 max-w-3xl mx-auto mb-10 leading-relaxed drop-shadow-lg animate-fade-in-up animation-delay-200">
             {pageHero ? (language === 'fr' ? pageHero.subtitle : (pageHero.subtitle_mg || pageHero.subtitle)) : 
-              getText('Ensemble pour un développement durable et l\'autonomisation des communautés malgaches', 
-                      'Miara-miasa ho an\'ny fampandrosoana maharitra sy fanomezana hery ny vondrom-piarahamonina malagasy')}
+              getText('Ensemble pour un développement durable et l\'autonomisation des jeunes malgaches', 
+                      'Miara-miasa ho an\'ny fampandrosoana maharitra sy fanomezana hery ny tanora malagasy')}
           </p>
           
-          {/* Boutons d'action */}
           <div className="flex flex-col sm:flex-row gap-5 justify-center animate-fade-in-up animation-delay-400">
             <Link 
-              href={pageHero?.buttonLink || '/donate'} 
-              className="group inline-flex items-center gap-2 bg-blue-400 text-white px-8 py-4 rounded-full font-semiboldtransition-all "
+              href="/donate" 
+              className="group inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-full font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
             >
               <Heart className="w-5 h-5 group-hover:scale-110 transition-transform" /> 
-              <span>{pageHero ? (language === 'fr' ? pageHero.buttonText : (pageHero.buttonText_mg || pageHero.buttonText)) : getText('Faire un don', 'Hanome')}</span>
+              <span>{getText('Faire un don', 'Hanome')}</span>
               <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
             </Link>
             <Link 
@@ -281,7 +275,6 @@ export default function HomePage() {
             </Link>
           </div>
           
-          {/* Indicateur de défilement */}
           <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
             <div className="w-6 h-10 border-2 border-white/40 rounded-full flex justify-center">
               <div className="w-1 h-2 bg-white rounded-full mt-2 animate-pulse"></div>
@@ -315,7 +308,7 @@ export default function HomePage() {
         }
       `}</style>
 
-      {/* ==================== STATISTIQUES (juste en dessous) ==================== */}
+      {/* ==================== STATISTIQUES ==================== */}
       <section className="relative z-20 px-4 -mt-20">
         <div className="max-w-7xl mx-auto">
           <div className="bg-white rounded-2xl shadow-2xl p-8">
@@ -323,10 +316,7 @@ export default function HomePage() {
               {stats.map((stat, index) => {
                 const Icon = stat.icon;
                 return (
-                  <div 
-                    key={index} 
-                    className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1"
-                  >
+                  <div key={index} className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1">
                     <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-600 transition-colors duration-300">
                       <Icon className="w-7 h-7 text-blue-600 group-hover:text-white transition-colors" />
                     </div>
@@ -370,29 +360,31 @@ export default function HomePage() {
       </section>
 
       {/* ==================== PROJETS PHARES ==================== */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between items-center mb-12 flex-wrap gap-4">
-            <div>
-              <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">
-                {getText('Nos actions sur le terrain', 'Ny asantsika eo an-toerana')}
-              </span>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mt-2">
-                {getText('Projets en cours', 'Tetim-piasana mitohy')}
-              </h2>
+      {featuredProjects.length > 0 && (
+        <section className="py-20 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="flex justify-between items-center mb-12 flex-wrap gap-4">
+              <div>
+                <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">
+                  {getText('Nos actions sur le terrain', 'Ny asantsika eo an-toerana')}
+                </span>
+                <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mt-2">
+                  {getText('Projets en cours', 'Tetim-piasana mitohy')}
+                </h2>
+              </div>
+              <Link href="/projects" className="group text-blue-600 font-semibold hover:text-blue-700 flex items-center gap-1">
+                {getText('Voir tous les projets', 'Jereo ny tetikasa rehetra')} 
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
             </div>
-            <Link href="/projects" className="group text-blue-600 font-semibold hover:text-blue-700 flex items-center gap-1">
-              {getText('Voir tous les projets', 'Jereo ny tetikasa rehetra')} 
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {featuredProjects.map((project) => (
+                <ProjectCard key={project.id} project={project} language={language} />
+              ))}
+            </div>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredProjects.map((project) => (
-              <ProjectCard key={project.id} project={project} language={language} />
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ==================== OFFRES D'EMPLOI ==================== */}
       {recentJobs.length > 0 && (
@@ -407,7 +399,7 @@ export default function HomePage() {
                   {getText('Offres d\'emploi', 'Asa')}
                 </h2>
               </div>
-              <Link href="/jobs" className="group text-blue-600 font-semibold hover:text-blue-700 flex items-center gap-1">
+              <Link href="/emploi" className="group text-blue-600 font-semibold hover:text-blue-700 flex items-center gap-1">
                 {getText('Voir toutes les offres', 'Jereo ny asa rehetra')} 
                 <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
@@ -462,13 +454,14 @@ export default function HomePage() {
             </h2>
             <div className="w-20 h-1 bg-blue-600 mx-auto rounded-full mt-4"></div>
           </div>
-          <div className="grid md:grid-cols-3 gap-8 mb-16">
-            {recentPosts.map((post) => (
-              <BlogCard key={post.id} post={post} language={language} />
-            ))}
-          </div>
+          {recentPosts.length > 0 && (
+            <div className="grid md:grid-cols-3 gap-8 mb-16">
+              {recentPosts.map((post) => (
+                <BlogCard key={post.id} post={post} language={language} />
+              ))}
+            </div>
+          )}
           
-          {/* Newsletter */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-3xl p-12 text-center text-white shadow-xl">
             <Mail className="w-14 h-14 mx-auto mb-4 opacity-90" />
             <h3 className="text-2xl font-bold mb-2">{getText('Restez informés', 'Mijanòna ho voa-tantara')}</h3>
@@ -522,37 +515,12 @@ export default function HomePage() {
           </Link>
         </div>
       </section>
-
-      {/* ==================== RÉSEAUX SOCIAUX ==================== */}
-      <section className="py-12 bg-gray-100 text-center">
-        <h3 className="text-lg font-semibold text-gray-700 mb-4">
-          {getText('Suivez-nous sur les réseaux', 'Araho izahay amin\'ny tambajotra sosialy')}
-        </h3>
-        <div className="flex justify-center gap-4 flex-wrap">
-          {socialLinks.map((social, idx) => {
-            const Icon = social.icon;
-            return (
-              <a 
-                key={idx} 
-                href={social.href} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg"
-                style={{ backgroundColor: social.bg }}
-                aria-label={social.label}
-              >
-                <Icon className="w-5 h-5 text-white" />
-              </a>
-            );
-          })}
-        </div>
-      </section>
     </div>
   );
 }
 
 // ============================================================
-// COMPOSANTS SECONDAIRES (Cartes Projet, Blog, Offre)
+// COMPOSANTS SECONDAIRES
 // ============================================================
 
 function ProjectCard({ project, language }: { project: Project; language: string }) {
@@ -569,7 +537,9 @@ function ProjectCard({ project, language }: { project: Project; language: string
         )}
       </div>
       <div className="p-6">
-        <div className="flex items-center gap-1 text-sm text-gray-500 mb-2"><MapPin className="w-4 h-4" /> {project.location}</div>
+        <div className="flex items-center gap-1 text-sm text-gray-500 mb-2">
+          <MapPin className="w-4 h-4" /> {project.location}
+        </div>
         <h3 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors line-clamp-1">{title}</h3>
         <p className="text-gray-600 line-clamp-2 leading-relaxed">{description}</p>
         <div className="mt-4 text-blue-600 font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
@@ -596,8 +566,12 @@ function BlogCard({ post, language }: { post: BlogPost; language: string }) {
       </div>
       <div className="p-6">
         <div className="flex gap-4 text-sm text-gray-500 mb-3">
-          <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(displayDate).toLocaleDateString('fr-FR')}</span>
-          <span className="flex items-center gap-1"><Eye className="w-3 h-3" /> {post.views} vues</span>
+          <span className="flex items-center gap-1">
+            <Calendar className="w-3 h-3" /> {new Date(displayDate).toLocaleDateString('fr-FR')}
+          </span>
+          <span className="flex items-center gap-1">
+            <Eye className="w-3 h-3" /> {post.views} vues
+          </span>
         </div>
         <h3 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">{title}</h3>
         <p className="text-gray-600 line-clamp-2 leading-relaxed">{excerpt}</p>
@@ -609,29 +583,42 @@ function BlogCard({ post, language }: { post: BlogPost; language: string }) {
   );
 }
 
+// ==================== FONCTION JOB CARD CORRIGÉE ====================
 function JobCard({ job, language }: { job: JobOffer; language: string }) {
   const title = language === 'fr' ? job.title : (job.title_mg || job.title);
-  const getJobTypeLabel = (type: string) => {
+  
+  // ✅ FONCTION CORRIGÉE - GÈRE LE CAS UNDEFINED
+  const getJobTypeLabel = (type?: string) => {
+    if (!type) return '';
+    
     const types: Record<string, { fr: string; mg: string }> = {
       cdi: { fr: 'CDI', mg: 'CDI' },
       cdd: { fr: 'CDD', mg: 'CDD' },
       stage: { fr: 'Stage', mg: 'Fiofanana' },
       freelance: { fr: 'Freelance', mg: 'Freelance' },
+      benevolat: { fr: 'Bénévolat', mg: 'Asa an-tsitrapo' },
     };
-    return types[type]?.[language === 'fr' ? 'fr' : 'mg'] || type.toUpperCase();
+    const label = types[type]?.[language === 'fr' ? 'fr' : 'mg'];
+    return label || (type ? type.toUpperCase() : '');
   };
 
   return (
-    <Link href={`/jobs/${job.id}`} className="group block bg-white rounded-2xl shadow-md p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-100">
+    <Link href={`/emploi/${job.id}`} className="group block bg-white rounded-2xl shadow-md p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-100">
       {job.isFeatured && (
         <div className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full mb-3">
           <Star className="w-3 h-3" /> {language === 'fr' ? 'À la une' : 'Voasongadina'}
         </div>
       )}
       <h3 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors line-clamp-1">{title}</h3>
-      <p className="text-blue-600 font-medium mb-3 flex items-center gap-1"><Building className="w-4 h-4" /> {job.companyName}</p>
+      <p className="text-blue-600 font-medium mb-3 flex items-center gap-1">
+        <Building className="w-4 h-4" /> {job.companyName}
+      </p>
       <div className="flex flex-wrap gap-2 mb-4">
-        <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">{getJobTypeLabel(job.jobType)}</span>
+        {job.jobType && (
+          <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
+            {getJobTypeLabel(job.jobType)}
+          </span>
+        )}
         {job.location && (
           <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full flex items-center gap-1">
             <MapPin className="w-3 h-3" /> {job.location}
@@ -639,7 +626,7 @@ function JobCard({ job, language }: { job: JobOffer; language: string }) {
         )}
       </div>
       <div className="flex justify-end text-blue-600 font-medium text-sm group-hover:translate-x-1 transition-transform">
-        {language === 'fr' ? 'Voir détails' : 'Jereo ny antsipirihany'} <ArrowRight className="w-3 h-3 ml-1" />
+        {language === 'fr' ? 'Postuler' : 'Mangataka'} <ArrowRight className="w-3 h-3 ml-1" />
       </div>
     </Link>
   );

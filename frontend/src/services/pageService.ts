@@ -1,6 +1,7 @@
 // frontend/src/services/pageService.ts
+// VERSION CORRIGEE - SUPPRESSION DU DOUBLE /api
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
 // ============================================
 // INTERFACES
@@ -82,7 +83,7 @@ export interface PageBackground {
 }
 
 // ============================================
-// VALEURS PAR DÉFAUT - EXPORTÉES
+// VALEURS PAR DEFAUT - EXPORTEES
 // ============================================
 
 export const defaultHero: HeroSection = {
@@ -167,15 +168,15 @@ export const pageIcons: Record<string, string> = {
 
 export const pagesList = [
   { value: 'home', label: 'Accueil', label_mg: 'Fandraisana', icon: 'Home' },
-  { value: 'about', label: 'À propos', label_mg: 'Momba anay', icon: 'Info' },
+  { value: 'about', label: 'A propos', label_mg: 'Momba anay', icon: 'Info' },
   { value: 'projects', label: 'Projets', label_mg: 'Tetikasa', icon: 'FolderOpen' },
   { value: 'jobs', label: 'Offres d\'emploi', label_mg: 'Asa', icon: 'Briefcase' },
-  { value: 'events', label: 'Événements', label_mg: 'Hetsika', icon: 'Calendar' },
+  { value: 'events', label: 'Evenements', label_mg: 'Hetsika', icon: 'Calendar' },
   { value: 'blog', label: 'Blog', label_mg: 'Bitsika', icon: 'Newspaper' },
   { value: 'contact', label: 'Contact', label_mg: 'Fifandraisana', icon: 'Mail' },
   { value: 'donate', label: 'Faire un don', label_mg: 'Hanome', icon: 'Heart' },
-  { value: 'join', label: 'Adhérer', label_mg: 'Hanara-maso', icon: 'UserPlus' },
-  { value: 'volunteers', label: 'Bénévoles', label_mg: 'Mpanao asa soa', icon: 'Users' },
+  { value: 'join', label: 'Adherer', label_mg: 'Hanara-maso', icon: 'UserPlus' },
+  { value: 'volunteers', label: 'Benevoles', label_mg: 'Mpanao asa soa', icon: 'Users' },
   { value: 'partners', label: 'Partenaires', label_mg: 'Mpiara-miasa', icon: 'Handshake' },
 ];
 
@@ -202,23 +203,19 @@ export const pageService = {
   // CONTENU DES PAGES
   // ==========================================
 
-  /**
-   * Récupère toutes les pages (admin uniquement)
-   */
   async getAll(token: string): Promise<PageContent[]> {
-    const response = await fetch(`${API_URL}/api/pages`, {
+    // CORRECTION: API_URL contient deja /api
+    const response = await fetch(`${API_URL}/pages`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) throw new Error('Erreur chargement des pages');
     return response.json();
   },
 
-  /**
-   * Récupère le contenu public d'une page (sans authentification)
-   */
   async getPublic(page: string): Promise<PageContent | null> {
     try {
-      const response = await fetch(`${API_URL}/api/pages/public/${page}`);
+      // CORRECTION: API_URL contient deja /api
+      const response = await fetch(`${API_URL}/pages/public/${page}`);
       if (!response.ok) return null;
       return response.json();
     } catch (error) {
@@ -227,20 +224,15 @@ export const pageService = {
     }
   },
 
-  /**
-   * Récupère une page pour l'administration (avec token)
-   */
   async getForAdmin(page: string, token: string): Promise<PageContent> {
-    const response = await fetch(`${API_URL}/api/pages/${page}`, {
+    // CORRECTION: API_URL contient deja /api
+    const response = await fetch(`${API_URL}/pages/${page}`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) throw new Error('Erreur chargement de la page');
     return response.json();
   },
 
-  /**
-   * Met à jour le contenu d'une page
-   */
   async update(page: string, token: string, data: Partial<PageContent>): Promise<PageContent> {
     const updateData = {
       ...data,
@@ -250,7 +242,8 @@ export const pageService = {
       stats: data.stats || [],
     };
     
-    const response = await fetch(`${API_URL}/api/pages/${page}`, {
+    // CORRECTION: API_URL contient deja /api
+    const response = await fetch(`${API_URL}/pages/${page}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -258,35 +251,30 @@ export const pageService = {
       },
       body: JSON.stringify(updateData),
     });
-    if (!response.ok) throw new Error('Erreur mise à jour de la page');
+    if (!response.ok) throw new Error('Erreur mise a jour de la page');
     return response.json();
   },
 
   // ==========================================
-  // FONDS D'ÉCRAN
+  // FONDS D'ECRAN
   // ==========================================
 
-  /**
-   * Récupère tous les fonds d'écran (admin uniquement)
-   */
   async getAllBackgrounds(token: string): Promise<PageBackground[]> {
-    const response = await fetch(`${API_URL}/api/pages/backgrounds/all`, {
+    // CORRECTION: API_URL contient deja /api
+    const response = await fetch(`${API_URL}/pages/backgrounds/all`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
-    if (!response.ok) throw new Error('Erreur chargement des fonds d\'écran');
+    if (!response.ok) throw new Error('Erreur chargement des fonds d\'ecran');
     return response.json();
   },
 
-  /**
-   * Récupère le fond d'écran d'une page (public)
-   */
   async getBackground(page: string): Promise<PageBackground | null> {
     try {
-      const response = await fetch(`${API_URL}/api/pages/backgrounds/${page}`);
+      // CORRECTION: API_URL contient deja /api (PLUS DE DOUBLE /api)
+      const response = await fetch(`${API_URL}/pages/backgrounds/${page}`);
       if (!response.ok) return null;
       const data = await response.json();
       
-      // S'assurer que les propriétés optionnelles existent
       return {
         ...data,
         mobile_url: data.mobile_url || '',
@@ -294,14 +282,11 @@ export const pageService = {
         alt_text: data.alt_text || '',
       };
     } catch (error) {
-      console.error(`Erreur chargement fond d'écran ${page}:`, error);
+      console.error(`Erreur chargement fond d'ecran ${page}:`, error);
       return null;
     }
   },
 
-  /**
-   * Met à jour le fond d'écran d'une page
-   */
   async updateBackground(page: string, token: string, data: Partial<PageBackground>): Promise<PageBackground> {
     const updateData = { 
       ...defaultBackground, 
@@ -311,7 +296,8 @@ export const pageService = {
       updated_at: new Date().toISOString()
     };
     
-    const response = await fetch(`${API_URL}/api/pages/backgrounds/${page}`, {
+    // CORRECTION: API_URL contient deja /api (PLUS DE DOUBLE /api)
+    const response = await fetch(`${API_URL}/pages/backgrounds/${page}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -319,24 +305,19 @@ export const pageService = {
       },
       body: JSON.stringify(updateData),
     });
-    if (!response.ok) throw new Error('Erreur mise à jour du fond d\'écran');
+    if (!response.ok) throw new Error('Erreur mise a jour du fond d\'ecran');
     return response.json();
   },
 
-  /**
-   * Supprime un fond d'écran par son ID
-   */
   async deleteBackground(id: string, token: string): Promise<void> {
-    const response = await fetch(`${API_URL}/api/pages/backgrounds/${id}`, {
+    // CORRECTION: API_URL contient deja /api
+    const response = await fetch(`${API_URL}/pages/backgrounds/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` },
     });
-    if (!response.ok) throw new Error('Erreur suppression du fond d\'écran');
+    if (!response.ok) throw new Error('Erreur suppression du fond d\'ecran');
   },
 
-  /**
-   * Crée un nouveau fond d'écran
-   */
   async createBackground(token: string, data: Partial<PageBackground>): Promise<PageBackground> {
     const createData = { 
       ...defaultBackground, 
@@ -345,7 +326,8 @@ export const pageService = {
       updated_at: new Date().toISOString()
     };
     
-    const response = await fetch(`${API_URL}/api/pages/backgrounds`, {
+    // CORRECTION: API_URL contient deja /api
+    const response = await fetch(`${API_URL}/pages/backgrounds`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -353,19 +335,13 @@ export const pageService = {
       },
       body: JSON.stringify(createData),
     });
-    if (!response.ok) throw new Error('Erreur création du fond d\'écran');
+    if (!response.ok) throw new Error('Erreur creation du fond d\'ecran');
     return response.json();
   },
 
-  // ==========================================
-  // INITIALISATION
-  // ==========================================
-
-  /**
-   * Initialise les pages par défaut (admin uniquement)
-   */
   async initializePages(token: string): Promise<void> {
-    const response = await fetch(`${API_URL}/api/pages/initialize`, {
+    // CORRECTION: API_URL contient deja /api
+    const response = await fetch(`${API_URL}/pages/initialize`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` },
     });
@@ -374,7 +350,7 @@ export const pageService = {
 };
 
 // ============================================
-// EXPORT PAR DÉFAUT
+// EXPORT PAR DEFAUT
 // ============================================
 
 export default pageService;

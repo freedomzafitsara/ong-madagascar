@@ -1,17 +1,21 @@
+import { PaymentProvider } from '../../../entities/donation.entity';
+
 export class CreateDonationDto {
   amount: number;
-  paymentProvider: string;
-  phoneNumber?: string;
-  projectId?: string | null;
-  donorName?: string;
-  donorEmail?: string;
-  donorPhone?: string;
+  currency?: string;
+  payment_provider: PaymentProvider;
+  phone_number?: string;
+  donor_name?: string;
+  donor_email?: string;
+  donor_phone?: string;
   message?: string;
-  isAnonymous?: boolean;
-  isRecurring?: boolean;
+  is_anonymous?: boolean;
+  is_recurring?: boolean;
+  recurring_interval?: string;
+  project_id?: string;
 }
 
-export class ConfirmPaymentDto {
-  transactionId: string;
-  reference?: string;
+export class ConfirmDonationDto {
+  transaction_id: string;
+  provider: string;
 }

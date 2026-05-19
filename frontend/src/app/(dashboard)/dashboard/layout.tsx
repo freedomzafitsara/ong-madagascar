@@ -1,19 +1,43 @@
 ﻿// frontend/src/app/(dashboard)/dashboard/layout.tsx
+// VERSION FINALE PROFESSIONNELLE - Y-Mad Dashboard Layout
+// COULEURS UNIQUEMENT : BLEU (#3B82F6, #2563EB) et GRIS (#6B7280, #9CA3AF, #F3F4F6)
+
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/dashboard/Sidebar';
-import { Loader2, ChevronDown, User, LogOut, Menu, Settings as SettingsIcon } from 'lucide-react';
+import { 
+  Loader2, ChevronDown, User, LogOut, Menu, 
+  Settings as SettingsIcon, Clock, UserCircle 
+} from 'lucide-react';
 import Link from 'next/link';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+// ============================================================
+// INTERFACE
+// ============================================================
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+// ============================================================
+// COMPOSANT PRINCIPAL
+// ============================================================
+
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { isAuthenticated, loading, user, logout } = useAuth();
   const router = useRouter();
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Sidebar ouverte par défaut sur PC
-  const [currentDateTime, setCurrentDateTime] = useState('');
+  const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+  const [currentDateTime, setCurrentDateTime] = useState<string>('');
+  const [mounted, setMounted] = useState<boolean>(false);
+
+  // Hydratation - éviter les erreurs SSR
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Mise à jour de la date et l'heure
   useEffect(() => {
@@ -27,18 +51,54 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         minute: '2-digit' 
       }));
     };
+    
     updateDateTime();
     const interval = setInterval(updateDateTime, 60000);
+    
     return () => clearInterval(interval);
   }, []);
 
   // Gestion de l'authentification
   useEffect(() => {
-    if (!loading && !isAuthenticated) router.push('/login');
-    if (!loading && user && user.role === 'visitor') router.push('/');
+    if (!loading && !isAuthenticated) {
+      router.push('/login');
+    }
+    if (!loading && user && user.role === 'visitor') {
+      router.push('/');
+    }
   }, [loading, isAuthenticated, router, user]);
 
-  if (loading) {
+  // Fermer le menu profil au clic extérieur
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isProfileOpen && !target.closest('.profile-menu')) {
+        setIsProfileOpen(false);
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [isProfileOpen]);
+
+  // Sauvegarde de l'état de la sidebar
+  useEffect(() => {
+    const savedState = localStorage.getItem('sidebarOpen');
+    if (savedState !== null) {
+      setIsSidebarOpen(savedState === 'true');
+    }
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarOpen(prev => {
+      const newState = !prev;
+      localStorage.setItem('sidebarOpen', String(newState));
+      return newState;
+    });
+  }, []);
+
+  // Affichage pendant le chargement
+  if (loading || !mounted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
@@ -46,76 +106,129 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  if (!isAuthenticated || user?.role === 'visitor') return null;
+  if (!isAuthenticated || user?.role === 'visitor') {
+    return null;
+  }
 
-  const userName = user?.firstName && user?.lastName 
+  const userInitial = user?.firstName?.charAt(0)?.toUpperCase() || 
+                       user?.lastName?.charAt(0)?.toUpperCase() || 
+                       user?.email?.charAt(0)?.toUpperCase() || 'U';
+  
+  const userDisplayName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}` 
-    : user?.email || 'Admin';
+    : user?.email?.split('@')[0] || 'Utilisateur';
+  
+  const userRoleDisplay = user?.role?.replace(/_/g, ' ') || 'Super Admin';
+  const capitalizedRole = userRoleDisplay.charAt(0).toUpperCase() + userRoleDisplay.slice(1);
 
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Sidebar */}
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
-      {/* Header avec bouton burger visible sur TOUS les appareils */}
+      {/* Header */}
       <header className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
         <div className="flex items-center justify-between px-4 py-3">
           
-          {/* ✅ BOUTON MENU BURGER - VISIBLE SUR PC ET MOBILE */}
+          {/* ==================== PARTIE GAUCHE ==================== */}
           <div className="flex items-center gap-3">
+            {/* Bouton menu burger */}
             <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 rounded-lg hover:bg-gray-100 transition"
+              onClick={toggleSidebar}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              aria-label={isSidebarOpen ? "Fermer le menu" : "Ouvrir le menu"}
               title={isSidebarOpen ? "Fermer le menu" : "Ouvrir le menu"}
             >
               <Menu className="w-5 h-5 text-gray-600" />
             </button>
             
+            {/* Logo Y-Mad */}
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">Y</span>
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+                <span className="text-white font-bold text-sm">Y</span>
               </div>
               <div className="hidden lg:block">
-                <h1 className="text-lg font-semibold text-gray-800">Y-Mad Madagascar</h1>
-                <p className="text-xs text-gray-500">Jeunesse Malgache en Action pour le Développement</p>
+                <h1 className="text-base font-semibold text-gray-800">Y-Mad Madagascar</h1>
+                <p className="text-xs text-gray-500">Jeunesse Malgache en Action</p>
               </div>
-              <span className="lg:hidden font-semibold text-gray-800">Y-Mad</span>
+              <span className="lg:hidden font-semibold text-gray-800 text-sm">Y-Mad</span>
             </div>
           </div>
 
-          {/* Date/Heure + Profil */}
+          {/* ==================== PARTIE DROITE ==================== */}
           <div className="flex items-center gap-4">
-            {/* ✅ Date et heure visible sur mobile ET desktop */}
-            <div className="text-sm text-gray-600">{currentDateTime}</div>
+            
+            {/* Date et heure */}
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
+              <Clock className="w-3.5 h-3.5 text-gray-500" />
+              <span className="text-xs text-gray-600 font-medium">{currentDateTime}</span>
+            </div>
+            
+            {/* Version mobile - icône seulement */}
+            <div className="sm:hidden">
+              <Clock className="w-4 h-4 text-gray-500" />
+            </div>
             
             {/* Menu profil */}
-            <div className="relative">
+            <div className="relative profile-menu">
               <button
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                aria-label="Menu profil"
               >
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-semibold">{userName.charAt(0).toUpperCase()}</span>
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shadow-sm">
+                  <span className="text-white text-sm font-semibold">{userInitial}</span>
                 </div>
-                <span className="hidden md:block text-sm font-medium text-gray-700">{userName}</span>
+                <span className="hidden md:block text-sm font-medium text-gray-700">{userDisplayName}</span>
                 <ChevronDown className="w-4 h-4 text-gray-500 hidden md:block" />
               </button>
 
+              {/* Dropdown profil */}
               {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 animate-fadeIn">
+                  {/* Informations utilisateur */}
                   <div className="px-4 py-3 border-b border-gray-100">
-                    <p className="text-sm font-semibold text-gray-800">{userName}</p>
-                    <p className="text-xs text-gray-500 capitalize">{user?.role?.replace('_', ' ') || 'Super Admin'}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center shadow-sm">
+                        <span className="text-white font-semibold">{userInitial}</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">{userDisplayName}</p>
+                        <p className="text-xs text-gray-500 capitalize">{capitalizedRole}</p>
+                      </div>
+                    </div>
                   </div>
-                  <Link href="/dashboard/profile" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition">
-                    <User className="w-4 h-4" /> Mon profil
+                  
+                  {/* Actions */}
+                  <Link 
+                    href="/dashboard/profile" 
+                    onClick={() => setIsProfileOpen(false)} 
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <UserCircle className="w-4 h-4 text-gray-500" />
+                    Mon profil
                   </Link>
-                  <Link href="/dashboard/settings" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition">
-                    <SettingsIcon className="w-4 h-4" /> Paramètres
+                  
+                  <Link 
+                    href="/dashboard/settings" 
+                    onClick={() => setIsProfileOpen(false)} 
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <SettingsIcon className="w-4 h-4 text-gray-500" />
+                    Paramètres
                   </Link>
+                  
+                  {/* Déconnexion */}
                   <div className="border-t border-gray-100 mt-1 pt-1">
-                    <button onClick={() => { logout(); setIsProfileOpen(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition">
-                      <LogOut className="w-4 h-4" /> Déconnexion
+                    <button 
+                      onClick={() => { 
+                        logout(); 
+                        setIsProfileOpen(false); 
+                      }} 
+                      className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Déconnexion
                     </button>
                   </div>
                 </div>
@@ -126,9 +239,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </header>
 
       {/* Contenu principal */}
-      <main className="p-5 lg:p-8">
+      <main className="p-4 lg:p-6">
         {children}
       </main>
+
+      {/* ==================== STYLES GLOBAUX ==================== */}
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

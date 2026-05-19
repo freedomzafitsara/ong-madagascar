@@ -1,3 +1,7 @@
+// backend/create-super-admin.ts
+// SCRIPT D'INITIALISATION DU SUPER ADMIN Y-MAD
+// Conforme au Cahier des Charges - Sections 4.1, 4.13, 9
+
 import { Client } from 'pg';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -11,6 +15,28 @@ const client = new Client({
   database: process.env.DB_DATABASE || 'ymad_db',
 });
 
+// Informations réelles de l'association Y-Mad
+const ASSOCIATION_INFO = {
+  name: 'Y-Mad',
+  fullName: 'Youthful Madagascar',
+  slogan: 'Ensemble, construisons le Madagascar de demain',
+  address: 'Carion, Antananarivo, Madagascar',
+  phone: '+261 32 04 856 97',
+  email: 'ymad.mg@gmail.com',
+  website: 'https://y-mad.mg',
+};
+
+// Configuration du compte Super Admin
+const SUPER_ADMIN_CONFIG = {
+  email: 'admin@ymad.mg',
+  password: 'admin123',
+  firstName: 'Jean',
+  lastName: 'Rakoto',
+  phone: '+261 32 04 856 97',
+  bio: 'Administrateur principal de l association Y-Mad - Youthful Madagascar',
+  region: 'Analamanga',
+};
+
 // Fonction pour générer un token de sécurité unique
 function generateSecureToken(): string {
   return crypto.randomBytes(32).toString('hex');
@@ -18,15 +44,26 @@ function generateSecureToken(): string {
 
 // Fonction principale d'initialisation du Super Admin
 async function initSuperAdmin() {
+  console.log('');
   console.log('============================================================');
-  console.log('INITIALISATION DU SUPER ADMIN - Y-MAD');
+  console.log('Y-Mad - Youthful Madagascar');
+  console.log('============================================================');
+  console.log('Association : ' + ASSOCIATION_INFO.fullName);
+  console.log('Slogan      : ' + ASSOCIATION_INFO.slogan);
+  console.log('Adresse     : ' + ASSOCIATION_INFO.address);
+  console.log('Contact     : ' + ASSOCIATION_INFO.phone + ' / ' + ASSOCIATION_INFO.email);
+  console.log('============================================================');
+  console.log('INITIALISATION DU COMPTE ADMINISTRATEUR');
   console.log('============================================================');
   console.log('');
 
   try {
     // Étape 1 : Connexion à PostgreSQL
     await client.connect();
-    console.log('SUCCES : Connexion à PostgreSQL établie');
+    console.log('SUCCES : Connexion à PostgreSQL etablie');
+    console.log('  - Base de donnees : ' + (process.env.DB_DATABASE || 'ymad_db'));
+    console.log('  - Hote           : ' + (process.env.DB_HOST || 'localhost'));
+    console.log('');
 
     // Étape 2 : Vérifier l'existence de la table users
     const tableCheck = await client.query(`
@@ -37,46 +74,43 @@ async function initSuperAdmin() {
     `);
     
     if (!tableCheck.rows[0].exists) {
-      console.log('ERREUR : La table "users" n\'existe pas.');
-      console.log('ACTION : Veuillez d\'abord exécuter les migrations de base de données.');
+      console.log('ERREUR : La table "users" n existe pas.');
+      console.log('ACTION : Veuillez d abord executer le fichier database-schema.sql');
       return;
     }
-
-    // Étape 3 : Vérifier les super admins existants
-    const existingAdmins = await client.query(`
-      SELECT id, email, role, is_active FROM users WHERE role = 'super_admin'
-    `);
     
-    console.log('Resultat : ' + existingAdmins.rows.length + ' super admin(s) existant(s)');
+    console.log('SUCCES : Table "users" trouvee');
+    console.log('');
 
-    if (existingAdmins.rows.length > 0) {
+    // Étape 3 : Vérifier si l'admin existe déjà
+    const existingAdmin = await client.query(`
+      SELECT id, email, role, is_active, first_name, last_name 
+      FROM users 
+      WHERE email = $1
+    `, [SUPER_ADMIN_CONFIG.email]);
+    
+    if (existingAdmin.rows.length > 0) {
+      const admin = existingAdmin.rows[0];
+      console.log('Information : Un compte existe deja avec cet email');
+      console.log('  - Email      : ' + admin.email);
+      console.log('  - Nom        : ' + admin.first_name + ' ' + admin.last_name);
+      console.log('  - Role actuel: ' + admin.role);
+      console.log('  - Statut     : ' + (admin.is_active ? 'Actif' : 'Inactif'));
       console.log('');
-      console.log('Attention : Super admin(s) existant(s) :');
-      for (const admin of existingAdmins.rows) {
-        const statut = admin.is_active ? 'actif' : 'inactif';
-        console.log('  - ' + admin.email + ' (' + statut + ')');
-      }
+      console.log('Mise a jour du compte en super_admin...');
+      console.log('');
+    } else {
+      console.log('Creation d un nouveau compte super_admin...');
+      console.log('');
     }
 
-    // Étape 4 : Configuration du super admin (via variables d'environnement ou valeurs par défaut)
-    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'super@ymad.mg';
-    const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || 'Y-Mad@2025#SuperAdmin!';
-    const superAdminFirstName = process.env.SUPER_ADMIN_FIRST_NAME || 'Super';
-    const superAdminLastName = process.env.SUPER_ADMIN_LAST_NAME || 'Admin';
-    
-    // Validation de la sécurité du mot de passe
-    if (superAdminPassword.length < 12) {
-      console.log('ERREUR : Le mot de passe doit contenir au moins 12 caracteres.');
-      return;
-    }
-
-    // Étape 5 : Hashage du mot de passe avec Bcrypt
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(superAdminPassword, saltRounds);
+    // Étape 4 : Hashage du mot de passe avec Bcrypt
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(SUPER_ADMIN_CONFIG.password, saltRounds);
     const verificationToken = generateSecureToken();
     const resetToken = generateSecureToken();
 
-    // Étape 6 : Creation ou mise a jour du super admin
+    // Étape 5 : Creation ou mise à jour du super admin
     const result = await client.query(`
       INSERT INTO users (
         id, 
@@ -85,6 +119,8 @@ async function initSuperAdmin() {
         first_name, 
         last_name, 
         phone,
+        bio,
+        region,
         role, 
         is_active, 
         email_verified,
@@ -101,28 +137,37 @@ async function initSuperAdmin() {
         $3, 
         $4, 
         $5,
-        $6, 
+        $6,
+        $7,
+        $8, 
         true, 
         true,
-        $7,
-        $8,
+        $9,
+        $10,
         NOW() + INTERVAL '24 hours',
         0,
         NOW(), 
         NOW()
       ) ON CONFLICT (email) DO UPDATE SET 
         password = EXCLUDED.password,
+        first_name = EXCLUDED.first_name,
+        last_name = EXCLUDED.last_name,
+        phone = EXCLUDED.phone,
+        bio = EXCLUDED.bio,
+        region = EXCLUDED.region,
         role = 'super_admin',
         is_active = true,
         email_verified = true,
         updated_at = NOW()
-      RETURNING id, email, role, created_at
+      RETURNING id, email, role, first_name, last_name, created_at, updated_at
     `, [
-      superAdminEmail, 
+      SUPER_ADMIN_CONFIG.email, 
       hashedPassword, 
-      superAdminFirstName, 
-      superAdminLastName,
-      '+261340000000',
+      SUPER_ADMIN_CONFIG.firstName, 
+      SUPER_ADMIN_CONFIG.lastName,
+      SUPER_ADMIN_CONFIG.phone,
+      SUPER_ADMIN_CONFIG.bio,
+      SUPER_ADMIN_CONFIG.region,
       'super_admin',
       verificationToken,
       resetToken
@@ -135,52 +180,95 @@ async function initSuperAdmin() {
     }
 
     const admin = result.rows[0];
-
-    // Étape 7 : Enregistrement dans le journal d'audit
-    await client.query(`
-      INSERT INTO audit_logs (
-        id, user_id, action, entity_type, entity_id, 
-        old_data, new_data, ip_address, user_agent, created_at
-      ) VALUES (
-        gen_random_uuid(), 
-        $1, 
-        'CREATE', 
-        'users', 
-        $2,
-        NULL,
-        $3,
-        '127.0.0.1',
-        'system-script',
-        NOW()
-      )
-    `, [admin.id, admin.id, JSON.stringify({ email: admin.email, role: 'super_admin' })]);
+    
+    // Étape 6 : Verifier si la table audit_logs existe
+    const auditTableCheck = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'audit_logs'
+      );
+    `);
+    
+    if (auditTableCheck.rows[0].exists) {
+      // Enregistrement dans le journal d'audit
+      await client.query(`
+        INSERT INTO audit_logs (
+          id, user_id, action, entity_type, entity_id, 
+          old_data, new_data, ip_address, user_agent, created_at
+        ) VALUES (
+          gen_random_uuid(), 
+          $1, 
+          'CREATE_OR_UPDATE', 
+          'users', 
+          $2,
+          NULL,
+          $3,
+          '127.0.0.1',
+          'system-init-script',
+          NOW()
+        )
+      `, [admin.id, admin.id, JSON.stringify({ 
+        email: admin.email, 
+        role: 'super_admin',
+        first_name: admin.first_name,
+        last_name: admin.last_name,
+        action: 'Initialisation du compte administrateur'
+      })]);
+      console.log('SUCCES : Entree ajoutee dans le journal d audit');
+    }
 
     // Affichage des résultats
     console.log('');
     console.log('============================================================');
-    console.log('SUCCES : Super Admin cree ou mis a jour avec succes');
+    console.log('COMPTE ADMINISTRATEUR CONFIGURE AVEC SUCCES');
     console.log('============================================================');
     console.log('');
-    console.log('IDENTIFIANTS DE CONNEXION :');
+    console.log('INFORMATIONS DE L ASSOCIATION :');
+    console.log('------------------------------------------------------------');
+    console.log('  Association : ' + ASSOCIATION_INFO.fullName);
+    console.log('  Adresse     : ' + ASSOCIATION_INFO.address);
+    console.log('  Telephone   : ' + ASSOCIATION_INFO.phone);
+    console.log('  Email       : ' + ASSOCIATION_INFO.email);
+    console.log('  Site web    : ' + ASSOCIATION_INFO.website);
+    console.log('------------------------------------------------------------');
+    console.log('');
+    console.log('IDENTIFIANTS DE CONNEXION ADMINISTRATEUR :');
     console.log('------------------------------------------------------------');
     console.log('  Email        : ' + admin.email);
-    console.log('  Mot de passe : ' + superAdminPassword);
+    console.log('  Mot de passe : ' + SUPER_ADMIN_CONFIG.password);
     console.log('  Role         : ' + admin.role);
+    console.log('  Nom complet  : ' + admin.first_name + ' ' + admin.last_name);
     console.log('  ID           : ' + admin.id);
     console.log('  Date creation: ' + admin.created_at);
     console.log('------------------------------------------------------------');
     console.log('');
-    console.log('CONSEIL : Conservez ces identifiants dans un endroit sur.');
-    console.log('         Ne les partagez jamais et changez le mot de passe regulierement.');
+    console.log('ACCES AU DASHBOARD ADMINISTRATION :');
+    console.log('------------------------------------------------------------');
+    console.log('  URL dashboard : http://localhost:3000/dashboard');
+    console.log('  URL API       : http://localhost:4001/api');
+    console.log('  Documentation : http://localhost:4001/api/docs');
+    console.log('------------------------------------------------------------');
+    console.log('');
+    console.log('CONSEILS DE SECURITE :');
+    console.log('------------------------------------------------------------');
+    console.log('  1. Changez ce mot de passe apres la premiere connexion');
+    console.log('  2. Utilisez toujours HTTPS en production');
+    console.log('  3. Ne partagez jamais ces identifiants');
+    console.log('  4. Activez la verification par email');
+    console.log('  5. Consultez regulierement le journal d audit');
+    console.log('------------------------------------------------------------');
     console.log('');
 
-    // Étape 8 : Afficher les statistiques des utilisateurs
+    // Étape 7 : Afficher les statistiques des utilisateurs
     const stats = await client.query(`
       SELECT 
         COUNT(*) as total_users,
         COUNT(CASE WHEN role = 'super_admin' THEN 1 END) as super_admins,
         COUNT(CASE WHEN role = 'admin' THEN 1 END) as admins,
-        COUNT(CASE WHEN role = 'member' THEN 1 END) as members
+        COUNT(CASE WHEN role = 'staff' THEN 1 END) as staff,
+        COUNT(CASE WHEN role = 'member' THEN 1 END) as members,
+        COUNT(CASE WHEN role = 'volunteer' THEN 1 END) as volunteers,
+        COUNT(CASE WHEN role = 'partner' THEN 1 END) as partners
       FROM users
     `);
     
@@ -189,7 +277,10 @@ async function initSuperAdmin() {
     console.log('  Total utilisateurs : ' + stats.rows[0].total_users);
     console.log('  Super admins       : ' + stats.rows[0].super_admins);
     console.log('  Admins             : ' + stats.rows[0].admins);
+    console.log('  Staff              : ' + stats.rows[0].staff);
     console.log('  Membres            : ' + stats.rows[0].members);
+    console.log('  Benevoles          : ' + stats.rows[0].volunteers);
+    console.log('  Partenaires        : ' + stats.rows[0].partners);
     console.log('============================================================');
     console.log('');
 
@@ -202,7 +293,10 @@ async function initSuperAdmin() {
     
     if (error.code === '42P01') {
       console.log('  Cause   : La table "users" n existe pas.');
-      console.log('  Action  : Executez d abord les migrations SQL.');
+      console.log('  Action  : Executez d abord le fichier database-schema.sql');
+    } else if (error.code === '28P01') {
+      console.log('  Cause   : Erreur d authentification PostgreSQL');
+      console.log('  Action  : Verifiez vos identifiants dans le fichier .env');
     }
     console.log('------------------------------------------------------------');
     console.log('');

@@ -1,76 +1,76 @@
-import { 
-  Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, 
-  UpdateDateColumn, ManyToOne, JoinColumn, Index 
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from './user.entity';
+import { JobApplication } from './job-application.entity';
 
 export enum JobType {
   CDI = 'cdi',
   CDD = 'cdd',
   STAGE = 'stage',
   FREELANCE = 'freelance',
-  VOLUNTEER = 'volunteer',
+  BENEVOLAT = 'benevolat'
 }
 
 export enum JobStatus {
   DRAFT = 'draft',
   PUBLISHED = 'published',
   CLOSED = 'closed',
-  EXPIRED = 'expired',
+  EXPIRED = 'expired'
 }
 
 @Entity('job_offers')
-@Index(['status'])
-@Index(['jobType'])
-@Index(['sector'])
 export class JobOffer {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ length: 255 })
   title: string;
 
-  @Column({ nullable: true })
+  @Column({ length: 255, nullable: true })
   title_mg: string;
 
-  @Column('text')
+  @Column({ type: 'text' })
   description: string;
 
-  @Column('text', { nullable: true })
+  @Column({ type: 'text', nullable: true })
   description_mg: string;
 
-  @Column({ name: 'company_name' })
-  companyName: string;
+  @Column({ length: 255 })
+  company_name: string;
 
-  @Column({ nullable: true })
+  @Column({ length: 500, nullable: true })
+  company_logo: string;
+
+  @Column({ length: 255, nullable: true })
+  company_website: string;
+
+  @Column({ length: 255, nullable: true })
   location: string;
 
-  @Column({ nullable: true })
+  @Column({ length: 100, nullable: true })
   region: string;
 
-  // ✅ CORRECTION : Utiliser le nom exact de la colonne dans la base
-  @Column({ name: 'job_type', type: 'varchar', default: JobType.CDI })
-  jobType: string;
+  @Column({ type: 'varchar', length: 50 })
+  job_type: string;
 
-  @Column({ nullable: true })
-  salary: string;
-
-  @Column({ nullable: true })
+  @Column({ length: 100, nullable: true })
   sector: string;
+
+  @Column({ length: 100, nullable: true })
+  salary: string;
 
   @Column({ type: 'text', nullable: true })
   requirements: string;
 
-  @Column({ nullable: true })
-  contact_email: string;
+  @Column({ type: 'text', nullable: true })
+  requirements_mg: string;
 
-  @Column({ nullable: true })
-  contact_phone: string;
+  @Column({ type: 'text', nullable: true })
+  benefits: string;
 
-  @Column({ type: 'date' })
+  @Column({ type: 'date', nullable: true })
   deadline: Date;
 
-  @Column({ type: 'varchar', default: JobStatus.DRAFT })
+  @Column({ type: 'varchar', length: 50, default: 'draft' })
   status: string;
 
   @Column({ default: 0 })
@@ -79,16 +79,27 @@ export class JobOffer {
   @Column({ default: false })
   is_featured: boolean;
 
-  @Column({ name: 'created_by', nullable: true })
-  createdBy: string;
+  @Column({ type: 'uuid', nullable: true })
+  created_by: string;
+
+  @Column({ length: 255, nullable: true })
+  contact_email: string;
+
+  @Column({ length: 50, nullable: true })
+  contact_phone: string;
+
+  @CreateDateColumn()
+  created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'created_by' })
   creator: User;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  @OneToMany(() => JobApplication, (application) => application.jobOffer)
+  applications: JobApplication[];
+  @Column({ length: 500, nullable: true })
+image_url: string;  // ← Image de couverture de l'offre
 }

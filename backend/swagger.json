@@ -844,7 +844,7 @@
     },
     "/api/events": {
       "post": {
-        "operationId": "EventsController_createEvent",
+        "operationId": "EventsController_create",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -858,9 +858,24 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Evenement cree avec succes"
+          },
+          "400": {
+            "description": "Donnees invalides"
+          },
+          "401": {
+            "description": "Non authentifie"
+          },
+          "403": {
+            "description": "Acces refuse"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Creer un nouvel evenement",
         "tags": [
           "Events"
         ]
@@ -870,33 +885,143 @@
         "parameters": [
           {
             "name": "page",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Numero de page",
             "schema": {
-              "type": "number"
-            }
-          },
-          {
-            "name": "limit",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "number"
-            }
-          },
-          {
-            "name": "type",
-            "required": true,
-            "in": "query",
-            "schema": {
+              "example": 1,
               "type": "string"
             }
           },
           {
-            "name": "region",
-            "required": true,
+            "name": "limit",
+            "required": false,
             "in": "query",
+            "description": "Nombre par page",
             "schema": {
+              "example": 10,
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Type d evenement",
+            "schema": {
+              "example": "workshop",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Statut",
+            "schema": {
+              "example": "published",
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Recherche",
+            "schema": {
+              "example": "leadership",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste recuperee avec succes"
+          }
+        },
+        "summary": "Liste des evenements",
+        "tags": [
+          "Events"
+        ]
+      }
+    },
+    "/api/events/public": {
+      "get": {
+        "operationId": "EventsController_findPublic",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Numero de page",
+            "schema": {
+              "example": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Nombre par page",
+            "schema": {
+              "example": 9,
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Type d evenement",
+            "schema": {
+              "example": "workshop",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste recuperee avec succes"
+          }
+        },
+        "summary": "Liste publique des evenements a venir",
+        "tags": [
+          "Events"
+        ]
+      }
+    },
+    "/api/events/stats": {
+      "get": {
+        "operationId": "EventsController_getStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Statistiques recuperees"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Statistiques des evenements",
+        "tags": [
+          "Events"
+        ]
+      }
+    },
+    "/api/events/upcoming": {
+      "get": {
+        "operationId": "EventsController_getUpcomingEvents",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Nombre maximum",
+            "schema": {
+              "example": 5,
               "type": "string"
             }
           }
@@ -906,6 +1031,7 @@
             "description": ""
           }
         },
+        "summary": "Evenements a venir",
         "tags": [
           "Events"
         ]
@@ -919,6 +1045,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "UUID de l evenement",
             "schema": {
               "type": "string"
             }
@@ -926,81 +1053,151 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Evenement trouve"
+          },
+          "404": {
+            "description": "Evenement non trouve"
           }
         },
+        "summary": "Details d un evenement",
         "tags": [
           "Events"
         ]
       },
-      "put": {
-        "operationId": "EventsController_updateEvent",
+      "patch": {
+        "operationId": "EventsController_update",
         "parameters": [
           {
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "UUID de l evenement",
             "schema": {
               "type": "string"
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Events"
-        ]
-      },
-      "delete": {
-        "operationId": "EventsController_deleteEvent",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Events"
-        ]
-      }
-    },
-    "/api/events/register": {
-      "post": {
-        "operationId": "EventsController_register",
-        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RegisterToEventDto"
+                "$ref": "#/components/schemas/UpdateEventDto"
               }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "Evenement mis a jour"
+          },
+          "404": {
+            "description": "Evenement non trouve"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mettre a jour un evenement",
+        "tags": [
+          "Events"
+        ]
+      },
+      "delete": {
+        "operationId": "EventsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID de l evenement",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evenement supprime"
+          },
+          "404": {
+            "description": "Evenement non trouve"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Supprimer un evenement",
         "tags": [
           "Events"
         ]
       }
     },
-    "/api/events/my-registrations": {
+    "/api/events/{id}/status": {
+      "patch": {
+        "operationId": "EventsController_changeStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID de l evenement",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Changer le statut d un evenement",
+        "tags": [
+          "Events"
+        ]
+      }
+    },
+    "/api/events/{id}/register": {
+      "post": {
+        "operationId": "EventsController_register",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID de l evenement",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "S'inscrire a un evenement",
+        "tags": [
+          "Events"
+        ]
+      }
+    },
+    "/api/events/my/registrations": {
       "get": {
         "operationId": "EventsController_getMyRegistrations",
         "parameters": [],
@@ -1009,6 +1206,12 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mes inscriptions",
         "tags": [
           "Events"
         ]
@@ -1022,6 +1225,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "UUID de l evenement",
             "schema": {
               "type": "string"
             }
@@ -1032,6 +1236,42 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liste des inscriptions a un evenement",
+        "tags": [
+          "Events"
+        ]
+      }
+    },
+    "/api/events/{eventId}/register": {
+      "delete": {
+        "operationId": "EventsController_cancelRegistration",
+        "parameters": [
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "description": "UUID de l evenement",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Annuler mon inscription",
         "tags": [
           "Events"
         ]
@@ -1922,12 +2162,12 @@
   },
   "info": {
     "title": "Y-Mad API",
-    "description": "\n      API complete du site Y-Mad (Youthful Madagascar)\n\n      Fonctionnalites principales :\n      - Authentification (7 roles: super_admin, admin, staff, member, volunteer, partner, visitor)\n      - Gestion des membres avec cartes QR\n      - Projets et indicateurs d'impact\n      - Evenements avec inscriptions et QR codes\n      - Module emploi (offres et candidatures)\n      - Dons Mobile Money (MVola, Orange Money)\n      - Blog bilingue (Francais/Malagasy)\n      - Gestion dynamique des pages\n      - Journal d'audit complet\n    ",
+    "description": "\n      API complete du site Y-Mad (Youthful Madagascar)\n\n      INFORMATIONS DE CONTACT:\n      - Adresse: Carion, Antananarivo, Madagascar\n      - Telephone: +261 32 04 856 97\n      - Email: ymad.mg@gmail.com\n    ",
     "version": "1.0.0",
     "contact": {
       "name": "Y-Mad Association",
       "url": "https://y-mad.mg",
-      "email": "contact@y-mad.mg"
+      "email": "ymad.mg@gmail.com"
     },
     "license": {
       "name": "MIT",
@@ -1937,39 +2177,19 @@
   "tags": [
     {
       "name": "Auth",
-      "description": "Authentification et gestion des utilisateurs"
+      "description": "Authentification"
     },
     {
       "name": "Members",
-      "description": "Gestion des adhesions et cartes membres"
-    },
-    {
-      "name": "Projects",
-      "description": "Gestion des projets Y-Mad"
+      "description": "Membres"
     },
     {
       "name": "Jobs",
-      "description": "Module emploi - Offres et candidatures"
+      "description": "Emploi"
     },
     {
       "name": "Events",
-      "description": "Gestion des evenements et inscriptions"
-    },
-    {
-      "name": "Donations",
-      "description": "Gestion des dons et paiements"
-    },
-    {
-      "name": "Blog",
-      "description": "Articles et actualites"
-    },
-    {
-      "name": "Pages",
-      "description": "Gestion dynamique du contenu"
-    },
-    {
-      "name": "Upload",
-      "description": "Upload de fichiers"
+      "description": "Evenements"
     }
   ],
   "servers": [],
@@ -1979,7 +2199,7 @@
         "scheme": "bearer",
         "bearerFormat": "JWT",
         "type": "http",
-        "description": "Entrez votre token JWT obtenu via /api/auth/login"
+        "description": "Entrez votre token JWT"
       }
     },
     "schemas": {
@@ -2124,11 +2344,160 @@
       },
       "CreateEventDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Titre de l'événement (français)"
+          },
+          "title_mg": {
+            "type": "string",
+            "description": "Titre de l'événement (malagasy)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description de l'événement (français)"
+          },
+          "description_mg": {
+            "type": "string",
+            "description": "Description de l'événement (malagasy)"
+          },
+          "type": {
+            "type": "string",
+            "description": "Type d'événement",
+            "enum": [
+              "camp",
+              "workshop",
+              "hackathon",
+              "conference",
+              "formation"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "Statut de l'événement",
+            "default": "draft"
+          },
+          "location": {
+            "type": "string",
+            "description": "Lieu de l'événement"
+          },
+          "region": {
+            "type": "string",
+            "description": "Région de l'événement"
+          },
+          "startDate": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Date de début"
+          },
+          "endDate": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Date de fin"
+          },
+          "maxCapacity": {
+            "type": "number",
+            "description": "Capacité maximale"
+          },
+          "isFree": {
+            "type": "boolean",
+            "description": "Événement gratuit ?",
+            "default": true
+          },
+          "price": {
+            "type": "number",
+            "description": "Prix en Ariary",
+            "default": 0
+          },
+          "imageUrl": {
+            "type": "string",
+            "description": "URL de l'image"
+          },
+          "galleryImages": {
+            "description": "Images de la galerie",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "program": {
+            "type": "string",
+            "description": "Programme détaillé"
+          },
+          "speakers": {
+            "type": "string",
+            "description": "Intervenants"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "type",
+          "location",
+          "startDate",
+          "isFree"
+        ]
       },
-      "RegisterToEventDto": {
+      "UpdateEventDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "title_mg": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "description_mg": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "startDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "endDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "maxCapacity": {
+            "type": "number"
+          },
+          "isFree": {
+            "type": "boolean"
+          },
+          "price": {
+            "type": "number"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "galleryImages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "program": {
+            "type": "string"
+          },
+          "speakers": {
+            "type": "string"
+          }
+        }
       },
       "CreateJobOfferDto": {
         "type": "object",

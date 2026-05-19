@@ -4,15 +4,20 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { pageService, PageBackground } from '@/services/pageService';
+import { projectsApi } from '@/lib/api';
 import { 
   Heart, Sparkles, Gift, Shield, TrendingUp, Users, 
   TreePine, BookOpen, HandHeart, ArrowRight, CheckCircle,
   Smartphone, Building, CreditCard, Loader2, AlertCircle,
   ChevronRight, Target, Globe, Leaf
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-// Types pour les projets
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+
+// Types
 interface Project {
   id: string;
   title: string;
@@ -23,11 +28,22 @@ interface Project {
   progress?: number;
 }
 
+interface DonationResponse {
+  success: boolean;
+  data?: {
+    id: string;
+    transaction_id: string;
+    amount: number;
+  };
+  message?: string;
+}
+
 // Montants de don proposes
 const donationAmounts = [5000, 10000, 25000, 50000, 100000];
 
 export default function DonatePage() {
   const { language } = useLanguage();
+  const { user, token, isAuthenticated } = useAuth();
   const router = useRouter();
   const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
@@ -42,38 +58,29 @@ export default function DonatePage() {
   const [isAnonymous, setIsAnonymous] = useState<boolean>(false);
   const [isRecurring, setIsRecurring] = useState<boolean>(false);
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
-  const [featuredProjects, setFeaturedProjects] = useState<Project[]>([
-    {
-      id: 'education',
-      title: 'Education pour tous',
-      title_mg: 'Fampianarana ho an\'ny rehetra',
-      description: 'Soutenir l education des jeunes defavorises',
-      description_mg: 'Fanohanana ny fampianarana ho an\'ny tanora sahirana',
-      progress: 65
-    },
-    {
-      id: 'environment',
-      title: 'Reforestation',
-      title_mg: 'Fambolena hazo',
-      description: 'Lutter contre la deforestation',
-      description_mg: 'Miady amin\'ny fanapahana hazo tafahoatra',
-      progress: 40
-    },
-    {
-      id: 'health',
-      title: 'Sante communautaire',
-      title_mg: 'Fahasalamana',
-      description: 'Acces aux soins pour tous',
-      description_mg: 'Fahafahana miditra amin\'ny fitsaboana ho an\'ny rehetra',
-      progress: 30
-    }
-  ]);
+  const [donationAmount, setDonationAmount] = useState<number>(0);
+  const [featuredProjects, setFeaturedProjects] = useState<Project[]>([]);
+  const [stats, setStats] = useState({
+    total_donations: 12450,
+    projects_completed: 50,
+    trees_planted: 15780,
+    beneficiaries: 12450
+  });
 
   useEffect(() => {
     loadPageBackground();
+    loadFeaturedProjects();
+    loadDonationStats();
+    
+    if (isAuthenticated && user) {
+      const firstName = (user as any).firstName || (user as any).first_name || '';
+      const lastName = (user as any).lastName || (user as any).last_name || '';
+      const userEmail = (user as any).email || '';
+      setFullName(`${firstName} ${lastName}`.trim());
+      setEmail(userEmail);
+    }
   }, []);
 
-  // Chargement du fond d ecran depuis l espace super-admin
   const loadPageBackground = async () => {
     try {
       const background = await pageService.getBackground('donate');
@@ -85,12 +92,59 @@ export default function DonatePage() {
     }
   };
 
+  const loadFeaturedProjects = async () => {
+    try {
+      const response = await projectsApi.getFeatured();
+      if (response && response.data) {
+        setFeaturedProjects(response.data.slice(0, 3));
+      } else {
+        setFeaturedProjects([
+          {
+            id: 'education',
+            title: 'Education pour tous',
+            title_mg: 'Fampianarana ho an\'ny rehetra',
+            description: 'Soutenir l education des jeunes defavorises',
+            description_mg: 'Fanohanana ny fampianarana ho an\'ny tanora sahirana',
+            progress: 65
+          },
+          {
+            id: 'environment',
+            title: 'Reforestation',
+            title_mg: 'Fambolena hazo',
+            description: 'Lutter contre la deforestation',
+            description_mg: 'Miady amin\'ny fanapahana hazo tafahoatra',
+            progress: 40
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Erreur chargement projets:', error);
+    }
+  };
+
+  const loadDonationStats = async () => {
+    try {
+      const response = await fetch(`${API_URL}/donations/stats/all`);
+      const data = await response.json();
+      if (data && data.totalAmount) {
+        setStats({
+          total_donations: Math.floor(data.totalAmount / 1000),
+          projects_completed: 50,
+          trees_planted: 15780,
+          beneficiaries: Math.floor(data.totalAmount / 500)
+        });
+      }
+    } catch (error) {
+      console.error('Erreur chargement stats:', error);
+    }
+  };
+
   const getText = (frText: string, mgText: string): string => {
     return language === 'fr' ? frText : mgText;
   };
 
   const getDisplayAmount = (amount: number): string => {
-    return `${amount.toLocaleString()} MGA`;
+    return `${amount.toLocaleString()} Ar`;
   };
 
   const handleAmountSelect = (amount: number) => {
@@ -115,71 +169,102 @@ export default function DonatePage() {
     
     const finalAmount = getFinalAmount();
     if (finalAmount < 1000) {
-      alert(getText('Le montant minimum est de 1 000 MGA', 'Ny vola farafahakeliny dia 1 000 Ar'));
+      toast.error(getText('Le montant minimum est de 1 000 Ar', 'Ny vola farafahakeliny dia 1 000 Ar'));
       return;
     }
 
     if (!isAnonymous && (!fullName || !email)) {
-      alert(getText('Veuillez remplir votre nom et email', 'Fenoy ny anaranao sy ny mailakao'));
+      toast.error(getText('Veuillez remplir votre nom et email', 'Fenoy ny anaranao sy ny mailakao'));
       return;
     }
 
-    if ((paymentMethod === 'mvola' || paymentMethod === 'orange_money' || paymentMethod === 'airtel') && !phoneNumber) {
-      alert(getText('Veuillez entrer votre numero de telephone', 'Ampidiro ny laharana telefaoninao'));
+    if ((paymentMethod === 'mvola' || paymentMethod === 'orange_money' || paymentMethod === 'airtel_money') && !phoneNumber) {
+      toast.error(getText('Veuillez entrer votre numero de telephone', 'Ampidiro ny laharana telefaoninao'));
       return;
     }
 
     setIsLoading(true);
+    setDonationAmount(finalAmount);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setShowSuccess(true);
-      setTimeout(() => {
-        router.push('/');
-      }, 3000);
+      const donationData = {
+        amount: finalAmount,
+        payment_provider: paymentMethod,
+        phone_number: phoneNumber || undefined,
+        donor_name: !isAnonymous ? fullName : undefined,
+        donor_email: !isAnonymous ? email : undefined,
+        message: message || undefined,
+        is_anonymous: isAnonymous,
+        is_recurring: isRecurring,
+        project_id: selectedProject || undefined
+      };
+
+      const url = isAuthenticated ? `${API_URL}/donations/auth` : `${API_URL}/donations`;
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(donationData)
+      });
+      
+      const data: DonationResponse = await response.json();
+      
+      if (response.ok) {
+        setShowSuccess(true);
+        toast.success(getText('Merci pour votre generosite !', 'Misaotra tamin\'ny fanomezanao !'));
+        setTimeout(() => {
+          router.push('/');
+        }, 3000);
+      } else {
+        toast.error(data.message || getText('Erreur lors du don', 'Nisy hadisoana tamin\'ny fanomezana'));
+      }
     } catch (error) {
       console.error('Erreur:', error);
-      alert(getText('Erreur lors du traitement du don', 'Nisy hadisoana tamin\'ny fanodinana ny fanomezana'));
+      toast.error(getText('Erreur de connexion', 'Tsy nahomby ny fifandraisana'));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const stats = [
-    { value: '12 450+', labelFr: 'Beneficiaires', labelMg: 'Tompondaka', icon: Users },
-    { value: '50+', labelFr: 'Projets realises', labelMg: 'Tetikasa vita', icon: Target },
-    { value: '15 780', labelFr: 'Arbres plantes', labelMg: 'Hazo nambolena', icon: Leaf },
+  const statsData = [
+    { value: stats.beneficiaries.toLocaleString(), labelFr: 'Beneficiaires', labelMg: 'Tompondaka', icon: Users },
+    { value: stats.projects_completed.toString(), labelFr: 'Projets realises', labelMg: 'Tetikasa vita', icon: Target },
+    { value: stats.trees_planted.toLocaleString(), labelFr: 'Arbres plantes', labelMg: 'Hazo nambolena', icon: Leaf },
     { value: '100%', labelFr: 'Transparence', labelMg: 'Fahamarinana', icon: Shield },
   ];
 
-  // Style du fond d ecran PLEIN ECRAN
+  // Style du fond d ecran PLEIN ECRAN - comme la section hero
   const overlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 40) / 100})`,
   } : {};
 
   if (showSuccess) {
     return (
-        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-20">
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8 animate-fade-in-up">
-          <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-10 h-10 text-blue-600" />
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center px-4">
+        <div className="text-center max-w-md mx-auto">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-10 h-10 text-green-600" />
           </div>
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 leading-tight drop-shadow-2xl animate-fade-in-up">
-            {getText('Merci pour votre don', 'Misaotra tamin\'ny fanomezanao')}
+          <h1 className="text-2xl font-bold text-gray-800 mb-3">
+            {getText('Merci pour votre don !', 'Misaotra tamin\'ny fanomezanao !')}
           </h1>
           <p className="text-gray-600 mb-4">
             {getText(
-              'Votre don de {amount} MGA a bien ete enregistre.',
-              'Ny fanomezanao {amount} Ar dia voarakitra tsara.'
-            ).replace('{amount}', getFinalAmount().toLocaleString())}
+              `Votre don de ${donationAmount.toLocaleString()} Ar a bien ete enregistre.`,
+              `Ny fanomezanao ${donationAmount.toLocaleString()} Ar dia voarakitra tsara.`
+            )}
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 mb-6">
             {getText(
               'Vous allez recevoir un recu par email.',
               'Hahazo taratasy fanamarinana amin\'ny mailaka ianao.'
             )}
           </p>
-          <div className="mt-6 w-16 h-1 bg-blue-500 rounded-full mx-auto animate-pulse"></div>
+          <div className="animate-pulse w-16 h-1 bg-blue-500 rounded-full mx-auto"></div>
         </div>
       </div>
     );
@@ -187,7 +272,7 @@ export default function DonatePage() {
 
   return (
     <div className="min-h-screen">
-      {/* ==================== HERO SECTION PLEIN ECRAN ==================== */}
+      {/* ==================== HERO SECTION AVEC FOND PLEIN ECRAN ==================== */}
       <section className="relative min-h-screen w-full overflow-hidden">
         <div className="absolute inset-0">
           {pageBackground?.image_url && pageBackground.is_active ? (
@@ -206,28 +291,40 @@ export default function DonatePage() {
         </div>
 
         <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-20">
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8 animate-fade-in-up">
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8">
             <Heart className="w-4 h-4 text-white" />
             <span className="text-sm font-medium text-white">
               {getText('Faire un don', 'Manome fanomezana')}
             </span>
           </div>
           
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 leading-tight drop-shadow-2xl animate-fade-in-up">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-6 leading-tight drop-shadow-2xl">
             {getText('Soutenez notre mission', 'Hanohana ny asantsika')}
           </h1>
           
-          <p className="text-lg md:text-xl text-white max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl lg:text-2xl text-white max-w-3xl mx-auto">
             {getText(
               'Chaque don contribue a construire un avenir meilleur pour la jeunesse malgache',
               'Ny fanomezana tsirairay dia manampy amin\'ny fananganana hoavy tsara kokoa ho an\'ny tanora malagasy'
             )}
           </p>
+          
+          <div className="mt-8 flex flex-wrap gap-4 justify-center">
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
+              <p className="text-white font-semibold">100% Transparent</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
+              <p className="text-white font-semibold">Reçu fiscal</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
+              <p className="text-white font-semibold">Sécurisé</p>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Section contenu avec fond blanc */}
-      <div className="relative z-10 bg-white">
+      {/* Section contenu avec fond blanc - tout le reste défile par-dessus */}
+      <div className="relative z-10 bg-white rounded-t-3xl shadow-2xl -mt-10">
         <div className="container mx-auto max-w-6xl px-4 py-12">
           
           {/* Statistiques d impact */}
@@ -236,7 +333,7 @@ export default function DonatePage() {
               {getText('Votre impact en chiffres', 'Ny vokatry ny fanomezanao')}
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {stats.map((stat, index) => {
+              {statsData.map((stat, index) => {
                 const Icon = stat.icon;
                 return (
                   <div key={index} className="text-center">
@@ -293,23 +390,25 @@ export default function DonatePage() {
                   </div>
 
                   {/* Projet specifique */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {getText('Projet specifique (optionnel)', 'Tetikasa manokana (tsy voatery)')}
-                    </label>
-                    <select
-                      value={selectedProject}
-                      onChange={(e) => setSelectedProject(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                    >
-                      <option value="">{getText('-- Don general --', '-- Fanomezana ankapobeny --')}</option>
-                      {featuredProjects.map(project => (
-                        <option key={project.id} value={project.id}>
-                          {language === 'fr' ? project.title : project.title_mg}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {featuredProjects.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {getText('Projet specifique (optionnel)', 'Tetikasa manokana (tsy voatery)')}
+                      </label>
+                      <select
+                        value={selectedProject}
+                        onChange={(e) => setSelectedProject(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                      >
+                        <option value="">{getText('-- Don general --', '-- Fanomezana ankapobeny --')}</option>
+                        {featuredProjects.map(project => (
+                          <option key={project.id} value={project.id}>
+                            {language === 'fr' ? project.title : project.title_mg}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Informations personnelles */}
                   <div className="space-y-4">
@@ -363,7 +462,7 @@ export default function DonatePage() {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         {getText('Moyen de paiement', 'Fomba fandoavam-bola')} *
                       </label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <button
                           type="button"
                           onClick={() => setPaymentMethod('mvola')}
@@ -374,7 +473,7 @@ export default function DonatePage() {
                           }`}
                         >
                           <Smartphone className="w-5 h-5 text-green-600" />
-                          <span className="font-medium">MVola</span>
+                          <span className="font-medium text-sm">MVola</span>
                         </button>
                         <button
                           type="button"
@@ -386,19 +485,19 @@ export default function DonatePage() {
                           }`}
                         >
                           <Smartphone className="w-5 h-5 text-orange-500" />
-                          <span className="font-medium">Orange Money</span>
+                          <span className="font-medium text-sm">Orange</span>
                         </button>
                         <button
                           type="button"
-                          onClick={() => setPaymentMethod('airtel')}
+                          onClick={() => setPaymentMethod('airtel_money')}
                           className={`p-3 rounded-xl border-2 transition flex items-center gap-2 justify-center ${
-                            paymentMethod === 'airtel'
+                            paymentMethod === 'airtel_money'
                               ? 'border-blue-600 bg-blue-50'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
                           <Smartphone className="w-5 h-5 text-red-600" />
-                          <span className="font-medium">Airtel Money</span>
+                          <span className="font-medium text-sm">Airtel</span>
                         </button>
                         <button
                           type="button"
@@ -410,12 +509,12 @@ export default function DonatePage() {
                           }`}
                         >
                           <Building className="w-5 h-5 text-gray-600" />
-                          <span className="font-medium">{getText('Virement', 'Fandefasana')}</span>
+                          <span className="font-medium text-sm">{getText('Virement', 'Fandefasana')}</span>
                         </button>
                       </div>
                     </div>
 
-                    {(paymentMethod === 'mvola' || paymentMethod === 'orange_money' || paymentMethod === 'airtel') && (
+                    {(paymentMethod === 'mvola' || paymentMethod === 'orange_money' || paymentMethod === 'airtel_money') && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           {getText('Numero de telephone', 'Laharan-telefaonina')} *
@@ -425,7 +524,7 @@ export default function DonatePage() {
                           value={phoneNumber}
                           onChange={(e) => setPhoneNumber(e.target.value)}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                          placeholder="034 00 000 00"
+                          placeholder="032 04 856 97"
                         />
                       </div>
                     )}
@@ -471,7 +570,7 @@ export default function DonatePage() {
                     ) : (
                       <>
                         <Heart className="w-5 h-5" />
-                        {getText('Faire un don', 'Manome fanomezana')}
+                        {getText('Faire un don', 'Manome fanomezana')} {getFinalAmount() > 0 ? `(${getFinalAmount().toLocaleString()} Ar)` : ''}
                       </>
                     )}
                   </button>
@@ -481,7 +580,6 @@ export default function DonatePage() {
 
             {/* Sidebar d information */}
             <div className="space-y-6">
-              {/* Pourquoi donner */}
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 text-white">
                 <Gift className="w-12 h-12 mb-4 opacity-80" />
                 <h3 className="text-xl font-bold mb-2">
@@ -499,47 +597,47 @@ export default function DonatePage() {
                 </div>
               </div>
 
-              {/* Projets vedettes */}
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-                <h3 className="font-bold text-gray-800 mb-4">
-                  {getText('Projets a soutenir', 'Tetikasa azo hanohana')}
-                </h3>
-                <div className="space-y-4">
-                  {featuredProjects.map(project => (
-                    <Link 
-                      key={project.id}
-                      href={`/projects/${project.id}`}
-                      className="block p-3 rounded-xl hover:bg-gray-50 transition group"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-semibold text-gray-800 group-hover:text-blue-600 transition">
-                          {language === 'fr' ? project.title : project.title_mg}
-                        </h4>
-                        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition" />
-                      </div>
-                      <p className="text-sm text-gray-500 mb-2">
-                        {language === 'fr' ? project.description : project.description_mg}
-                      </p>
-                      {project.progress && (
-                        <div className="mt-2">
-                          <div className="flex justify-between text-xs text-gray-400 mb-1">
-                            <span>{getText('Progression', 'Fandrosoana')}</span>
-                            <span>{project.progress}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5">
-                            <div 
-                              className="bg-blue-600 rounded-full h-1.5" 
-                              style={{ width: `${project.progress}%` }}
-                            />
-                          </div>
+              {featuredProjects.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+                  <h3 className="font-bold text-gray-800 mb-4">
+                    {getText('Projets a soutenir', 'Tetikasa azo hanohana')}
+                  </h3>
+                  <div className="space-y-4">
+                    {featuredProjects.map(project => (
+                      <Link 
+                        key={project.id}
+                        href={`/projects/${project.id}`}
+                        className="block p-3 rounded-xl hover:bg-gray-50 transition group"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-semibold text-gray-800 group-hover:text-blue-600 transition">
+                            {language === 'fr' ? project.title : project.title_mg}
+                          </h4>
+                          <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition" />
                         </div>
-                      )}
-                    </Link>
-                  ))}
+                        <p className="text-sm text-gray-500 mb-2">
+                          {language === 'fr' ? project.description : project.description_mg}
+                        </p>
+                        {project.progress && (
+                          <div className="mt-2">
+                            <div className="flex justify-between text-xs text-gray-400 mb-1">
+                              <span>{getText('Progression', 'Fandrosoana')}</span>
+                              <span>{project.progress}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div 
+                                className="bg-blue-600 rounded-full h-1.5" 
+                                style={{ width: `${project.progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Transparence */}
               <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
                 <Shield className="w-10 h-10 text-blue-600 mb-3" />
                 <h3 className="font-bold text-gray-800 mb-2">

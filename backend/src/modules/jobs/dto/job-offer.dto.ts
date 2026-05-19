@@ -1,16 +1,24 @@
+// backend/src/modules/jobs/dto/create-job-offer.dto.ts
+
+import { JobType, JobStatus } from '../../../entities/job-offer.entity';
+
 export class CreateJobOfferDto {
   title: string;
   title_mg?: string;
   description: string;
   description_mg?: string;
-  companyName: string;
+  company_name: string;        // ← snake_case pour correspondre à la BDD
   location?: string;
   region?: string;
-  jobType: string;
+  job_type: string;            // ← snake_case
   salary?: string;
   sector?: string;
+  requirements?: string;       // ← Ajouté
   deadline?: Date;
-  isFeatured?: boolean;
+  status?: JobStatus;          // ← Ajouté avec enum
+  is_featured?: boolean;       // ← snake_case
+  contact_email?: string;      // ← Ajouté
+  contact_phone?: string;      // ← Ajouté
 }
 
 export class UpdateJobOfferDto {
@@ -18,17 +26,20 @@ export class UpdateJobOfferDto {
   title_mg?: string;
   description?: string;
   description_mg?: string;
-  companyName?: string;
+  company_name?: string;       // ← snake_case
   location?: string;
   region?: string;
-  jobType?: string;
+  job_type?: string;           // ← snake_case
   salary?: string;
   sector?: string;
+  requirements?: string;
   deadline?: Date;
-  status?: string;
-  isFeatured?: boolean;
+  status?: JobStatus;
+  is_featured?: boolean;
+  contact_email?: string;
+  contact_phone?: string;
 }
 
 export class UpdateJobStatusDto {
-  status: string;
+  status: JobStatus;           // ← Utiliser l'enum pour type-safety
 }

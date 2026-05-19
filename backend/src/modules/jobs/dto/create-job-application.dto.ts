@@ -1,47 +1,17 @@
-import { IsString, IsOptional, IsEmail, IsUrl, IsNotEmpty } from 'class-validator';
+import { ApplicationStatus } from '../../../entities/job-application.entity';
 
 export class CreateJobApplicationDto {
-  @IsString()
-  @IsNotEmpty()
-  jobOfferId: string;
-
-  @IsString()
-  @IsNotEmpty()
-  fullName: string;
-
-  @IsEmail()
-  @IsNotEmpty()
+  job_offer_id: string;
+  full_name: string;
   email: string;
-
-  @IsOptional()
-  @IsString()
   phone?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  address: string;
-
-  @IsOptional()
-  @IsString()
-  experience?: string;
-
-  @IsOptional()
-  @IsString()
+  address?: string;
+  experience_years?: number;
   cover_letter?: string;
+  message?: string;
+}
 
-  @IsOptional()
-  @IsString()
-  photo_url?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  cv_url: string;
-
-  @IsOptional()
-  @IsString()
-  diploma_url?: string;
-
-  @IsOptional()
-  @IsString()
-  attestation_url?: string;
+export class UpdateApplicationStatusDto {
+  status: ApplicationStatus;
+  notes?: string;
 }

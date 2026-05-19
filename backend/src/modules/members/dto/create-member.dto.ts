@@ -1,4 +1,7 @@
-import { IsString, IsOptional, IsNumber, IsDateString, IsIn } from 'class-validator';
+// backend/src/modules/members/dto/create-member.dto.ts
+// VERSION FINALE - CORRECTE
+
+import { IsString, IsOptional, IsIn } from 'class-validator';
 
 export class CreateMemberDto {
   @IsString()
@@ -13,37 +16,14 @@ export class CreateMemberDto {
   @IsOptional()
   @IsString()
   phoneNumber?: string;
-}
-
-export class RenewMemberDto {
-  @IsString()
-  @IsIn(['standard', 'premium', 'student', 'honorary'])
-  membershipType: string;
 
   @IsOptional()
   @IsString()
-  @IsIn(['mvola', 'orange_money', 'airtel', 'bank'])
-  paymentMethod?: string;
+  userId?: string;
 }
 
 export class UpdateMemberStatusDto {
   @IsString()
   @IsIn(['pending', 'active', 'expired', 'suspended'])
   status: string;
-}
-
-export class MemberResponseDto {
-  id: string;
-  memberNumber: string;
-  userId: string;
-  status: string;
-  membershipType: string;
-  startDate: Date;
-  expiryDate: Date;
-  amountPaid: number;
-  paymentMethod: string;
-  cardUrl: string;
-  qrCode: string;
-  createdAt: Date;
-  updatedAt: Date;
 }

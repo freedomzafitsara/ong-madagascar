@@ -1,13 +1,19 @@
+// backend/src/modules/jobs/dto/create-job-application.dto.ts
+
+import { ApplicationStatus } from '../../../entities/job-application.entity';
+
 export class CreateJobApplicationDto {
-  jobOfferId: string;
-  fullName: string;
+  job_offer_id: string;
+  full_name: string;
   email: string;
-  address: string;
   phone?: string;
-  experience?: string;
-  coverLetter?: string;
+  address?: string;
+  experience_years?: number;
+  cover_letter?: string;
+  message?: string;
 }
 
 export class UpdateApplicationStatusDto {
-  status: string;
+  status: ApplicationStatus;
+  notes?: string;
 }

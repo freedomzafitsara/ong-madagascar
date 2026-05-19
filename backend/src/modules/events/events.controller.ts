@@ -1,33 +1,23 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+// backend/src/modules/events/events.controller.ts
+
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
 import { EventsService } from './events.service';
+import { CreateEventDto, UpdateEventDto } from './dto/create-event.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
-import { UserRole } from '../../entities/user.entity';
 
-// DTOs définis ici pour éviter les problèmes d'import
-export class CreateEventDto {
-  title: string;
-  title_mg?: string;
-  description: string;
-  description_mg?: string;
-  type: string;
-  location?: string;
-  region?: string;
-  startDate: Date;
-  endDate: Date;
-  maxCapacity?: number;
-  isFree?: boolean;
-  price?: number;
-  imageUrl?: string;
-  program?: string;
-  speakers?: string;
-}
-
-export class RegisterToEventDto {
-  eventId: string;
+// Définir l'enum UserRole localement si non importé
+enum UserRole {
+  SUPER_ADMIN = 'super_admin',
+  ADMIN = 'admin',
+  STAFF = 'staff',
+  MEMBER = 'member',
+  VOLUNTEER = 'volunteer',
+  PARTNER = 'partner',
+  VISITOR = 'visitor'
 }
 
 @Controller('events')
@@ -36,20 +26,33 @@ export class EventsController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async createEvent(@Body() createEventDto: CreateEventDto, @CurrentUser() user: any) {
-    return this.eventsService.createEvent(createEventDto, user.id);
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  async create(@Body() createEventDto: CreateEventDto, @CurrentUser() user: any) {
+    return this.eventsService.create(createEventDto, user.id);
   }
 
   @Public()
   @Get()
   async findAll(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 9,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
     @Query('type') type?: string,
-    @Query('region') region?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
   ) {
-    return this.eventsService.findAll(page, limit, type, region);
+    return this.eventsService.findAll(parseInt(page), parseInt(limit), type, status, search);
+  }
+
+  @Public()
+  @Get('stats')
+  async getStats() {
+    return this.eventsService.getStats();
+  }
+
+  @Public()
+  @Get('upcoming')
+  async getUpcoming(@Query('limit') limit: string = '5') {
+    return this.eventsService.getUpcomingEvents(parseInt(limit));
   }
 
   @Public()
@@ -58,36 +61,25 @@ export class EventsController {
     return this.eventsService.findOne(id);
   }
 
-  @Post('register')
-  @UseGuards(JwtAuthGuard)
-  async register(@CurrentUser() user: any, @Body() registerDto: RegisterToEventDto) {
-    return this.eventsService.register(user.id, registerDto.eventId);
-  }
-
-  @Get('my-registrations')
-  @UseGuards(JwtAuthGuard)
-  async getMyRegistrations(@CurrentUser() user: any) {
-    return this.eventsService.getUserRegistrations(user.id);
-  }
-
-  @Get(':id/registrations')
+  @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async getEventRegistrations(@Param('id') id: string) {
-    return this.eventsService.getEventRegistrations(id);
-  }
-
-  @Put(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async updateEvent(@Param('id') id: string, @Body() updateData: Partial<CreateEventDto>) {
-    return this.eventsService.updateEvent(id, updateData);
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  async update(@Param('id') id: string, @Body() updateEventDto: UpdateEventDto) {
+    return this.eventsService.update(id, updateEventDto);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async deleteEvent(@Param('id') id: string) {
-    return this.eventsService.deleteEvent(id);
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  async remove(@Param('id') id: string) {
+    await this.eventsService.remove(id);
+    return { success: true };
+  }
+
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  async changeStatus(@Param('id') id: string, @Body('status') status: string) {
+    return this.eventsService.changeStatus(id, status);
   }
 }

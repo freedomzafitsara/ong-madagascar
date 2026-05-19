@@ -6,10 +6,14 @@ import {
   Calendar, User, Search, Tag, Sparkles, X, ChevronLeft, ChevronRight, 
   Eye, BookOpen, Newspaper, FolderOpen, GraduationCap, Leaf, 
   Calendar as CalendarIcon, Briefcase, Stethoscope, Handshake, 
-  Loader2, AlertCircle
+  Loader2, AlertCircle, Heart
 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { pageService, PageBackground } from '@/services/pageService';
+import { blogApi } from '@/lib/api';
+import toast from 'react-hot-toast';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
 interface BlogPost {
   id: string;
@@ -88,25 +92,43 @@ export default function BlogPage() {
     }
   }, []);
 
-  const loadPosts = useCallback(() => {
+  const loadPosts = useCallback(async () => {
     setLoading(true);
     try {
-      const stored = localStorage.getItem('ymad_blog_posts');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const formatted = parsed.map((p: any) => ({
-          ...p,
-          date: new Date(p.createdAt || p.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', { day: 'numeric', month: 'long', year: 'numeric' })
+      // Tentative de chargement depuis l'API backend
+      const response = await blogApi.getAll(1, 100);
+      if (response && response.data && response.data.length > 0) {
+        const formatted = response.data.map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          titleMg: p.title_mg,
+          slug: p.slug || p.id,
+          excerpt: p.summary || p.description.substring(0, 150),
+          excerptMg: p.summary_mg,
+          date: new Date(p.published_at || p.created_at).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', { day: 'numeric', month: 'long', year: 'numeric' }),
+          author: p.author || p.author_name || 'Y-Mad',
+          category: p.type || 'Actualites',
+          tags: p.tags || [],
+          coverImage: p.image_url,
+          viewsCount: p.views || 0
         }));
         setPosts(formatted);
         setFilteredPosts(formatted);
       } else {
-        setPosts(defaultPosts);
-        setFilteredPosts(defaultPosts);
-        localStorage.setItem('ymad_blog_posts', JSON.stringify(defaultPosts));
+        // Fallback sur localStorage ou donnees par defaut
+        const stored = localStorage.getItem('ymad_blog_posts');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setPosts(parsed);
+          setFilteredPosts(parsed);
+        } else {
+          setPosts(defaultPosts);
+          setFilteredPosts(defaultPosts);
+        }
       }
     } catch (error) {
       console.error('Erreur chargement articles:', error);
+      // Fallback sur donnees par defaut
       setPosts(defaultPosts);
       setFilteredPosts(defaultPosts);
     } finally {
@@ -149,6 +171,7 @@ export default function BlogPage() {
     totalViews: posts.reduce((sum, p) => sum + p.viewsCount, 0)
   }), [posts]);
 
+  // Style du fond d'ecran plein ecran avec overlay
   const overlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 30) / 100})`,
   } : {};
@@ -166,9 +189,9 @@ export default function BlogPage() {
 
   return (
     <div className="min-h-screen">
-      {/* ==================== HERO SECTION PLEIN ECRAN AVEC TEXTE BLANC ==================== */}
+      {/* ==================== HERO SECTION PLEIN ECRAN ==================== */}
       <section className="relative min-h-screen w-full overflow-hidden">
-        {/* Fond d'ecran */}
+        {/* Fond d'ecran uploade via super-admin */}
         <div className="absolute inset-0">
           {pageBackground?.image_url && pageBackground.is_active ? (
             <>
@@ -186,59 +209,61 @@ export default function BlogPage() {
         </div>
 
         {/* Contenu centre avec TEXTE BLANC */}
-<div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-20">          
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-6">
-            <Sparkles className="w-4 h-4 text-white" />
+        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-20">
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8">
+            <Heart className="w-4 h-4 text-white" />
             <span className="text-sm font-medium text-white">Y-Mad Madagascar</span>
           </div>
           
-          {/* Titre principal - TEXTE BLANC */}
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 leading-tight drop-shadow-2xl animate-fade-in-up">
             {language === 'fr' ? 'Actualites et Blog' : 'Vaovao sy Bitsika'}
           </h1>
           
-          {/* Sous-titre - TEXTE BLANC */}
-          <p className="text-lg md:text-xl text-white max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl lg:text-2xl text-white max-w-2xl mx-auto">
             {language === 'fr' 
               ? 'Suivez nos actions et decouvrez nos dernieres actualites'
               : 'Araho ny asantsika ary jereo ny vaovao farany'}
           </p>
+          
+          <div className="mt-8 flex flex-wrap gap-4 justify-center">
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
+              <p className="text-white font-semibold text-sm">{stats.total} Articles</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
+              <p className="text-white font-semibold text-sm">{stats.categories} Categories</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
+              <p className="text-white font-semibold text-sm">{stats.totalViews} Vues</p>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ==================== STATISTIQUES CENTREES ==================== */}
-      {stats.total > 0 && (
-        <div className="bg-white border-b shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-10">
+      {/* ==================== SECTION PRINCIPALE ==================== */}
+      <div className="relative z-10 bg-white rounded-t-3xl shadow-2xl -mt-10">
+        {/* Statistiques */}
+        <div className="border-b border-gray-100 py-10">
+          <div className="max-w-7xl mx-auto px-4">
             <div className="flex flex-wrap justify-center items-center gap-12 md:gap-20">
-              {/* Articles */}
               <div className="text-center">
-                <div className="flex justify-center mb-3">
-                  <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
-                    <BookOpen className="w-7 h-7 text-blue-600" />
-                  </div>
+                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <BookOpen className="w-7 h-7 text-blue-600" />
                 </div>
                 <p className="text-3xl font-bold text-blue-700">{stats.total}</p>
                 <p className="text-sm text-gray-500 mt-1">{language === 'fr' ? 'Articles' : 'Lahatsoratra'}</p>
               </div>
               
-              {/* Categories */}
               <div className="text-center">
-                <div className="flex justify-center mb-3">
-                  <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
-                    <FolderOpen className="w-7 h-7 text-blue-600" />
-                  </div>
+                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <FolderOpen className="w-7 h-7 text-blue-600" />
                 </div>
                 <p className="text-3xl font-bold text-blue-700">{stats.categories}</p>
                 <p className="text-sm text-gray-500 mt-1">{language === 'fr' ? 'Categories' : 'Sokajy'}</p>
               </div>
               
-              {/* Vues totales */}
               <div className="text-center">
-                <div className="flex justify-center mb-3">
-                  <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Eye className="w-7 h-7 text-blue-600" />
-                  </div>
+                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Eye className="w-7 h-7 text-blue-600" />
                 </div>
                 <p className="text-3xl font-bold text-blue-700">{stats.totalViews}</p>
                 <p className="text-sm text-gray-500 mt-1">{language === 'fr' ? 'Vues totales' : 'Fijeriana rehetra'}</p>
@@ -246,107 +271,103 @@ export default function BlogPage() {
             </div>
           </div>
         </div>
-      )}
 
-      {/* ==================== FILTRES ==================== */}
-      <div className="sticky top-0 z-10 bg-white border-b shadow-sm py-4">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-            {/* Boutons de categories */}
-            <div className="flex flex-wrap gap-2 justify-center">
-              {categories.map(cat => {
-                const isActive = selectedCategory === cat;
-                const CategoryIcon = getCategoryIcon(cat);
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer ${
-                      isActive 
-                        ? 'bg-blue-600 text-white shadow-md' 
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {CategoryIcon}
-                    {cat}
-                  </button>
-                );
-              })}
+        {/* Filtres */}
+        <div className="sticky top-0 z-10 bg-white border-b shadow-sm py-4">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+              <div className="flex flex-wrap gap-2 justify-center">
+                {categories.map(cat => {
+                  const isActive = selectedCategory === cat;
+                  const CategoryIcon = getCategoryIcon(cat);
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer ${
+                        isActive 
+                          ? 'bg-blue-600 text-white shadow-md' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {CategoryIcon}
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder={language === 'fr' ? 'Rechercher un article...' : 'Karohy lahatsoratra...'}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-full w-64 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                />
+              </div>
             </div>
             
-            {/* Barre de recherche */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder={language === 'fr' ? 'Rechercher un article...' : 'Karohy lahatsoratra...'}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-full w-64 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              />
-            </div>
+            {(searchTerm || selectedCategory !== (language === 'fr' ? "Tous" : "Rehetra")) && (
+              <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100 justify-center">
+                {searchTerm && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700">
+                    <Search className="w-3 h-3" /> {searchTerm}
+                    <button onClick={() => setSearchTerm('')} className="hover:text-red-500 transition">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+                {selectedCategory !== (language === 'fr' ? "Tous" : "Rehetra") && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700">
+                    {selectedCategory}
+                    <button onClick={() => setSelectedCategory(language === 'fr' ? "Tous" : "Rehetra")} className="hover:text-red-500 transition">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+                <button 
+                  onClick={() => { setSearchTerm(''); setSelectedCategory(language === 'fr' ? "Tous" : "Rehetra"); }} 
+                  className="text-sm text-blue-600 hover:underline transition"
+                >
+                  {language === 'fr' ? 'Tout effacer' : 'Fafana daholo'}
+                </button>
+              </div>
+            )}
           </div>
-          
-          {/* Filtres actifs */}
-          {(searchTerm || selectedCategory !== (language === 'fr' ? "Tous" : "Rehetra")) && (
-            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100 justify-center">
-              {searchTerm && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700">
-                  <Search className="w-3 h-3" /> {searchTerm}
-                  <button onClick={() => setSearchTerm('')} className="hover:text-red-500 transition">
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              )}
-              {selectedCategory !== (language === 'fr' ? "Tous" : "Rehetra") && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700">
-                  {selectedCategory}
-                  <button onClick={() => setSelectedCategory(language === 'fr' ? "Tous" : "Rehetra")} className="hover:text-red-500 transition">
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              )}
-              <button 
-                onClick={() => { setSearchTerm(''); setSelectedCategory(language === 'fr' ? "Tous" : "Rehetra"); }} 
-                className="text-sm text-blue-600 hover:underline transition"
-              >
-                {language === 'fr' ? 'Tout effacer' : 'Fafana daholo'}
-              </button>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* ==================== LISTE DES ARTICLES ==================== */}
-      <div className="py-16">
-        <div className="max-w-4xl mx-auto px-4">
-          {paginatedPosts.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm p-16 text-center border border-gray-100">
-              <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg mb-2">
-                {language === 'fr' ? 'Aucun article trouve' : 'Tsy misy lahatsoratra hita'}
-              </p>
-              <p className="text-gray-400">
-                {language === 'fr' ? 'Essayez de modifier vos criteres de recherche' : 'Andramo hanova ny fikarohanao'}
-              </p>
-            </div>
-          ) : (
-            <>
-              {paginatedPosts.map((post, index) => (
-                <ArticleCard key={post.id} post={post} language={language} index={index} />
-              ))}
-              
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <Pagination 
-                  currentPage={currentPage} 
-                  totalPages={totalPages} 
-                  onPageChange={setCurrentPage}
-                  language={language}
-                />
-              )}
-            </>
-          )}
+        {/* Liste des articles */}
+        <div className="py-16">
+          <div className="max-w-4xl mx-auto px-4">
+            {paginatedPosts.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm p-16 text-center border border-gray-100">
+                <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg mb-2">
+                  {language === 'fr' ? 'Aucun article trouve' : 'Tsy misy lahatsoratra hita'}
+                </p>
+                <p className="text-gray-400">
+                  {language === 'fr' ? 'Essayez de modifier vos criteres de recherche' : 'Andramo hanova ny fikarohanao'}
+                </p>
+              </div>
+            ) : (
+              <>
+                {paginatedPosts.map((post, index) => (
+                  <ArticleCard key={post.id} post={post} language={language} index={index} />
+                ))}
+                
+                {totalPages > 1 && (
+                  <Pagination 
+                    currentPage={currentPage} 
+                    totalPages={totalPages} 
+                    onPageChange={setCurrentPage}
+                    language={language}
+                  />
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

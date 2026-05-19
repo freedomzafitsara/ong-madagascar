@@ -1,116 +1,117 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan, MoreThan } from 'typeorm';
 import { Event } from '../../entities/event.entity';
-import { EventRegistration } from '../../entities/event-registration.entity';
-
-export class CreateEventDto {
-  title: string;
-  title_mg?: string;
-  description: string;
-  description_mg?: string;
-  type: string;
-  location?: string;
-  region?: string;
-  startDate: Date;
-  endDate: Date;
-  maxCapacity?: number;
-  isFree?: boolean;
-  price?: number;
-  imageUrl?: string;
-  program?: string;
-  speakers?: string;
-}
-
-export class RegisterToEventDto {
-  eventId: string;
-}
+import { CreateEventDto, UpdateEventDto } from './dto/create-event.dto';
 
 @Injectable()
 export class EventsService {
   constructor(
     @InjectRepository(Event)
     private eventRepository: Repository<Event>,
-    @InjectRepository(EventRegistration)
-    private registrationRepository: Repository<EventRegistration>,
   ) {}
 
-  async createEvent(createEventDto: CreateEventDto, userId: string) {
-    const event = this.eventRepository.create({
-      ...createEventDto,
-      createdBy: userId,
-      status: 'published',
-    });
-    return this.eventRepository.save(event);
+  async create(createEventDto: CreateEventDto, userId: string): Promise<Event> {
+    try {
+      const event = this.eventRepository.create({
+        title: createEventDto.title,
+        title_mg: createEventDto.title_mg,
+        description: createEventDto.description,
+        description_mg: createEventDto.description_mg,
+        type: createEventDto.type,
+        status: createEventDto.status || 'draft',
+        location: createEventDto.location,
+        region: createEventDto.region,
+        startDate: createEventDto.startDate,
+        endDate: createEventDto.endDate,
+        maxCapacity: createEventDto.maxCapacity || null,
+        currentRegistrations: 0,
+        isFree: createEventDto.isFree !== undefined ? createEventDto.isFree : true,
+        price: createEventDto.price || 0,
+        imageUrl: createEventDto.imageUrl,
+        createdBy: userId,
+      });
+      
+      return await this.eventRepository.save(event);
+    } catch (error) {
+      console.error('Erreur creation evenement:', error);
+      throw new BadRequestException(error.message);
+    }
   }
 
-  async findAll(page: number = 1, limit: number = 9, type?: string, region?: string) {
-    const skip = (page - 1) * limit;
-    const query: any = { status: 'published' };
-    if (type) query.type = type;
-    if (region) query.region = region;
-
-    const [data, total] = await this.eventRepository.findAndCount({
-      where: query,
-      order: { startDate: 'ASC' },
-      skip,
-      take: limit,
-    });
-
-    return { data, total, page, totalPages: Math.ceil(total / limit) };
+  async findAll(page: number = 1, limit: number = 10, type?: string, status?: string, search?: string) {
+    try {
+      const skip = (page - 1) * limit;
+      const query = this.eventRepository.createQueryBuilder('event');
+      
+      if (status && status !== 'all') {
+        query.andWhere('event.status = :status', { status });
+      }
+      
+      if (type && type !== 'all') {
+        query.andWhere('event.type = :type', { type });
+      }
+      
+      if (search) {
+        query.andWhere('(event.title ILIKE :search OR event.description ILIKE :search)', { 
+          search: `%${search}%` 
+        });
+      }
+      
+      const [data, total] = await query
+        .orderBy('event.startDate', 'DESC')
+        .skip(skip)
+        .take(limit)
+        .getManyAndCount();
+      
+      return { data, total, page, totalPages: Math.ceil(total / limit), limit };
+    } catch (error) {
+      return { data: [], total: 0, page: 1, totalPages: 0, limit };
+    }
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<Event> {
     const event = await this.eventRepository.findOne({ where: { id } });
-    if (!event) throw new NotFoundException('Événement non trouvé');
+    if (!event) {
+      throw new NotFoundException(`Evenement avec l'id ${id} non trouve`);
+    }
     return event;
   }
 
-  async register(userId: string, eventId: string) {
-    const existing = await this.registrationRepository.findOne({
-      where: { userId, eventId },
-    });
-
-    if (existing) {
-      return { success: false, message: 'Vous êtes déjà inscrit à cet événement' };
-    }
-
-    const ticketNumber = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-
-    const registration = this.registrationRepository.create({
-      userId,
-      eventId,
-      ticketNumber,
-      status: 'confirmed',
-    });
-
-    await this.registrationRepository.save(registration);
-    
-    return { success: true, message: 'Inscription réussie', registration };
+  async update(id: string, updateEventDto: UpdateEventDto): Promise<Event> {
+    const event = await this.findOne(id);
+    Object.assign(event, updateEventDto);
+    return await this.eventRepository.save(event);
   }
 
-  async getUserRegistrations(userId: string) {
-    return this.registrationRepository.find({
-      where: { userId },
-      relations: ['event'],
-      order: { registeredAt: 'DESC' },
-    });
+  async remove(id: string): Promise<void> {
+    const event = await this.findOne(id);
+    await this.eventRepository.remove(event);
   }
 
-  async getEventRegistrations(eventId: string) {
-    return this.registrationRepository.find({
-      where: { eventId },
-      relations: ['user'],
+  async getStats() {
+    const now = new Date();
+    const total = await this.eventRepository.count();
+    const published = await this.eventRepository.count({ where: { status: 'published' } });
+    const draft = await this.eventRepository.count({ where: { status: 'draft' } });
+    const upcoming = await this.eventRepository.count({ 
+      where: { status: 'published', startDate: MoreThan(now) } 
+    });
+    return { total, published, draft, upcoming };
+  }
+
+  async getUpcomingEvents(limit: number = 5) {
+    const now = new Date();
+    return this.eventRepository.find({
+      where: { status: 'published', startDate: MoreThan(now) },
+      order: { startDate: 'ASC' },
+      take: limit,
     });
   }
 
-  async updateEvent(id: string, updateData: Partial<CreateEventDto>) {
-    await this.eventRepository.update(id, updateData);
-    return this.findOne(id);
-  }
-
-  async deleteEvent(id: string) {
-    await this.eventRepository.delete(id);
-    return { success: true };
+  async changeStatus(id: string, status: string): Promise<Event> {
+    const event = await this.findOne(id);
+    event.status = status;
+    return await this.eventRepository.save(event);
   }
 }

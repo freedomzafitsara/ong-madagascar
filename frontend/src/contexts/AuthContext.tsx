@@ -3,6 +3,10 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
+// ============================================================
+// 1. ENUM DES RÔLES
+// ============================================================
+
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
   ADMIN = 'admin',
@@ -12,6 +16,10 @@ export enum UserRole {
   PARTNER = 'partner',
   VISITOR = 'visitor',
 }
+
+// ============================================================
+// 2. INTERFACES ET TYPES
+// ============================================================
 
 export interface User {
   id: string;
@@ -50,7 +58,7 @@ export interface AuthContextType {
   refreshToken: () => Promise<boolean>;
 }
 
-interface RegisterData {
+export interface RegisterData {
   email: string;
   password: string;
   first_name: string;
@@ -66,9 +74,17 @@ interface LoginResponse {
   statusCode?: number;
 }
 
+// ============================================================
+// 3. CONTEXTE
+// ============================================================
+
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+
+// ============================================================
+// 4. PROVIDER
+// ============================================================
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -76,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // Charger la session au démarrage
   useEffect(() => {
     const storedToken = localStorage.getItem('access_token') || localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
@@ -101,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  // Mettre à jour l'utilisateur
   const updateUser = (data: Partial<User>) => {
     if (user) {
       const updatedUser = { ...user, ...data };
@@ -110,17 +128,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Vérifier si l'utilisateur a un rôle spécifique
   const hasRole = (roles: UserRole[]): boolean => {
     if (!user) return false;
     return roles.includes(user.role);
   };
 
+  // Rafraîchir le token
   const refreshToken = async (): Promise<boolean> => {
     try {
       const refreshTokenValue = localStorage.getItem('refresh_token');
       if (!refreshTokenValue) return false;
       
-      const response = await fetch(API_URL + '/auth/refresh', {
+      const response = await fetch(`${API_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshTokenValue }),
@@ -144,11 +164,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Connexion
   const login = async (email: string, password: string): Promise<void> => {
     try {
       console.log('Tentative de connexion pour:', email);
       
-      const response = await fetch(API_URL + '/auth/login', {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -201,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Déconnexion
   const logout = (): void => {
     console.log('Deconnexion');
     localStorage.removeItem('access_token');
@@ -212,11 +234,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/login');
   };
 
+  // Inscription
   const register = async (userData: RegisterData): Promise<void> => {
     try {
       console.log('Tentative d\'inscription pour:', userData.email);
       
-      const response = await fetch(API_URL + '/auth/register', {
+      const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
@@ -237,6 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Valeur du contexte
   const contextValue: AuthContextType = {
     user,
     token,
@@ -257,10 +281,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// ============================================================
+// 5. HOOK PERSONNALISÉ
+// ============================================================
+
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth doit etre utilise a l\'interieur d\'un AuthProvider');
+    throw new Error('useAuth doit être utilisé à l\'intérieur d\'un AuthProvider');
   }
   return context;
 };

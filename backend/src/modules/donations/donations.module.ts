@@ -8,5 +8,6 @@ import { Donation } from '../../entities/donation.entity';
   imports: [TypeOrmModule.forFeature([Donation])],
   controllers: [DonationsController],
   providers: [DonationsService],
+  exports: [DonationsService],
 })
 export class DonationsModule {}

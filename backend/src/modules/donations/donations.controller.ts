@@ -1,12 +1,9 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { DonationsService } from './donations.service';
-import { CreateDonationDto, ConfirmPaymentDto } from './dto/create-donation.dto';
+import { CreateDonationDto, ConfirmDonationDto } from './dto/create-donation.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
-import { UserRole } from '../../entities/user.entity';
 
 @Controller('donations')
 export class DonationsController {
@@ -14,20 +11,32 @@ export class DonationsController {
 
   @Public()
   @Post()
-  async createDonation(@Body() createDonationDto: CreateDonationDto) {
-    return this.donationsService.createDonation(null, createDonationDto);
+  async create(@Body() createDonationDto: CreateDonationDto) {
+    return this.donationsService.create(createDonationDto);
   }
 
   @Post('auth')
   @UseGuards(JwtAuthGuard)
-  async createAuthenticatedDonation(@CurrentUser() user: any, @Body() createDonationDto: CreateDonationDto) {
-    return this.donationsService.createDonation(user.id, createDonationDto);
+  async createAuth(@Body() createDonationDto: CreateDonationDto, @CurrentUser() user: any) {
+    return this.donationsService.create(createDonationDto, user.id);
   }
 
-  @Public()
   @Post('confirm')
-  async confirmPayment(@Body() confirmPaymentDto: ConfirmPaymentDto) {
-    return this.donationsService.confirmPayment(confirmPaymentDto);
+  @Public()
+  async confirm(@Body() confirmDto: ConfirmDonationDto) {
+    return this.donationsService.confirm(confirmDto);
+  }
+
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  async findAll(@Query('page') page: string = '1', @Query('limit') limit: string = '10') {
+    return this.donationsService.findAll(parseInt(page), parseInt(limit));
+  }
+
+  @Get('stats/all')
+  @Public()
+  async getStats() {
+    return this.donationsService.getStats();
   }
 
   @Get('my-donations')
@@ -37,22 +46,8 @@ export class DonationsController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  async getDonation(@Param('id') id: string) {
-    return this.donationsService.getDonationById(id);
-  }
-
-  @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async getAllDonations() {
-    return this.donationsService.getAllDonations();
-  }
-
-  @Get('stats/all')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async getStats() {
-    return this.donationsService.getStats();
+  @Public()
+  async findOne(@Param('id') id: string) {
+    return this.donationsService.findOne(id);
   }
 }

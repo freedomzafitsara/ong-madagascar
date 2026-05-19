@@ -1,10 +1,13 @@
 ﻿'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, Phone, MapPin, Clock, Send, CheckCircle, Sparkles, AlertCircle } from 'lucide-react';
+import { Mail, Phone, MapPin, Clock, Send, CheckCircle, Sparkles, AlertCircle, Heart } from 'lucide-react';
 import { FaFacebook, FaTwitter, FaInstagram, FaLinkedin } from 'react-icons/fa';
 import { useTranslation } from '@/hooks/useTranslation';
 import { pageService, PageBackground } from '@/services/pageService';
+import toast from 'react-hot-toast';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
 export default function ContactPage() {
   const { t, language } = useTranslation();
@@ -40,6 +43,7 @@ export default function ContactPage() {
     
     if (!formData.name || !formData.email || !formData.message) {
       setError(true);
+      toast.error(language === 'fr' ? 'Veuillez remplir tous les champs obligatoires' : 'Fenoy ny sehatra takiana');
       setTimeout(() => setError(false), 3000);
       return;
     }
@@ -47,23 +51,33 @@ export default function ContactPage() {
     setLoading(true);
     
     try {
-      const contactMessage = {
-        id: Date.now().toString(),
-        ...formData,
-        createdAt: new Date().toISOString(),
-        status: 'new'
-      };
-      
-      const existing = localStorage.getItem('ymad_contact_messages');
-      const messages = existing ? JSON.parse(existing) : [];
-      messages.push(contactMessage);
-      localStorage.setItem('ymad_contact_messages', JSON.stringify(messages));
-      
-      setSubmitted(true);
-      setFormData({ name: "", email: "", phone: "", subject: "", message: "" });
-      setTimeout(() => setSubmitted(false), 5000);
+      // Envoi vers l'API backend
+      const response = await fetch(`${API_URL}/contact`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          subject: formData.subject,
+          message: formData.message
+        })
+      });
+
+      if (response.ok) {
+        setSubmitted(true);
+        toast.success(language === 'fr' ? 'Message envoyé avec succès !' : 'Voaefa tsara ny hafatra !');
+        setFormData({ name: "", email: "", phone: "", subject: "", message: "" });
+        setTimeout(() => setSubmitted(false), 5000);
+      } else {
+        throw new Error('Erreur lors de l\'envoi');
+      }
     } catch (err) {
+      console.error('Erreur:', err);
       setError(true);
+      toast.error(language === 'fr' ? 'Erreur lors de l\'envoi du message' : 'Nisy hadisoana tamin\'ny fandefasana');
       setTimeout(() => setError(false), 3000);
     } finally {
       setLoading(false);
@@ -71,10 +85,10 @@ export default function ContactPage() {
   };
 
   const socialLinks = [
-    { name: 'Facebook', url: 'https://facebook.com/ymad', icon: FaFacebook, bg: '#1877F2' },
-    { name: 'Twitter', url: 'https://twitter.com/ymad', icon: FaTwitter, bg: '#1DA1F2' },
-    { name: 'Instagram', url: 'https://instagram.com/ymad', icon: FaInstagram, bg: '#E4405F' },
-    { name: 'LinkedIn', url: 'https://linkedin.com/company/ymad', icon: FaLinkedin, bg: '#0A66C2' },
+    { name: 'Facebook', url: 'https://facebook.com/ymad.mg', icon: FaFacebook, bg: '#1877F2' },
+    { name: 'Twitter', url: 'https://twitter.com/ymad_mg', icon: FaTwitter, bg: '#1DA1F2' },
+    { name: 'Instagram', url: 'https://instagram.com/ymad.mg', icon: FaInstagram, bg: '#E4405F' },
+    { name: 'LinkedIn', url: 'https://linkedin.com/company/ymad-mg', icon: FaLinkedin, bg: '#0A66C2' },
   ];
 
   // Style du fond d'ecran plein ecran avec overlay
@@ -106,7 +120,8 @@ export default function ContactPage() {
         {/* Contenu centre avec TEXTE BLANC */}
         <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-20">
           {/* Badge d'association */}
- <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8 animate-fade-in-up">            <Sparkles className="w-4 h-4 text-white" />
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8 animate-fade-in-up">
+            <Heart className="w-4 h-4 text-white" />
             <span className="text-sm font-medium text-white">Y-Mad Madagascar</span>
           </div>
           
@@ -114,40 +129,41 @@ export default function ContactPage() {
             {language === 'fr' ? 'Contactez-nous' : 'Mifandraisa aminay'}
           </h1>
           
-          <p className="text-lg md:text-xl text-white max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl lg:text-2xl text-white max-w-2xl mx-auto">
             {language === 'fr' 
               ? 'Une question ? N\'hésitez pas à nous contacter'
               : 'Manana fanontaniana? Aza misalasala mifandraisa aminay'}
           </p>
+          
+          <div className="mt-8 flex flex-wrap gap-4 justify-center">
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
+              <p className="text-white font-semibold text-sm">Réponse sous 48h</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
+              <p className="text-white font-semibold text-sm">Support gratuit</p>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ==================== SECTION PRINCIPALE ==================== */}
-      <div className="relative z-10 bg-white">
+      <div className="relative z-10 bg-white rounded-t-3xl shadow-2xl -mt-10">
         <div className="py-16">
           <div className="max-w-7xl mx-auto px-4">
-            {/* Messages de notification */}
-            {submitted && (
-              <div className="bg-green-100 text-green-700 p-4 rounded-lg mb-6 flex items-center gap-2 max-w-2xl mx-auto border border-green-200">
-                <CheckCircle size={20} /> 
-                <span>{language === 'fr' ? 'Message envoyé avec succès' : 'Voaefa tsara ny hafatra'}</span>
-              </div>
-            )}
             
-            {error && (
-              <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6 flex items-center gap-2 max-w-2xl mx-auto border border-red-200">
-                <AlertCircle size={20} /> 
-                <span>{language === 'fr' ? 'Erreur lors de l\'envoi' : 'Nisy hadisoana tamin\'ny fandefasana'}</span>
-              </div>
-            )}
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Formulaire de contact */}
               <div className="lg:col-span-2">
-                <div className="bg-white rounded-xl shadow-md p-8 border border-gray-100">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-6">
+                <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">
                     {language === 'fr' ? 'Envoyez-nous un message' : 'Alefaso aminay ny hafatra'}
                   </h2>
+                  <p className="text-gray-500 mb-6">
+                    {language === 'fr' 
+                      ? 'Nous vous répondrons dans les plus brefs délais'
+                      : 'Hamaly anao haingana izahay'}
+                  </p>
+                  
                   <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <div>
@@ -156,7 +172,7 @@ export default function ContactPage() {
                         </label>
                         <input 
                           type="text" 
-                          placeholder={language === 'fr' ? 'Votre nom' : 'Ny anaranao'} 
+                          placeholder={language === 'fr' ? 'Jean Rakoto' : 'Jean Rakoto'} 
                           value={formData.name} 
                           onChange={(e) => setFormData({...formData, name: e.target.value})} 
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
@@ -167,7 +183,7 @@ export default function ContactPage() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
                         <input 
                           type="email" 
-                          placeholder={language === 'fr' ? 'Votre email' : 'Ny mailakao'} 
+                          placeholder="jean@email.com" 
                           value={formData.email} 
                           onChange={(e) => setFormData({...formData, email: e.target.value})} 
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
@@ -182,7 +198,7 @@ export default function ContactPage() {
                         </label>
                         <input 
                           type="tel" 
-                          placeholder={language === 'fr' ? 'Votre téléphone' : 'Ny telefaoninao'} 
+                          placeholder="032 04 856 97" 
                           value={formData.phone} 
                           onChange={(e) => setFormData({...formData, phone: e.target.value})} 
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" 
@@ -194,7 +210,7 @@ export default function ContactPage() {
                         </label>
                         <input 
                           type="text" 
-                          placeholder={language === 'fr' ? 'Sujet' : 'Lohahevitra'} 
+                          placeholder={language === 'fr' ? 'Question sur...' : 'Fanontaniana...'} 
                           value={formData.subject} 
                           onChange={(e) => setFormData({...formData, subject: e.target.value})} 
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
@@ -207,27 +223,30 @@ export default function ContactPage() {
                         {language === 'fr' ? 'Message' : 'Hafatra'} *
                       </label>
                       <textarea 
-                        placeholder={language === 'fr' ? 'Votre message' : 'Ny hafatrao'} 
+                        placeholder={language === 'fr' ? 'Votre message...' : 'Ny hafatrao...'} 
                         rows={5} 
                         value={formData.message} 
                         onChange={(e) => setFormData({...formData, message: e.target.value})} 
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
                         required
                       />
                     </div>
                     <button 
                       type="submit" 
                       disabled={loading}
-                      className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer"
+                      className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer w-full md:w-auto justify-center"
                     >
                       {loading ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          {language === 'fr' ? 'Envoi en cours...' : 'Fandefasana...'}
+                        </>
                       ) : (
-                        <Send size={18} />
+                        <>
+                          <Send size={18} />
+                          {language === 'fr' ? 'Envoyer le message' : 'Alefaso ny hafatra'}
+                        </>
                       )}
-                      {loading 
-                        ? (language === 'fr' ? 'Envoi en cours...' : 'Fandefasana...') 
-                        : (language === 'fr' ? 'Envoyer le message' : 'Alefaso ny hafatra')}
                     </button>
                   </form>
                 </div>
@@ -235,36 +254,56 @@ export default function ContactPage() {
 
               {/* Informations de contact */}
               <div>
-                <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-gray-100">
+                <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-100">
                   <h3 className="text-xl font-bold text-gray-800 mb-4">
                     {language === 'fr' ? 'Informations' : 'Fampahalalana'}
                   </h3>
                   <div className="space-y-4">
                     <div className="flex gap-3 items-start">
-                      <MapPin className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
-                      <span className="text-gray-600">
-                        {language === 'fr' ? 'Antananarivo, Madagascar' : 'Antananarivo, Madagasikara'}
-                      </span>
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <MapPin className="text-blue-600" size={18} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">Adresse</p>
+                        <span className="text-gray-600 text-sm">
+                          Carion, Antananarivo, Madagascar
+                        </span>
+                      </div>
                     </div>
                     <div className="flex gap-3 items-start">
-                      <Phone className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
-                      <span className="text-gray-600">+261 32 04 85 697</span>
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Phone className="text-blue-600" size={18} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">Téléphone</p>
+                        <span className="text-gray-600 text-sm">+261 32 04 856 97</span>
+                      </div>
                     </div>
                     <div className="flex gap-3 items-start">
-                      <Mail className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
-                      <span className="text-gray-600">ymad.mg@gmail.com</span>
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Mail className="text-blue-600" size={18} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">Email</p>
+                        <span className="text-gray-600 text-sm">ymad.mg@gmail.com</span>
+                      </div>
                     </div>
                     <div className="flex gap-3 items-start">
-                      <Clock className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
-                      <span className="text-gray-600">
-                        {language === 'fr' ? 'Lundi - Vendredi: 8h - 17h' : 'Alatsinainy - Zoma: 8h - 17h'}
-                      </span>
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Clock className="text-blue-600" size={18} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">Horaires</p>
+                        <span className="text-gray-600 text-sm">
+                          Lundi - Vendredi: 8h - 17h
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Reseaux sociaux */}
-                <div className="bg-blue-50 rounded-xl p-6 border border-blue-100">
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
                   <h3 className="text-xl font-bold text-gray-800 mb-4">
                     {language === 'fr' ? 'Suivez-nous' : 'Araho izahay'}
                   </h3>
@@ -286,8 +325,8 @@ export default function ContactPage() {
                 </div>
 
                 {/* Carte de localisation */}
-                <div className="mt-6 bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
-                  <div className="h-48 bg-gray-200 relative">
+                <div className="mt-6 bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+                  <div className="h-56 bg-gray-200 relative">
                     <iframe 
                       src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3831.0!2d47.5!3d-18.9!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTPCsDQ4JzU0LjAiUyA0N8KwMjUnMDAuMCJF!5e0!3m2!1sfr!2smg!4v1!5m2!1sfr!2smg" 
                       width="100%" 
@@ -296,13 +335,13 @@ export default function ContactPage() {
                       allowFullScreen 
                       loading="lazy"
                       title="Carte Y-Mad"
-                      className="grayscale hover:grayscale-0 transition"
+                      className="grayscale hover:grayscale-0 transition duration-300"
                     />
                   </div>
-                  <div className="p-4 text-center">
-                    <p className="text-sm text-gray-500">
-                      <MapPin className="w-3 h-3 inline mr-1" /> 
-                      {language === 'fr' ? 'Antananarivo, Madagascar' : 'Antananarivo, Madagasikara'}
+                  <div className="p-4 text-center bg-gray-50">
+                    <p className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                      <MapPin className="w-3 h-3 text-blue-600" /> 
+                      Carion, Antananarivo, Madagascar
                     </p>
                   </div>
                 </div>

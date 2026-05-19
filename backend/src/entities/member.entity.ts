@@ -1,6 +1,10 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+// backend/src/entities/member.entity.ts
+// VERSION AVEC RELATION
 
-// ✅ Exporter les enums
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { User } from './user.entity';
+
+// Exporter les enums
 export enum MembershipStatus {
   PENDING = 'pending',
   ACTIVE = 'active',
@@ -32,6 +36,11 @@ export class Member {
 
   @Column({ name: 'userId' })
   userId: string;
+
+  // AJOUT: Relation ManyToOne avec User
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
   @Column({ type: 'varchar', default: MembershipStatus.PENDING })
   status: string;

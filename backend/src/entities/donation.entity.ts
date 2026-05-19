@@ -1,19 +1,20 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { User } from './user.entity';
+import { Project } from './project.entity';
 
-// ✅ Exporter les enums
 export enum DonationStatus {
   PENDING = 'pending',
   COMPLETED = 'completed',
   FAILED = 'failed',
-  REFUNDED = 'refunded',
+  REFUNDED = 'refunded'
 }
 
 export enum PaymentProvider {
   MVOLA = 'mvola',
   ORANGE_MONEY = 'orange_money',
   AIRTEL_MONEY = 'airtel_money',
-  BANK_TRANSFER = 'bank_transfer',
-  PAYPAL = 'paypal',
+  BANK = 'bank',
+  PAYPAL = 'paypal'
 }
 
 @Entity('donations')
@@ -24,60 +25,62 @@ export class Donation {
   @Column({ type: 'decimal', precision: 15, scale: 2 })
   amount: number;
 
-  @Column({ default: 'MGA' })
+  @Column({ length: 10, default: 'MGA' })
   currency: string;
 
-  @Column({ name: 'payment_provider' })
-  paymentProvider: string;
+  @Column({ type: 'enum', enum: PaymentProvider })
+  payment_provider: PaymentProvider;
 
-  @Column({ name: 'phone_number', nullable: true })
-  phoneNumber: string;
+  @Column({ length: 20, nullable: true })
+  phone_number: string;
 
-  @Column({ name: 'transaction_id', nullable: true })
-  transactionId: string;
+  @Column({ length: 255, nullable: true })
+  transaction_id: string;
 
-  @Column({ name: 'mvola_transaction_id', nullable: true })
-  mvolaTransactionId: string;
+  @Column({ type: 'enum', enum: DonationStatus, default: DonationStatus.PENDING })
+  status: DonationStatus;
 
-  @Column({ name: 'orange_transaction_id', nullable: true })
-  orangeTransactionId: string;
+  @Column({ type: 'uuid', nullable: true })
+  user_id: string;
 
-  @Column({ type: 'varchar', default: DonationStatus.PENDING })
-  status: string;
+  @Column({ type: 'uuid', nullable: true })
+  project_id: string;
 
-  @Column({ name: 'user_id', nullable: true })
-  userId: string;
+  @Column({ length: 255, nullable: true })
+  donor_name: string;
 
-  @Column({ name: 'project_id', nullable: true })
-  projectId: string;
+  @Column({ length: 255, nullable: true })
+  donor_email: string;
 
-  @Column({ name: 'donor_name', nullable: true })
-  donorName: string;
-
-  @Column({ name: 'donor_email', nullable: true })
-  donorEmail: string;
-
-  @Column({ name: 'donor_phone', nullable: true })
-  donorPhone: string;
+  @Column({ length: 50, nullable: true })
+  donor_phone: string;
 
   @Column({ type: 'text', nullable: true })
   message: string;
 
-  @Column({ name: 'is_anonymous', default: false })
-  isAnonymous: boolean;
+  @Column({ default: false })
+  is_anonymous: boolean;
 
-  @Column({ name: 'is_recurring', default: false })
-  isRecurring: boolean;
+  @Column({ default: false })
+  is_recurring: boolean;
 
-  @Column({ name: 'recurring_interval', nullable: true })
-  recurringInterval: string;
+  @Column({ length: 50, nullable: true })
+  recurring_interval: string;
 
-  @Column({ name: 'receipt_url', nullable: true })
-  receiptUrl: string;
+  @Column({ type: 'text', nullable: true })
+  receipt_url: string;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  @CreateDateColumn()
+  created_at: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  @UpdateDateColumn()
+  updated_at: Date;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'user_id' })
+  user: User;
+
+  @ManyToOne(() => Project)
+  @JoinColumn({ name: 'project_id' })
+  project: Project;
 }

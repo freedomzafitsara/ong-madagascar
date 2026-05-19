@@ -1,3 +1,5 @@
+// backend/src/app.module.ts
+
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -14,7 +16,7 @@ import { JobsModule } from './modules/jobs/jobs.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { PagesModule } from './modules/pages/pages.module';
-import { BeneficiariesModule } from './modules/beneficiaries/beneficiaries.module'; // ← AJOUTÉ
+import { BeneficiariesModule } from './modules/beneficiaries/beneficiaries.module';
 
 // Guards
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -34,19 +36,16 @@ import { FooterSection } from './modules/footer/entities/footer-section.entity';
 import { FooterLink } from './modules/footer/entities/footer-link.entity';
 import { FooterContact } from './modules/footer/entities/footer-contact.entity';
 import { FooterLegalLink } from './modules/footer/entities/footer-legal-link.entity';
-import { PageContent } from './entities/page-content.entity';  
+import { PageContent } from './entities/page-content.entity';
 import { PageBackground } from './entities/page-background.entity';
-import { Beneficiary } from './entities/beneficiary.entity'; // ← AJOUTÉ
+import { Beneficiary } from './entities/beneficiary.entity';
 
 @Module({
   imports: [
-    // Configuration des variables d'environnement
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-
-    // Base de données PostgreSQL
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -70,17 +69,15 @@ import { Beneficiary } from './entities/beneficiary.entity'; // ← AJOUTÉ
           FooterLink,
           FooterContact,
           FooterLegalLink,
-          PageContent,     
+          PageContent,
           PageBackground,
-          Beneficiary, // ← AJOUTÉ (l'entité)
+          Beneficiary,
         ],
-        synchronize: false,  // ← Mettre à true pour la première fois (puis repasser à false)
+        synchronize: false,
         logging: true,
       }),
       inject: [ConfigService],
     }),
-
-    // Modules fonctionnels
     AuthModule,
     ProjectsModule,
     FooterModule,
@@ -91,17 +88,11 @@ import { Beneficiary } from './entities/beneficiary.entity'; // ← AJOUTÉ
     BlogModule,
     UploadModule,
     PagesModule,
-    BeneficiariesModule, // ← AJOUTÉ (le module)
+    BeneficiariesModule,
   ],
   providers: [
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}
