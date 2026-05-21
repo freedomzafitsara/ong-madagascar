@@ -1,5 +1,3 @@
-// backend/src/modules/auth/enums/roles.enum.ts
-
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
   ADMIN = 'admin',
@@ -7,5 +5,5 @@ export enum UserRole {
   MEMBER = 'member',
   VOLUNTEER = 'volunteer',
   PARTNER = 'partner',
-  VISITOR = 'visitor',  // ← Ajoute visitor si nécessaire
+  VISITOR = 'visitor',
 }

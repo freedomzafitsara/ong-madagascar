@@ -1,21 +1,15 @@
-// backend/create-super-admin.ts
-// SCRIPT D'INITIALISATION DU SUPER ADMIN Y-MAD
-// Conforme au Cahier des Charges - Sections 4.1, 4.13, 9
-
 import { Client } from 'pg';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
-// Configuration de la connexion à la base de données
 const client = new Client({
   host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
+  port: parseInt(process.env.DB_PORT || '5432', 10),
   user: process.env.DB_USERNAME || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
   database: process.env.DB_DATABASE || 'ymad_db',
 });
 
-// Informations réelles de l'association Y-Mad
 const ASSOCIATION_INFO = {
   name: 'Y-Mad',
   fullName: 'Youthful Madagascar',
@@ -26,7 +20,6 @@ const ASSOCIATION_INFO = {
   website: 'https://y-mad.mg',
 };
 
-// Configuration du compte Super Admin
 const SUPER_ADMIN_CONFIG = {
   email: 'admin@ymad.mg',
   password: 'admin123',
@@ -37,12 +30,10 @@ const SUPER_ADMIN_CONFIG = {
   region: 'Analamanga',
 };
 
-// Fonction pour générer un token de sécurité unique
 function generateSecureToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
-// Fonction principale d'initialisation du Super Admin
 async function initSuperAdmin() {
   console.log('');
   console.log('============================================================');
@@ -58,14 +49,12 @@ async function initSuperAdmin() {
   console.log('');
 
   try {
-    // Étape 1 : Connexion à PostgreSQL
     await client.connect();
-    console.log('SUCCES : Connexion à PostgreSQL etablie');
+    console.log('SUCCES : Connexion a PostgreSQL etablie');
     console.log('  - Base de donnees : ' + (process.env.DB_DATABASE || 'ymad_db'));
     console.log('  - Hote           : ' + (process.env.DB_HOST || 'localhost'));
     console.log('');
 
-    // Étape 2 : Vérifier l'existence de la table users
     const tableCheck = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -74,15 +63,14 @@ async function initSuperAdmin() {
     `);
     
     if (!tableCheck.rows[0].exists) {
-      console.log('ERREUR : La table "users" n existe pas.');
+      console.log('ERREUR : La table users n existe pas.');
       console.log('ACTION : Veuillez d abord executer le fichier database-schema.sql');
       return;
     }
     
-    console.log('SUCCES : Table "users" trouvee');
+    console.log('SUCCES : Table users trouvee');
     console.log('');
 
-    // Étape 3 : Vérifier si l'admin existe déjà
     const existingAdmin = await client.query(`
       SELECT id, email, role, is_active, first_name, last_name 
       FROM users 
@@ -104,13 +92,11 @@ async function initSuperAdmin() {
       console.log('');
     }
 
-    // Étape 4 : Hashage du mot de passe avec Bcrypt
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(SUPER_ADMIN_CONFIG.password, saltRounds);
     const verificationToken = generateSecureToken();
     const resetToken = generateSecureToken();
 
-    // Étape 5 : Creation ou mise à jour du super admin
     const result = await client.query(`
       INSERT INTO users (
         id, 
@@ -173,7 +159,6 @@ async function initSuperAdmin() {
       resetToken
     ]);
 
-    // Verification du succès de l'operation
     if (result.rows.length === 0) {
       console.log('ERREUR : La creation du super admin a echoue');
       return;
@@ -181,7 +166,6 @@ async function initSuperAdmin() {
 
     const admin = result.rows[0];
     
-    // Étape 6 : Verifier si la table audit_logs existe
     const auditTableCheck = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -190,7 +174,6 @@ async function initSuperAdmin() {
     `);
     
     if (auditTableCheck.rows[0].exists) {
-      // Enregistrement dans le journal d'audit
       await client.query(`
         INSERT INTO audit_logs (
           id, user_id, action, entity_type, entity_id, 
@@ -217,7 +200,6 @@ async function initSuperAdmin() {
       console.log('SUCCES : Entree ajoutee dans le journal d audit');
     }
 
-    // Affichage des résultats
     console.log('');
     console.log('============================================================');
     console.log('COMPTE ADMINISTRATEUR CONFIGURE AVEC SUCCES');
@@ -259,7 +241,6 @@ async function initSuperAdmin() {
     console.log('------------------------------------------------------------');
     console.log('');
 
-    // Étape 7 : Afficher les statistiques des utilisateurs
     const stats = await client.query(`
       SELECT 
         COUNT(*) as total_users,
@@ -284,7 +265,7 @@ async function initSuperAdmin() {
     console.log('============================================================');
     console.log('');
 
-  } catch (error) {
+  } catch (error: any) {
     console.log('');
     console.log('ERREUR LORS DE L INITIALISATION :');
     console.log('------------------------------------------------------------');
@@ -292,7 +273,7 @@ async function initSuperAdmin() {
     console.log('  Code    : ' + (error.code || 'Non disponible'));
     
     if (error.code === '42P01') {
-      console.log('  Cause   : La table "users" n existe pas.');
+      console.log('  Cause   : La table users n existe pas.');
       console.log('  Action  : Executez d abord le fichier database-schema.sql');
     } else if (error.code === '28P01') {
       console.log('  Cause   : Erreur d authentification PostgreSQL');
@@ -307,5 +288,4 @@ async function initSuperAdmin() {
   }
 }
 
-// Lancer le script
 initSuperAdmin();

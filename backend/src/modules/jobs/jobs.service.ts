@@ -1,4 +1,4 @@
-﻿import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+﻿import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, MoreThan } from 'typeorm';
 import { JobOffer, JobStatus, JobType } from '../../entities/job-offer.entity';
@@ -8,6 +8,8 @@ import { CreateJobApplicationDto, UpdateApplicationStatusDto } from './dto/creat
 
 @Injectable()
 export class JobsService {
+  private readonly logger = new Logger(JobsService.name);
+
   constructor(
     @InjectRepository(JobOffer)
     private jobRepository: Repository<JobOffer>,
@@ -16,12 +18,11 @@ export class JobsService {
   ) {}
 
   // ============================================================
-  // OFFRES D'EMPLOI
+  // SECTION 1 : GESTION DES OFFRES D EMPLOI
   // ============================================================
 
   async create(createDto: CreateJobOfferDto, userId: string): Promise<JobOffer> {
     try {
-      // Création explicite avec les propriétés de l'entité
       const job = new JobOffer();
       job.title = createDto.title;
       job.title_mg = createDto.title_mg;
@@ -45,9 +46,11 @@ export class JobsService {
       job.created_by = userId;
       job.applications_count = 0;
       
-      return await this.jobRepository.save(job);
+      const savedJob = await this.jobRepository.save(job);
+      this.logger.log(`Offre d emploi créée: ${savedJob.title} par ${userId}`);
+      return savedJob;
     } catch (error) {
-      console.error('Erreur création offre:', error);
+      this.logger.error(`Erreur lors de la création de l offre: ${error.message}`);
       throw new BadRequestException(`Erreur lors de la création: ${error.message}`);
     }
   }
@@ -84,7 +87,7 @@ export class JobsService {
 
       return { data, total, page, totalPages: Math.ceil(total / limit), limit };
     } catch (error) {
-      console.error('Erreur findAll:', error);
+      this.logger.error(`Erreur lors de la récupération des offres: ${error.message}`);
       return { data: [], total: 0, page: 1, totalPages: 0, limit };
     }
   }
@@ -115,7 +118,7 @@ export class JobsService {
 
       return { data, total, page, totalPages: Math.ceil(total / limit), limit };
     } catch (error) {
-      console.error('Erreur findPublished:', error);
+      this.logger.error(`Erreur lors de la récupération des offres publiées: ${error.message}`);
       return { data: [], total: 0, page: 1, totalPages: 0, limit };
     }
   }
@@ -127,13 +130,13 @@ export class JobsService {
         where: {
           status: JobStatus.PUBLISHED,
           is_featured: true,
-          ...(now && { deadline: MoreThan(now) }),
+          deadline: MoreThan(now),
         },
         order: { created_at: 'DESC' },
         take: 6,
       });
     } catch (error) {
-      console.error('Erreur findFeatured:', error);
+      this.logger.error(`Erreur lors de la récupération des offres vedettes: ${error.message}`);
       return [];
     }
   }
@@ -141,7 +144,7 @@ export class JobsService {
   async findOne(id: string): Promise<JobOffer> {
     const job = await this.jobRepository.findOne({ where: { id } });
     if (!job) {
-      throw new NotFoundException(`Offre d'emploi avec l'id ${id} non trouvée`);
+      throw new NotFoundException(`Offre d emploi avec l identifiant ${id} non trouvée`);
     }
     return job;
   }
@@ -150,7 +153,6 @@ export class JobsService {
     try {
       const job = await this.findOne(id);
       
-      // Mise à jour explicite des champs
       if (updateDto.title !== undefined) job.title = updateDto.title;
       if (updateDto.title_mg !== undefined) job.title_mg = updateDto.title_mg;
       if (updateDto.description !== undefined) job.description = updateDto.description;
@@ -171,9 +173,11 @@ export class JobsService {
       if (updateDto.contact_phone !== undefined) job.contact_phone = updateDto.contact_phone;
       if (updateDto.status !== undefined) job.status = updateDto.status;
       
-      return await this.jobRepository.save(job);
+      const updatedJob = await this.jobRepository.save(job);
+      this.logger.log(`Offre d emploi mise à jour: ${updatedJob.id}`);
+      return updatedJob;
     } catch (error) {
-      console.error('Erreur mise à jour offre:', error);
+      this.logger.error(`Erreur lors de la mise à jour de l offre: ${error.message}`);
       throw new BadRequestException(`Erreur lors de la mise à jour: ${error.message}`);
     }
   }
@@ -182,9 +186,11 @@ export class JobsService {
     try {
       const job = await this.findOne(id);
       job.status = status;
-      return await this.jobRepository.save(job);
+      const updatedJob = await this.jobRepository.save(job);
+      this.logger.log(`Statut de l offre mis à jour: ${id} -> ${status}`);
+      return updatedJob;
     } catch (error) {
-      console.error('Erreur mise à jour statut:', error);
+      this.logger.error(`Erreur lors du changement de statut: ${error.message}`);
       throw new BadRequestException(`Erreur lors du changement de statut: ${error.message}`);
     }
   }
@@ -192,6 +198,7 @@ export class JobsService {
   async remove(id: string): Promise<void> {
     const job = await this.findOne(id);
     await this.jobRepository.remove(job);
+    this.logger.log(`Offre d emploi supprimée: ${id}`);
   }
 
   async getStats() {
@@ -214,15 +221,33 @@ export class JobsService {
         where: { status: ApplicationStatus.SUBMITTED } 
       });
 
-      return { total, published, draft, closed, expired, featured, totalApplications, pendingApplications };
+      return { 
+        total, 
+        published, 
+        draft, 
+        closed, 
+        expired, 
+        featured, 
+        totalApplications, 
+        pendingApplications 
+      };
     } catch (error) {
-      console.error('Erreur getStats:', error);
-      return { total: 0, published: 0, draft: 0, closed: 0, expired: 0, featured: 0, totalApplications: 0, pendingApplications: 0 };
+      this.logger.error(`Erreur lors de la récupération des statistiques: ${error.message}`);
+      return { 
+        total: 0, 
+        published: 0, 
+        draft: 0, 
+        closed: 0, 
+        expired: 0, 
+        featured: 0, 
+        totalApplications: 0, 
+        pendingApplications: 0 
+      };
     }
   }
 
   // ============================================================
-  // CANDIDATURES
+  // SECTION 2 : GESTION DES CANDIDATURES
   // ============================================================
 
   async apply(createDto: CreateJobApplicationDto, files: any, userId?: string): Promise<JobApplication> {
@@ -230,11 +255,11 @@ export class JobsService {
       const job = await this.findOne(createDto.job_offer_id);
 
       if (job.status !== JobStatus.PUBLISHED) {
-        throw new BadRequestException('Cette offre n\'est plus disponible');
+        throw new BadRequestException("Cette offre n'est plus disponible");
       }
 
       if (job.deadline && new Date(job.deadline) < new Date()) {
-        throw new BadRequestException('La date limite de candidature est dépassée');
+        throw new BadRequestException("La date limite de candidature est dépassée");
       }
 
       const existing = await this.applicationRepository.findOne({
@@ -245,7 +270,7 @@ export class JobsService {
       });
 
       if (existing) {
-        throw new BadRequestException('Vous avez déjà postulé à cette offre');
+        throw new BadRequestException("Vous avez déjà postulé à cette offre");
       }
 
       const application = new JobApplication();
@@ -263,14 +288,15 @@ export class JobsService {
       application.attestation_url = files?.attestation?.[0]?.path;
       application.status = ApplicationStatus.SUBMITTED;
 
-      const saved = await this.applicationRepository.save(application);
+      const savedApplication = await this.applicationRepository.save(application);
 
       job.applications_count += 1;
       await this.jobRepository.save(job);
 
-      return saved;
+      this.logger.log(`Nouvelle candidature pour l offre ${createDto.job_offer_id} par ${createDto.email}`);
+      return savedApplication;
     } catch (error) {
-      console.error('Erreur candidature:', error);
+      this.logger.error(`Erreur lors de la candidature: ${error.message}`);
       throw new BadRequestException(error.message);
     }
   }
@@ -290,7 +316,7 @@ export class JobsService {
       const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
       return { data, total, page, totalPages: Math.ceil(total / limit), limit };
     } catch (error) {
-      console.error('Erreur getApplicationsByJob:', error);
+      this.logger.error(`Erreur lors de la récupération des candidatures pour l offre: ${error.message}`);
       return { data: [], total: 0, page: 1, totalPages: 0, limit };
     }
   }
@@ -301,7 +327,7 @@ export class JobsService {
       relations: ['jobOffer', 'user'],
     });
     if (!application) {
-      throw new NotFoundException('Candidature non trouvée');
+      throw new NotFoundException("Candidature non trouvée");
     }
     return application;
   }
@@ -313,9 +339,12 @@ export class JobsService {
       application.notes = updateDto.notes;
       application.reviewed_by = reviewerId;
       application.reviewed_at = new Date();
-      return await this.applicationRepository.save(application);
+      
+      const updatedApplication = await this.applicationRepository.save(application);
+      this.logger.log(`Statut de candidature mis à jour: ${id} -> ${updateDto.status} par ${reviewerId}`);
+      return updatedApplication;
     } catch (error) {
-      console.error('Erreur mise à jour statut candidature:', error);
+      this.logger.error(`Erreur lors de la mise à jour du statut de candidature: ${error.message}`);
       throw new BadRequestException(`Erreur lors de la mise à jour: ${error.message}`);
     }
   }
@@ -332,7 +361,7 @@ export class JobsService {
       });
       return { data, total, page, totalPages: Math.ceil(total / limit), limit };
     } catch (error) {
-      console.error('Erreur getUserApplications:', error);
+      this.logger.error(`Erreur lors de la récupération des candidatures de l utilisateur: ${error.message}`);
       return { data: [], total: 0, page: 1, totalPages: 0, limit };
     }
   }
@@ -351,7 +380,7 @@ export class JobsService {
       const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
       return { data, total, page, totalPages: Math.ceil(total / limit), limit };
     } catch (error) {
-      console.error('Erreur getAllApplications:', error);
+      this.logger.error(`Erreur lors de la récupération de toutes les candidatures: ${error.message}`);
       return { data: [], total: 0, page: 1, totalPages: 0, limit };
     }
   }

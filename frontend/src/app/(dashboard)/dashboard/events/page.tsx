@@ -8,6 +8,10 @@ import { eventsApi } from '@/lib/api';
 import { Calendar, Plus, Search, RefreshCw, Loader2, Eye, Edit, Trash2, MapPin, Clock, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+// ============================================================
+// INTERFACES
+// ============================================================
+
 interface Event {
   id: string;
   title: string;
@@ -30,12 +34,20 @@ interface StatsData {
   upcoming: number;
 }
 
+// ============================================================
+// CONSTANTES
+// ============================================================
+
 const STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
   draft: { label: 'Brouillon', bg: 'bg-gray-100', text: 'text-gray-600' },
-  published: { label: 'Publié', bg: 'bg-blue-100', text: 'text-blue-700' },
-  cancelled: { label: 'Annulé', bg: 'bg-gray-200', text: 'text-gray-700' },
-  completed: { label: 'Terminé', bg: 'bg-blue-50', text: 'text-blue-600' }
+  published: { label: 'Publie', bg: 'bg-blue-100', text: 'text-blue-700' },
+  cancelled: { label: 'Annule', bg: 'bg-gray-200', text: 'text-gray-700' },
+  completed: { label: 'Termine', bg: 'bg-blue-50', text: 'text-blue-600' }
 };
+
+// ============================================================
+// SOUS-COMPOSANTS
+// ============================================================
 
 function StatusBadge({ status }: { status: string }) {
   const config = STATUS_STYLES[status] || STATUS_STYLES.draft;
@@ -56,6 +68,10 @@ function StatCard({ title, value, color = 'gray' }: { title: string; value: numb
   );
 }
 
+// ============================================================
+// COMPOSANT PRINCIPAL
+// ============================================================
+
 export default function EventsPage() {
   const { user, token, isAuthenticated } = useAuth();
   const router = useRouter();
@@ -67,6 +83,10 @@ export default function EventsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [stats, setStats] = useState<StatsData>({ total: 0, published: 0, draft: 0, upcoming: 0 });
 
+  // ============================================================
+  // SECTION 1 : VERIFICATION DES DROITS
+  // ============================================================
+
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login');
@@ -75,6 +95,10 @@ export default function EventsPage() {
 
   const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'staff';
   const isSuperAdmin = user?.role === 'super_admin';
+
+  // ============================================================
+  // SECTION 2 : CHARGEMENT DES DONNEES
+  // ============================================================
 
   const fetchEvents = useCallback(async () => {
     if (!token) return;
@@ -120,11 +144,15 @@ export default function EventsPage() {
     }
   }, [token, currentPage, filterStatus, searchTerm, fetchEvents, fetchStats]);
 
+  // ============================================================
+  // SECTION 3 : GESTIONNAIRES D EVENEMENTS
+  // ============================================================
+
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`Supprimer l'événement "${title}" ? Cette action est irréversible.`)) return;
+    if (!confirm(`Supprimer l evenement "${title}" ? Cette action est irreversible.`)) return;
     try {
       await eventsApi.delete(id);
-      toast.success('Événement supprimé avec succès');
+      toast.success('Evenement supprime avec succes');
       fetchEvents();
       fetchStats();
     } catch (error: any) {
@@ -135,7 +163,7 @@ export default function EventsPage() {
   const handlePublish = async (id: string) => {
     try {
       await eventsApi.changeStatus(id, 'published');
-      toast.success('Événement publié avec succès');
+      toast.success('Evenement publie avec succes');
       fetchEvents();
       fetchStats();
     } catch (error: any) {
@@ -143,8 +171,12 @@ export default function EventsPage() {
     }
   };
 
+  // ============================================================
+  // SECTION 4 : FONCTIONS UTILITAIRES
+  // ============================================================
+
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'Non définie';
+    if (!dateString) return 'Non definie';
     try {
       return new Date(dateString).toLocaleDateString('fr-FR', { 
         day: '2-digit', 
@@ -161,7 +193,7 @@ export default function EventsPage() {
       camp: 'Camp', 
       workshop: 'Atelier', 
       hackathon: 'Hackathon', 
-      conference: 'Conférence', 
+      conference: 'Conference', 
       formation: 'Formation' 
     };
     return types[type] || type;
@@ -173,22 +205,39 @@ export default function EventsPage() {
     setCurrentPage(1);
   };
 
+  // ============================================================
+  // SECTION 5 : ECRAN DE CHARGEMENT
+  // ============================================================
+
   if (loading && events.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
         <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-        <p className="text-gray-500">Chargement des événements...</p>
+        <p className="text-gray-500">Chargement des evenements...</p>
       </div>
     );
   }
 
+  // ============================================================
+  // SECTION 6 : RENDU PRINCIPAL
+  // ============================================================
+
   return (
     <div className="space-y-6">
-      {/* En-tête */}
+      
+      {/* SOUS-SECTION 6.1 : EN-TETE ET ACTIONS RAPIDES */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Événements</h1>
-          <p className="text-gray-500 text-sm mt-1">Gérez les camps, ateliers et formations</p>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <Calendar className="w-4 h-4 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-800">Evenements</h1>
+            {user?.role === 'super_admin' && (
+              <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">Super Admin</span>
+            )}
+          </div>
+          <p className="text-gray-500 text-sm">Gerez les camps, ateliers et formations</p>
         </div>
         <div className="flex gap-3">
           <button 
@@ -202,21 +251,21 @@ export default function EventsPage() {
               href="/dashboard/events/new" 
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm"
             >
-              <Plus className="w-4 h-4" /> Nouvel événement
+              <Plus className="w-4 h-4" /> Nouvel evenement
             </Link>
           )}
         </div>
       </div>
 
-      {/* Statistiques */}
+      {/* SOUS-SECTION 6.2 : STATISTIQUES */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="Total événements" value={stats.total} />
-        <StatCard title="Publiés" value={stats.published} color="blue" />
+        <StatCard title="Total evenements" value={stats.total} />
+        <StatCard title="Publies" value={stats.published} color="blue" />
         <StatCard title="Brouillons" value={stats.draft} />
-        <StatCard title="À venir" value={stats.upcoming} color="blue" />
+        <StatCard title="A venir" value={stats.upcoming} color="blue" />
       </div>
 
-      {/* Filtres */}
+      {/* SOUS-SECTION 6.3 : FILTRES ET RECHERCHE */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 relative">
@@ -235,35 +284,35 @@ export default function EventsPage() {
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
           >
             <option value="all">Tous les statuts</option>
-            <option value="published">Publiés</option>
+            <option value="published">Publies</option>
             <option value="draft">Brouillons</option>
-            <option value="completed">Terminés</option>
-            <option value="cancelled">Annulés</option>
+            <option value="completed">Termines</option>
+            <option value="cancelled">Annules</option>
           </select>
           {(searchTerm || filterStatus !== 'all') && (
             <button 
               onClick={resetFilters} 
               className="flex items-center gap-1 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
             >
-              <X className="w-4 h-4" /> Réinitialiser
+              <X className="w-4 h-4" /> Reinitialiser
             </button>
           )}
         </div>
       </div>
 
-      {/* Tableau des événements */}
+      {/* SOUS-SECTION 6.4 : TABLEAU DES EVENEMENTS */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Titre</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Type</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Lieu</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Capacité</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Statut</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Titre</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Lieu</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Capacite</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Statut</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -272,10 +321,10 @@ export default function EventsPage() {
                   <td colSpan={7} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Calendar className="w-12 h-12 text-gray-300" />
-                      <p className="text-gray-500 font-medium">Aucun événement trouvé</p>
+                      <p className="text-gray-500 font-medium">Aucun evenement trouve</p>
                       {hasEditRights && (
                         <Link href="/dashboard/events/new" className="mt-2 text-blue-600 hover:underline text-sm">
-                          Créer un événement
+                          Creer un evenement
                         </Link>
                       )}
                     </div>
@@ -317,7 +366,7 @@ export default function EventsPage() {
                         <Link 
                           href={`/dashboard/events/${event.id}`} 
                           className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                          title="Voir détails"
+                          title="Voir details"
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
@@ -360,7 +409,7 @@ export default function EventsPage() {
         </div>
       </div>
 
-      {/* Pagination */}
+      {/* SOUS-SECTION 6.5 : PAGINATION */}
       {totalPages > 1 && events.length > 0 && (
         <div className="flex justify-center items-center gap-4 py-2">
           <button

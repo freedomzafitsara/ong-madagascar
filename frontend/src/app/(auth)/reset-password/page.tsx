@@ -19,6 +19,8 @@ export default function ResetPasswordPage() {
   const [validToken, setValidToken] = useState<boolean | null>(null);
   const [checkingToken, setCheckingToken] = useState(true);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+
   useEffect(() => {
     if (!token) {
       setValidToken(false);
@@ -42,18 +44,18 @@ export default function ResetPasswordPage() {
     }
 
     if (password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères');
+      setError('Le mot de passe doit contenir au moins 6 caracteres');
       setLoading(false);
       return;
     }
 
     try {
-      const response = await fetch('http://localhost:4001/auth/reset-password', {
+      const response = await fetch(`${API_URL}/auth/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ token, newPassword: password }),
       });
 
       const data = await response.json();
@@ -74,19 +76,17 @@ export default function ResetPasswordPage() {
     }
   };
 
-  // Vérification du token
   if (checkingToken) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Vérification du lien...</p>
+          <p className="text-gray-600">Verification du lien</p>
         </div>
       </div>
     );
   }
 
-  // Token invalide
   if (!validToken) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4">
@@ -94,7 +94,7 @@ export default function ResetPasswordPage() {
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Lien invalide</h2>
           <p className="text-gray-600 mb-6">
-            Ce lien de réinitialisation est invalide ou a expiré.
+            Ce lien de reinitialisation est invalide ou a expire.
           </p>
           <Link
             href="/forgot-password"
@@ -107,18 +107,17 @@ export default function ResetPasswordPage() {
     );
   }
 
-  // Succès
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Mot de passe modifié !</h2>
+          <CheckCircle className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Mot de passe modifie</h2>
           <p className="text-gray-600 mb-4">
-            Votre mot de passe a été réinitialisé avec succès.
+            Votre mot de passe a ete reinitialise avec succes.
           </p>
           <p className="text-gray-500 text-sm mb-6">
-            Redirection vers la page de connexion...
+            Redirection vers la page de connexion.
           </p>
           <div className="w-16 h-1 bg-blue-600 mx-auto rounded-full animate-pulse" />
         </div>
@@ -145,7 +144,7 @@ export default function ResetPasswordPage() {
           </div>
           <h2 className="text-3xl font-bold text-gray-800">Nouveau mot de passe</h2>
           <p className="text-gray-500 mt-2">
-            Choisissez un nouveau mot de passe sécurisé
+            Choisissez un nouveau mot de passe securise
           </p>
         </div>
 
@@ -159,7 +158,7 @@ export default function ResetPasswordPage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nouveau mot de passe *
+              Nouveau mot de passe
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -179,12 +178,12 @@ export default function ResetPasswordPage() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères</p>
+            <p className="text-xs text-gray-500 mt-1">Minimum 6 caracteres</p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Confirmer le mot de passe *
+              Confirmer le mot de passe
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -207,10 +206,10 @@ export default function ResetPasswordPage() {
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Réinitialisation en cours...
+                Reinitialisation en cours
               </>
             ) : (
-              'Réinitialiser le mot de passe'
+              'Reinitialiser le mot de passe'
             )}
           </button>
         </form>

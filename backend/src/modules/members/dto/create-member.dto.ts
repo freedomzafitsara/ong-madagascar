@@ -1,29 +1,54 @@
-// backend/src/modules/members/dto/create-member.dto.ts
-// VERSION FINALE - CORRECTE
+import { IsString, IsEmail, IsOptional, IsEnum, IsNumber, IsDate, IsNotEmpty } from 'class-validator';
+import { Type } from 'class-transformer';
+import { MembershipType, PaymentMethod } from '../../../entities/member.entity';
 
-import { IsString, IsOptional, IsIn } from 'class-validator';
-
-export class CreateMemberDto {
+export class CreateMemberUserDto {
   @IsString()
-  @IsIn(['standard', 'premium', 'student', 'honorary'])
-  membershipType: string;
+  @IsNotEmpty()
+  firstName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  lastName: string;
+
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
 
   @IsOptional()
   @IsString()
-  @IsIn(['mvola', 'orange_money', 'airtel', 'bank'])
-  paymentMethod?: string;
+  phone?: string;
 
   @IsOptional()
   @IsString()
-  phoneNumber?: string;
-
-  @IsOptional()
-  @IsString()
-  userId?: string;
+  region?: string;
 }
 
+export class CreateMemberDto {
+  @IsNotEmpty()
+  user: CreateMemberUserDto;
+
+  @IsEnum(MembershipType)
+  membershipType: MembershipType;
+
+  @IsEnum(PaymentMethod)
+  paymentMethod: PaymentMethod;
+
+  @IsNumber()
+  amountPaid: number;
+
+  @Type(() => Date)
+  @IsDate()
+  startDate: Date;
+
+  @Type(() => Date)
+  @IsDate()
+  endDate: Date;
+}
+
+// Ajout de UpdateMemberStatusDto
 export class UpdateMemberStatusDto {
   @IsString()
-  @IsIn(['pending', 'active', 'expired', 'suspended'])
+  @IsNotEmpty()
   status: string;
 }

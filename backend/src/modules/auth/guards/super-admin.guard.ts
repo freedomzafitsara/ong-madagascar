@@ -14,9 +14,6 @@ export class SuperAdminGuard implements CanActivate {
       throw new ForbiddenException('Accès réservé au Super Administrateur');
     }
 
-    // Vérifier qu'il n'y a qu'un seul super admin actif
-    // Cette logique peut être étendue
-
     return true;
   }
 }

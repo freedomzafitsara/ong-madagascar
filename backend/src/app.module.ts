@@ -1,5 +1,3 @@
-// backend/src/app.module.ts
-
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -17,6 +15,7 @@ import { BlogModule } from './modules/blog/blog.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { PagesModule } from './modules/pages/pages.module';
 import { BeneficiariesModule } from './modules/beneficiaries/beneficiaries.module';
+import { BackgroundsModule } from './modules/backgrounds/backgrounds.module';
 
 // Guards
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -39,6 +38,7 @@ import { FooterLegalLink } from './modules/footer/entities/footer-legal-link.ent
 import { PageContent } from './entities/page-content.entity';
 import { PageBackground } from './entities/page-background.entity';
 import { Beneficiary } from './entities/beneficiary.entity';
+import { Background } from './entities/background.entity';
 
 @Module({
   imports: [
@@ -51,7 +51,7 @@ import { Beneficiary } from './entities/beneficiary.entity';
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         host: configService.get('DB_HOST', 'localhost'),
-        port: parseInt(configService.get('DB_PORT', '5432')),
+        port: parseInt(configService.get('DB_PORT', '5432'), 10),
         username: configService.get('DB_USERNAME', 'postgres'),
         password: configService.get('DB_PASSWORD', 'postgres'),
         database: configService.get('DB_DATABASE', 'ymad_db'),
@@ -72,6 +72,7 @@ import { Beneficiary } from './entities/beneficiary.entity';
           PageContent,
           PageBackground,
           Beneficiary,
+          Background,
         ],
         synchronize: false,
         logging: true,
@@ -89,10 +90,17 @@ import { Beneficiary } from './entities/beneficiary.entity';
     UploadModule,
     PagesModule,
     BeneficiariesModule,
+    BackgroundsModule,
   ],
   providers: [
-    { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
   ],
 })
 export class AppModule {}

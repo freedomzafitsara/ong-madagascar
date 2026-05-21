@@ -1,12 +1,12 @@
-﻿// src/modules/auth/entities/user.entity.ts
-import { 
+﻿import { 
   Entity, 
   Column, 
   PrimaryGeneratedColumn, 
   CreateDateColumn, 
   UpdateDateColumn,
   BeforeInsert,
-  BeforeUpdate
+  BeforeUpdate,
+  Index
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
@@ -21,6 +21,9 @@ export enum UserRole {
 }
 
 @Entity('users')
+@Index(['email'])
+@Index(['role'])
+@Index(['isActive'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -31,31 +34,48 @@ export class User {
   @Column({ name: 'last_name', length: 100 })
   lastName: string;
 
-  @Column({ unique: true })
+  @Column({ unique: true, length: 255 })
   email: string;
 
-  @Column({ select: false })
+  @Column({ select: false, length: 255 })
   password: string;
 
-  @Column({ nullable: true })
+  @Column({ length: 20, nullable: true })
   phone: string;
 
-  @Column({ type: 'enum', enum: UserRole, default: UserRole.VISITOR })
-  role: UserRole;
+  @Column({ 
+    type: 'varchar', 
+    length: 20,
+    default: UserRole.VISITOR 
+  })
+  role: string;
 
-  @Column({ name: 'avatar_url', nullable: true })
+  @Column({ name: 'avatar_url', length: 500, nullable: true })
   avatarUrl: string;
 
-  @Column({ name: 'bio', type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true })
   bio: string;
 
-  @Column({ name: 'social_links', type: 'jsonb', nullable: true })
-  socialLinks: {
-    facebook?: string;
-    instagram?: string;
-    linkedin?: string;
-    twitter?: string;
-  };
+  @Column({ name: 'region', length: 100, nullable: true })
+  region: string;
+
+  @Column({ name: 'position', length: 100, nullable: true })
+  position: string;
+
+  @Column({ name: 'department', length: 100, nullable: true })
+  department: string;
+
+  @Column({ type: 'text', nullable: true })
+  skills: string;
+
+  @Column({ name: 'social_linkedin', length: 255, nullable: true })
+  socialLinkedin: string;
+
+  @Column({ name: 'social_twitter', length: 255, nullable: true })
+  socialTwitter: string;
+
+  @Column({ name: 'social_github', length: 255, nullable: true })
+  socialGithub: string;
 
   @Column({ name: 'reset_password_token', nullable: true })
   resetPasswordToken: string;
@@ -66,14 +86,14 @@ export class User {
   @Column({ name: 'email_verified', default: false })
   emailVerified: boolean;
 
-  @Column({ name: 'email_verification_token', nullable: true })
-  emailVerificationToken: string;
+  @Column({ name: 'verification_token', nullable: true })
+  verificationToken: string;
 
-  @Column({ name: 'last_login_at', nullable: true })
-  lastLoginAt: Date;
+  @Column({ name: 'last_login', nullable: true })
+  lastLogin: Date;
 
-  @Column({ name: 'last_login_ip', nullable: true })
-  lastLoginIp: string;
+  @Column({ name: 'last_ip', length: 45, nullable: true })
+  lastIp: string;
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;

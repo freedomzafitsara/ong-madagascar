@@ -1,43 +1,60 @@
-// src/modules/auth/entities/audit-log.entity.ts
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { User } from './user.entity';
 
+export enum AuditAction {
+  CREATE = 'CREATE',
+  UPDATE = 'UPDATE',
+  DELETE = 'DELETE',
+  LOGIN = 'LOGIN',
+  LOGOUT = 'LOGOUT',
+  EXPORT = 'EXPORT',
+  VIEW = 'VIEW',
+}
+
+export enum AuditStatus {
+  SUCCESS = 'SUCCESS',
+  FAILURE = 'FAILURE',
+}
+
 @Entity('audit_logs')
+@Index(['userId', 'timestamp'])
+@Index(['entity', 'entityId'])
+@Index(['action', 'timestamp'])
 export class AuditLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => User)
+  @Column({ name: 'user_id', nullable: true })
+  userId: string;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ name: 'user_id' })
-  userId: string;
+  @Column({ type: 'varchar', length: 20 })
+  action: string;
 
-  @Column()
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'EXPORT' | 'VIEW';
+  @Column({ name: 'entity_type', length: 50 })
+  entityType: string;
 
-  @Column()
-  entity: string;
-
-  @Column()
+  @Column({ name: 'entity_id', nullable: true })
   entityId: string;
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ name: 'old_data', type: 'jsonb', nullable: true })
   oldData: any;
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ name: 'new_data', type: 'jsonb', nullable: true })
   newData: any;
 
-  @Column()
+  @Column({ name: 'ip_address', length: 45 })
   ipAddress: string;
 
-  @Column()
+  @Column({ name: 'user_agent', type: 'text', nullable: true })
   userAgent: string;
 
-  @Column({ default: 'SUCCESS' })
-  status: 'SUCCESS' | 'FAILURE';
+  @Column({ type: 'varchar', length: 10, default: AuditStatus.SUCCESS })
+  status: string;
 
-  @CreateDateColumn()
-  timestamp: Date;
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 }

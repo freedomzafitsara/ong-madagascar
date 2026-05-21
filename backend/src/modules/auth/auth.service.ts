@@ -1,13 +1,9 @@
-﻿// backend/src/modules/auth/auth.service.ts
-// Version finale complète - Soutenance DTS 2025
-
-import { 
+﻿import { 
   Injectable, 
   NotFoundException, 
   BadRequestException, 
   ConflictException, 
   UnauthorizedException,
-  ForbiddenException,
   InternalServerErrorException,
   Logger
 } from '@nestjs/common';
@@ -17,8 +13,6 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { User, UserRole } from '../../entities/user.entity';
 import { LoginDto, RegisterDto } from './dto';
-import * as fs from 'fs';
-import * as path from 'path';
 
 @Injectable()
 export class AuthService {
@@ -59,7 +53,7 @@ export class AuthService {
     });
 
     await this.userRepository.save(user);
-    this.logger.log(`✅ Nouvel utilisateur inscrit: ${email}`);
+    this.logger.log(`Nouvel utilisateur inscrit: ${email}`);
 
     return {
       success: true,
@@ -110,7 +104,7 @@ export class AuthService {
       lastIp: ip,
     });
 
-    this.logger.log(`✅ Connexion réussie: ${email}`);
+    this.logger.log(`Connexion réussie: ${email}`);
 
     return {
       access_token,
@@ -200,7 +194,7 @@ export class AuthService {
 
     if (Object.keys(updateFields).length > 0) {
       await this.userRepository.update(userId, updateFields);
-      this.logger.log(`✏️ Profil mis à jour: ${user.email}`);
+      this.logger.log(`Profil mis à jour: ${user.email}`);
     }
 
     return this.getProfile(userId);
@@ -221,7 +215,7 @@ export class AuthService {
     }
 
     await this.userRepository.update(userId, { avatar_url: photoUrl });
-    this.logger.log(`📸 Photo mise à jour: ${user.email}`);
+    this.logger.log(`Photo mise à jour: ${user.email}`);
     
     return this.getProfile(userId);
   }
@@ -239,7 +233,7 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.userRepository.update(userId, { password: hashedPassword });
-    this.logger.log(`🔒 Mot de passe modifié: ${user.email}`);
+    this.logger.log(`Mot de passe modifié: ${user.email}`);
 
     return {
       success: true,
@@ -248,26 +242,20 @@ export class AuthService {
   }
 
   // ============================================================
-  // 5. MOT DE PASSE OUBLIÉ (NOUVELLES MÉTHODES)
+  // 5. MOT DE PASSE OUBLIÉ
   // ============================================================
 
-  /**
-   * ✅ Génère un token de réinitialisation de mot de passe
-   * @param email - Email de l'utilisateur
-   */
   async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
     const user = await this.userRepository.findOne({ where: { email } });
     
-    // Pour des raisons de sécurité, on retourne le même message même si l'email n'existe pas
     if (!user) {
-      this.logger.warn(`🔐 Demande de réinitialisation pour email inexistant: ${email}`);
+      this.logger.warn(`Demande de réinitialisation pour email inexistant: ${email}`);
       return {
         success: true,
         message: 'Si cet email existe, vous recevrez un lien de réinitialisation.',
       };
     }
 
-    // Génération du token (expiration 1 heure)
     const resetToken = this.generateRandomToken();
     const resetExpires = new Date();
     resetExpires.setHours(resetExpires.getHours() + 1);
@@ -277,8 +265,7 @@ export class AuthService {
       resetPasswordExpires: resetExpires,
     });
 
-    this.logger.log(`📧 Token de réinitialisation généré pour: ${email}`);
-    // TODO: Envoyer l'email avec le token (intégration Brevo)
+    this.logger.log(`Token de réinitialisation généré pour: ${email}`);
 
     return {
       success: true,
@@ -286,11 +273,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * ✅ Réinitialise le mot de passe avec un token valide
-   * @param token - Token de réinitialisation
-   * @param newPassword - Nouveau mot de passe
-   */
   async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
     if (!token) {
       throw new BadRequestException('Token requis');
@@ -308,7 +290,6 @@ export class AuthService {
       throw new BadRequestException('Token expiré. Veuillez refaire une demande');
     }
 
-    // Validation du nouveau mot de passe
     if (newPassword.length < 6) {
       throw new BadRequestException('Le mot de passe doit contenir au moins 6 caractères');
     }
@@ -320,7 +301,7 @@ export class AuthService {
       resetPasswordExpires: null,
     });
 
-    this.logger.log(`🔓 Mot de passe réinitialisé: ${user.email}`);
+    this.logger.log(`Mot de passe réinitialisé: ${user.email}`);
 
     return {
       success: true,
@@ -329,13 +310,9 @@ export class AuthService {
   }
 
   // ============================================================
-  // 6. VÉRIFICATION D'EMAIL (NOUVELLE MÉTHODE)
+  // 6. VÉRIFICATION D EMAIL
   // ============================================================
 
-  /**
-   * ✅ Vérifie l'email de l'utilisateur avec un token
-   * @param token - Token de vérification
-   */
   async verifyEmail(token: string): Promise<{ success: boolean; message: string }> {
     if (!token) {
       throw new BadRequestException('Token requis');
@@ -354,7 +331,7 @@ export class AuthService {
       verificationToken: null,
     });
 
-    this.logger.log(`✅ Email vérifié: ${user.email}`);
+    this.logger.log(`Email vérifié: ${user.email}`);
 
     return {
       success: true,
@@ -388,7 +365,7 @@ export class AuthService {
     }
 
     await this.userRepository.update(id, { role: newRole });
-    this.logger.log(`👑 Rôle modifié: ${user.email} → ${newRole}`);
+    this.logger.log(`Rôle modifié: ${user.email} → ${newRole}`);
 
     return this.userRepository.findOne({ where: { id } });
   }
@@ -401,7 +378,7 @@ export class AuthService {
 
     const newStatus = !user.isActive;
     await this.userRepository.update(id, { isActive: newStatus });
-    this.logger.log(`🔁 Statut modifié: ${user.email} → ${newStatus ? 'Activé' : 'Désactivé'}`);
+    this.logger.log(`Statut modifié: ${user.email} → ${newStatus ? 'Activé' : 'Désactivé'}`);
 
     return this.userRepository.findOne({ where: { id } });
   }
@@ -412,19 +389,8 @@ export class AuthService {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
-    if (user.avatar_url && user.avatar_url.startsWith('/uploads/')) {
-      try {
-        const oldFilePath = path.join(process.cwd(), user.avatar_url);
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
-        }
-      } catch (error) {
-        this.logger.error(`Erreur suppression photo: ${error.message}`);
-      }
-    }
-
     await this.userRepository.delete(id);
-    this.logger.log(`🗑️ Utilisateur supprimé: ${user.email}`);
+    this.logger.log(`Utilisateur supprimé: ${user.email}`);
 
     return {
       success: true,

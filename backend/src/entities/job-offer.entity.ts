@@ -1,4 +1,14 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { 
+  Entity, 
+  Column, 
+  PrimaryGeneratedColumn, 
+  CreateDateColumn, 
+  UpdateDateColumn, 
+  ManyToOne, 
+  JoinColumn, 
+  OneToMany,
+  Index 
+} from 'typeorm';
 import { User } from './user.entity';
 import { JobApplication } from './job-application.entity';
 
@@ -18,6 +28,8 @@ export enum JobStatus {
 }
 
 @Entity('job_offers')
+@Index(['status', 'deadline'])
+@Index(['is_featured', 'status'])
 export class JobOffer {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -25,22 +37,22 @@ export class JobOffer {
   @Column({ length: 255 })
   title: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ length: 255, name: 'title_mg', nullable: true })
   title_mg: string;
 
   @Column({ type: 'text' })
   description: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', name: 'description_mg', nullable: true })
   description_mg: string;
 
-  @Column({ length: 255 })
+  @Column({ length: 255, name: 'company_name' })
   company_name: string;
 
-  @Column({ length: 500, nullable: true })
+  @Column({ length: 500, name: 'company_logo', nullable: true })
   company_logo: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ length: 255, name: 'company_website', nullable: true })
   company_website: string;
 
   @Column({ length: 255, nullable: true })
@@ -49,7 +61,7 @@ export class JobOffer {
   @Column({ length: 100, nullable: true })
   region: string;
 
-  @Column({ type: 'varchar', length: 50 })
+  @Column({ type: 'varchar', length: 50, name: 'job_type' })
   job_type: string;
 
   @Column({ length: 100, nullable: true })
@@ -61,7 +73,7 @@ export class JobOffer {
   @Column({ type: 'text', nullable: true })
   requirements: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', name: 'requirements_mg', nullable: true })
   requirements_mg: string;
 
   @Column({ type: 'text', nullable: true })
@@ -70,36 +82,41 @@ export class JobOffer {
   @Column({ type: 'date', nullable: true })
   deadline: Date;
 
-  @Column({ type: 'varchar', length: 50, default: 'draft' })
+  @Column({ 
+    type: 'varchar', 
+    length: 50, 
+    default: JobStatus.DRAFT 
+  })
   status: string;
 
-  @Column({ default: 0 })
+  @Column({ name: 'applications_count', default: 0 })
   applications_count: number;
 
-  @Column({ default: false })
+  @Column({ name: 'is_featured', default: false })
   is_featured: boolean;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'uuid', name: 'created_by', nullable: true })
   created_by: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ length: 255, name: 'contact_email', nullable: true })
   contact_email: string;
 
-  @Column({ length: 50, nullable: true })
+  @Column({ length: 50, name: 'contact_phone', nullable: true })
   contact_phone: string;
 
-  @CreateDateColumn()
+  @Column({ length: 500, name: 'image_url', nullable: true })
+  image_url: string;
+
+  @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updated_at: Date;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'created_by' })
   creator: User;
 
-  @OneToMany(() => JobApplication, (application) => application.jobOffer)
+  @OneToMany(() => JobApplication, (application) => application.jobOffer, { cascade: true })
   applications: JobApplication[];
-  @Column({ length: 500, nullable: true })
-image_url: string;  // ← Image de couverture de l'offre
 }

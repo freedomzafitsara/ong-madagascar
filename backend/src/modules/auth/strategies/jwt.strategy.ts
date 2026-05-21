@@ -6,6 +6,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../../entities/user.entity';
 
+interface JwtPayload {
+  sub: string;
+  email: string;
+  role: string;
+  firstName: string;
+  lastName: string;
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -13,14 +21,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     @InjectRepository(User)
     private userRepository: Repository<User>,
   ) {
+    const jwtSecret = configService.get<string>('JWT_SECRET', 'y-mad-secret-key-2025');
+    
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get('JWT_SECRET', 'y-mad-secret-key-2025'),
+      secretOrKey: jwtSecret,
     });
   }
 
-  async validate(payload: any) {
+  async validate(payload: JwtPayload) {
     const user = await this.userRepository.findOne({
       where: { id: payload.sub, isActive: true },
     });

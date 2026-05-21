@@ -1,7 +1,4 @@
-﻿// frontend/src/app/(dashboard)/dashboard/page.tsx
-// VERSION CORRIGÉE - TOUTES LES ICÔNES EN BLEU
-
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,10 +11,6 @@ import {
   AlertCircle, RefreshCw, UserPlus, PlusCircle, CalendarPlus,
   FilePlus, BarChart4, Layout, Image, Plus
 } from 'lucide-react';
-
-// ============================================================
-// INTERFACES
-// ============================================================
 
 interface DashboardStats {
   totalMembers: number;
@@ -39,50 +32,46 @@ interface DashboardStats {
   lastUpdated?: string;
 }
 
-// ============================================================
-// TRADUCTIONS
-// ============================================================
-
 const translations = {
   fr: {
     dashboard: 'Tableau de bord',
     welcome: 'Bienvenue,',
-    hereIsOverview: 'Voici un aperçu de votre activité.',
-    lastUpdate: 'Dernière mise à jour',
+    hereIsOverview: 'Voici un apercu de votre activite.',
+    lastUpdate: 'Derniere mise a jour',
     members: 'Membres',
     active: 'actifs',
     projects: 'Projets',
-    events: 'Événements',
-    upcoming: 'à venir',
+    events: 'Evenements',
+    upcoming: 'a venir',
     jobOffers: 'Offres emploi',
     open: 'ouvertes',
     applications: 'Candidatures',
     pending: 'en attente',
     donations: 'Dons (mois)',
-    volunteers: 'Bénévoles',
-    beneficiaries: 'Bénéficiaires',
+    volunteers: 'Benevoles',
+    beneficiaries: 'Beneficiaires',
     impactRate: 'Taux impact',
     yourImpact: 'Votre impact',
-    impactDescription: 'Grâce à votre engagement, Y-Mad continue de transformer des vies à Madagascar.',
-    peopleImpacted: 'Personnes impactées',
+    impactDescription: 'Grace a votre engagement, Y-Mad continue de transformer des vies a Madagascar.',
+    peopleImpacted: 'Personnes impactees',
     activeProjects: 'Projets actifs',
     quickActions: 'Actions rapides',
     newMember: 'Nouveau membre',
     newProject: 'Nouveau projet',
-    newEvent: 'Nouvel événement',
+    newEvent: 'Nouvel evenement',
     newJob: 'Nouvelle offre',
     newArticle: 'Nouvel article',
-    generateReport: 'Générer rapport',
-    newBeneficiary: 'Nouveau bénéficiaire',
+    generateReport: 'Generer rapport',
+    newBeneficiary: 'Nouveau beneficiaire',
     siteManagement: 'Gestion du site',
-    siteManagementDesc: 'Personnalisez l\'apparence et le contenu du site',
-    managePages: 'Gérer les pages',
-    manageBackgrounds: 'Gérer les fonds d\'écran',
-    viewDetails: 'Voir les détails',
-    seeImpact: 'Voir le détail',
+    siteManagementDesc: 'Personnalisez l apparence et le contenu du site',
+    managePages: 'Gerer les pages',
+    manageBackgrounds: 'Gerer les fonds d ecran',
+    viewDetails: 'Voir les details',
+    seeImpact: 'Voir le detail',
     loading: 'Chargement...',
     error: 'Erreur lors du chargement',
-    retry: 'Réessayer',
+    retry: 'Reessayer',
     admin: 'Admin',
     refresh: 'Actualiser',
     ariary: 'Ar',
@@ -131,10 +120,6 @@ const translations = {
     ariary: 'Ar',
   }
 };
-
-// ============================================================
-// COMPOSANT PRINCIPAL
-// ============================================================
 
 export default function DashboardHome() {
   const { user, token } = useAuth();
@@ -197,11 +182,9 @@ export default function DashboardHome() {
       const results = await Promise.allSettled([
         fetchWithTimeout(`${API_URL}/members/stats/all`),
         fetchWithTimeout(`${API_URL}/projects/stats`),
-        fetchWithTimeout(`${API_URL}/events`),
+        fetchWithTimeout(`${API_URL}/events?limit=100`),
         fetchWithTimeout(`${API_URL}/jobs/offers/stats`),
         fetchWithTimeout(`${API_URL}/donations/stats/all`),
-        fetchWithTimeout(`${API_URL}/members/stats/all`),
-        fetchWithTimeout(`${API_URL}/members/stats/all`),
       ]);
 
       const newStats: Partial<DashboardStats> = {};
@@ -286,28 +269,25 @@ export default function DashboardHome() {
   const totalImpacted = stats.totalMembers + stats.totalVolunteers + stats.totalBeneficiaries;
   const donationsFormatted = new Intl.NumberFormat('fr-MG').format(stats.monthlyDonations);
 
-  // Cartes principales - Icones BLEUES
   const mainStatCards = [
-    { title: t.members, value: stats.totalMembers, subValue: `${stats.activeMembers} ${t.active}`, icon: Users, href: '/dashboard/members', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { title: t.projects, value: stats.totalProjects, subValue: `${stats.activeProjects} ${t.active}`, icon: FolderOpen, href: '/dashboard/projects', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { title: t.events, value: stats.totalEvents, subValue: `${stats.upcomingEvents} ${t.upcoming}`, icon: Calendar, href: '/dashboard/events', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { title: t.jobOffers, value: stats.totalJobs, subValue: `${stats.activeJobs} ${t.open}`, icon: Briefcase, href: '/dashboard/jobs', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { title: t.members, value: stats.totalMembers, subValue: stats.activeMembers + ' ' + t.active, icon: Users, href: '/dashboard/members', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { title: t.projects, value: stats.totalProjects, subValue: stats.activeProjects + ' ' + t.active, icon: FolderOpen, href: '/dashboard/projects', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { title: t.events, value: stats.totalEvents, subValue: stats.upcomingEvents + ' ' + t.upcoming, icon: Calendar, href: '/dashboard/events', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { title: t.jobOffers, value: stats.totalJobs, subValue: stats.activeJobs + ' ' + t.open, icon: Briefcase, href: '/dashboard/jobs', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
   ];
 
-  // Cartes secondaires - Icones BLEUES
   const secondaryStatCards = [
-    { title: t.applications, value: stats.totalApplications, subValue: `${stats.pendingApplications} ${t.pending}`, icon: FileText, href: '/dashboard/jobs/applications', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { title: t.donations, value: `${donationsFormatted} ${t.ariary}`, subValue: 'Ariary', icon: Gift, href: '/dashboard/donations', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { title: t.volunteers, value: stats.totalVolunteers, subValue: `${stats.activeVolunteers} ${t.active}`, icon: Heart, href: '/dashboard/volunteers', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { title: t.beneficiaries, value: stats.totalBeneficiaries, subValue: `${t.impactRate}: ${stats.impactRate}%`, icon: GraduationCap, href: '/dashboard/beneficiaries', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { title: t.applications, value: stats.totalApplications, subValue: stats.pendingApplications + ' ' + t.pending, icon: FileText, href: '/dashboard/applications', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { title: t.donations, value: donationsFormatted + ' ' + t.ariary, subValue: t.donations, icon: Gift, href: '/dashboard/donations', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { title: t.volunteers, value: stats.totalVolunteers, subValue: stats.activeVolunteers + ' ' + t.active, icon: Heart, href: '/dashboard/volunteers', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { title: t.beneficiaries, value: stats.totalBeneficiaries, subValue: stats.impactRate + '%', icon: GraduationCap, href: '/dashboard/beneficiaries', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
   ];
 
-  // Actions rapides - Icones BLEUES
   const quickActionsList = [
     { label: t.newMember, href: '/dashboard/members/new', icon: UserPlus, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { label: t.newProject, href: '/dashboard/projects/new', icon: PlusCircle, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { label: t.newEvent, href: '/dashboard/events/new', icon: CalendarPlus, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { label: t.newJob, href: '/dashboard/jobs/offers/new', icon: Plus, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { label: t.newJob, href: '/dashboard/jobs/new', icon: Plus, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { label: t.newBeneficiary, href: '/dashboard/beneficiaries/new', icon: GraduationCap, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { label: t.newArticle, href: '/dashboard/blog/new', icon: FilePlus, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { label: t.generateReport, href: '/dashboard/reports', icon: BarChart4, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
@@ -342,7 +322,6 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-8 pb-8">
-      {/* En-tête */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -367,7 +346,7 @@ export default function DashboardHome() {
             disabled={refreshing}
             className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors"
           >
-            <RefreshCw className={`w-4 h-4 text-blue-600 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={'w-4 h-4 text-blue-600 ' + (refreshing ? 'animate-spin' : '')} />
             <span className="text-xs text-blue-600 font-medium">{t.refresh}</span>
           </button>
           <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full">
@@ -379,7 +358,6 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Cartes principales - Icones BLEUES */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {mainStatCards.map((card, index) => {
           const Icon = card.icon;
@@ -409,7 +387,6 @@ export default function DashboardHome() {
         })}
       </div>
 
-      {/* Cartes secondaires - Icones BLEUES */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {secondaryStatCards.map((card, index) => {
           const Icon = card.icon;
@@ -439,10 +416,8 @@ export default function DashboardHome() {
         })}
       </div>
 
-      {/* Section Impact + Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Section Impact - BLEU */}
         <div className="bg-blue-600 rounded-2xl p-6 text-white shadow-lg">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -475,7 +450,6 @@ export default function DashboardHome() {
           </Link>
         </div>
 
-        {/* Actions rapides - Icones BLEUES */}
         <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -503,7 +477,6 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Gestion du site */}
       <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">

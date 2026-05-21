@@ -2,7 +2,6 @@
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -16,11 +15,10 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log'],
   });
 
-  // Validation des donnees - DESACTIVEE pour les tests
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: false,
-      forbidNonWhitelisted: false,
+      whitelist: true,
+      forbidNonWhitelisted: true,
       transform: true,
       transformOptions: {
         enableImplicitConversion: true,
@@ -28,7 +26,6 @@ async function bootstrap() {
     }),
   );
 
-  // Configuration CORS
   app.enableCors({
     origin: true,
     credentials: true,
@@ -36,10 +33,8 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
-  // Prefixe global
   app.setGlobalPrefix('api');
 
-  // Gestion des fichiers statiques
   const uploadsPath = path.join(process.cwd(), 'uploads');
   if (!fs.existsSync(uploadsPath)) {
     fs.mkdirSync(uploadsPath, { recursive: true });
@@ -49,18 +44,6 @@ async function bootstrap() {
   app.useStaticAssets(uploadsPath, {
     prefix: '/uploads/',
   });
-
-  // Configuration Swagger
-  const config = new DocumentBuilder()
-    .setTitle('Y-Mad API')
-    .setDescription('API complete du site Y-Mad (Youthful Madagascar)')
-    .setVersion('1.0.0')
-    .setContact('Y-Mad Association', 'https://y-mad.mg', 'ymad.mg@gmail.com')
-    .addBearerAuth()
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT || 4001;
   await app.listen(port);
@@ -72,7 +55,6 @@ async function bootstrap() {
   console.log('');
   console.log('Serveur      : http://localhost:' + port);
   console.log('API Prefixe  : http://localhost:' + port + '/api');
-  console.log('Swagger UI   : http://localhost:' + port + '/api/docs');
   console.log('');
   console.log('============================================================');
   console.log('');

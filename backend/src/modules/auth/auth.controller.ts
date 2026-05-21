@@ -1,7 +1,4 @@
-// backend/src/modules/auth/auth.controller.ts
-// VERSION CORRIGÉE - AVEC @Public() SUR TOUTES LES ROUTES PUBLIQUES
-
-import {
+ï»¿import {
   Controller,
   Post,
   Get,
@@ -14,7 +11,6 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
-  NotFoundException
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
@@ -24,7 +20,7 @@ import {
   ChangePasswordDto,
   ForgotPasswordDto,
   ResetPasswordDto,
-  UpdateProfileDto
+  UpdateProfileDto,
 } from './dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -37,19 +33,19 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   // ============================================================
-  // ROUTES PUBLIQUES (sans authentification)
+  // ROUTES PUBLIQUES
   // ============================================================
 
- @Post('register')
-@Public()
-@HttpCode(HttpStatus.CREATED)
-async register(@Body() registerDto: RegisterDto, @Request() req) {
+  @Post('register')
+  @Public()
+  @HttpCode(HttpStatus.CREATED)
+  async register(@Body() registerDto: RegisterDto, @Request() req) {
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     return this.authService.register(registerDto, ip);
   }
 
   @Post('login')
-  @Public()  // ? AJOUT CRITIQUE
+  @Public()
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto, @Request() req) {
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -57,37 +53,34 @@ async register(@Body() registerDto: RegisterDto, @Request() req) {
   }
 
   @Post('forgot-password')
-  @Public()  // ? AJOUT CRITIQUE
+  @Public()
   @HttpCode(HttpStatus.OK)
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto.email);
   }
 
   @Post('reset-password')
-  @Public()  // ? AJOUT CRITIQUE
+  @Public()
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto.token, resetPasswordDto.newPassword);
   }
 
   @Get('verify-email/:token')
-  @Public()  // ? AJOUT CRITIQUE
+  @Public()
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Param('token') token: string) {
     return this.authService.verifyEmail(token);
   }
 
   // ============================================================
-  // ROUTES PROTÉGÉES (authentification requise)
+  // ROUTES PROTEGEES
   // ============================================================
 
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req) {
-    const userId = req.user?.id || req.user?.sub;
-    if (!userId) {
-      throw new BadRequestException('Utilisateur non identifié');
-    }
+    const userId = this.extractUserId(req);
     return this.authService.getProfile(userId);
   }
 
@@ -123,7 +116,7 @@ async register(@Body() registerDto: RegisterDto, @Request() req) {
     return this.authService.changePassword(
       userId,
       changePasswordDto.currentPassword,
-      changePasswordDto.newPassword
+      changePasswordDto.newPassword,
     );
   }
 
@@ -168,13 +161,13 @@ async register(@Body() registerDto: RegisterDto, @Request() req) {
   }
 
   // ============================================================
-  // MÉTHODE UTILITAIRE PRIVÉE
+  // METHODE PRIVEE
   // ============================================================
 
   private extractUserId(req: any): string {
     const userId = req.user?.id || req.user?.sub;
     if (!userId) {
-      throw new BadRequestException('Utilisateur non identifié');
+      throw new BadRequestException('Utilisateur non identifie');
     }
     return userId;
   }

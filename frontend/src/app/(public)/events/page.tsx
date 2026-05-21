@@ -1,19 +1,30 @@
-// frontend/src/app/(public)/events/page.tsx
-// VERSION FINALE - MÊME DESIGN QUE LA PAGE PROJETS
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { api } from '@/lib/api';
 import { pageService, PageBackground } from '@/services/pageService';
 import { 
-  Search, MapPin, Calendar, Heart, X, Image as ImageIcon, 
+  Search, MapPin, Calendar, Heart, X, 
   ChevronRight, Grid3x3, LayoutList, Sparkles, TrendingUp, 
-  Users, Globe, ArrowRight, Target, BookOpen, 
+  Users, ArrowRight, Target, BookOpen, 
   Briefcase, UsersRound, Loader2, Clock, Ticket, AlertCircle
 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
+
+// ============================================================
+// CONSTANTES
+// ============================================================
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+
+const EVENT_TYPES = [
+  { value: 'camp', labelFr: 'Camp', labelMg: 'Toby', icon: Users },
+  { value: 'workshop', labelFr: 'Atelier', labelMg: 'Atelier', icon: Briefcase },
+  { value: 'hackathon', labelFr: 'Hackathon', labelMg: 'Hackathon', icon: Target },
+  { value: 'conference', labelFr: 'Conference', labelMg: 'Konferansy', icon: UsersRound },
+  { value: 'formation', labelFr: 'Formation', labelMg: 'Fampiofanana', icon: BookOpen },
+  { value: 'other', labelFr: 'Autre', labelMg: 'Hafa', icon: Calendar },
+];
 
 interface Event {
   id: string;
@@ -22,29 +33,23 @@ interface Event {
   description: string;
   description_mg?: string;
   location: string;
-  event_type: string;
-  start_datetime: string;
-  end_datetime?: string;
-  image_url?: string;
-  max_capacity: number;
-  current_registrations: number;
-  is_free: boolean;
-  price_mga: number;
+  type: string;
+  startDate: string;
+  endDate?: string;
+  imageUrl?: string;
+  maxCapacity: number;
+  currentRegistrations: number;
+  isFree: boolean;
+  price: number;
   status: string;
-  created_at: string;
+  createdAt: string;
 }
 
-// Types d'événements avec icones professionnelles
-const eventTypes = [
-  { value: 'camp', labelFr: 'Camp', labelMg: 'Toby', icon: Users },
-  { value: 'workshop', labelFr: 'Atelier', labelMg: 'Atelier', icon: Briefcase },
-  { value: 'hackathon', labelFr: 'Hackathon', labelMg: 'Hackathon', icon: Target },
-  { value: 'conference', labelFr: 'Conférence', labelMg: 'Konferansy', icon: UsersRound },
-  { value: 'formation', labelFr: 'Formation', labelMg: 'Fampiofanana', icon: BookOpen },
-  { value: 'other', labelFr: 'Autre', labelMg: 'Hafa', icon: Calendar },
-];
+// ============================================================
+// COMPOSANT PRINCIPAL
+// ============================================================
 
-export default function EventsPage() {
+export default function EventsPublicPage() {
   const { t, language } = useTranslation();
   const [events, setEvents] = useState<Event[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
@@ -55,8 +60,12 @@ export default function EventsPage() {
   const [showModal, setShowModal] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
+  const [error, setError] = useState('');
 
-  // Chargement du fond d'écran et des événements
+  // ============================================================
+  // SECTION 1 : CHARGEMENT DES DONNEES
+  // ============================================================
+
   useEffect(() => {
     loadPageBackground();
     loadEvents();
@@ -69,33 +78,49 @@ export default function EventsPage() {
         setPageBackground(background);
       }
     } catch (error) {
-      console.error('Erreur chargement fond d\'écran:', error);
+      console.error('Erreur chargement fond d ecran:', error);
     }
   };
 
   const loadEvents = async () => {
     setLoading(true);
+    setError('');
     try {
-      const response = await api.get('/events');
-      let allEvents = response.data.data || response.data || [];
+      // Appel direct à l'API avec fetch pour plus de fiabilité
+      const response = await fetch(`${API_URL}/events/public`);
       
-      // Filtrer les événements publiés
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Extraction des événements publiés
+      let allEvents = data.data || data || [];
       const publishedEvents = allEvents.filter((e: Event) => e.status === 'published');
-      setEvents(publishedEvents);
-      setFilteredEvents(publishedEvents);
+      
+      // Trier par date de début (les plus proches d'abord)
+      const sortedEvents = [...publishedEvents].sort((a, b) => 
+        new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+      );
+      
+      console.log('Evenements charges:', sortedEvents.length);
+      setEvents(sortedEvents);
+      setFilteredEvents(sortedEvents);
     } catch (error) {
-      console.error('Erreur chargement événements:', error);
+      console.error('Erreur chargement evenements:', error);
+      setError(language === 'fr' ? 'Impossible de charger les evenements' : 'Tsy nahomby ny fitaterana ny hetsika');
+      setEvents([]);
+      setFilteredEvents([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const openEventDetails = (event: Event) => {
-    setSelectedEvent(event);
-    setShowModal(true);
-  };
+  // ============================================================
+  // SECTION 2 : FILTRES
+  // ============================================================
 
-  // Filtrer les événements
   useEffect(() => {
     let filtered = [...events];
     
@@ -111,17 +136,22 @@ export default function EventsPage() {
     }
     
     if (selectedType) {
-      filtered = filtered.filter(e => e.event_type === selectedType);
+      filtered = filtered.filter(e => e.type === selectedType);
     }
     
     setFilteredEvents(filtered);
   }, [searchTerm, selectedType, events]);
 
+  // ============================================================
+  // SECTION 3 : FONCTIONS UTILITAIRES
+  // ============================================================
+
   const getMainImageUrl = (event: Event): string => {
-    return event.image_url || '/images/placeholder-event.jpg';
+    return event.imageUrl || '/images/placeholder-event.jpg';
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     try {
       return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
         year: 'numeric', month: 'long', day: 'numeric'
@@ -132,6 +162,7 @@ export default function EventsPage() {
   };
 
   const formatTime = (dateString: string) => {
+    if (!dateString) return '';
     try {
       return new Date(dateString).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
         hour: '2-digit', minute: '2-digit'
@@ -142,13 +173,13 @@ export default function EventsPage() {
   };
 
   const getEventTypeIcon = (typeValue: string) => {
-    const type = eventTypes.find(t => t.value === typeValue);
+    const type = EVENT_TYPES.find(t => t.value === typeValue);
     if (!type) return Calendar;
     return type.icon;
   };
 
   const getEventTypeLabel = (typeValue: string) => {
-    const type = eventTypes.find(t => t.value === typeValue);
+    const type = EVENT_TYPES.find(t => t.value === typeValue);
     if (!type) return typeValue;
     return language === 'fr' ? type.labelFr : type.labelMg;
   };
@@ -162,21 +193,31 @@ export default function EventsPage() {
   };
 
   const isFull = (event: Event) => {
-    return event.max_capacity > 0 && event.current_registrations >= event.max_capacity;
+    return event.maxCapacity > 0 && event.currentRegistrations >= event.maxCapacity;
   };
 
   const getAvailableSpots = (event: Event) => {
-    if (event.max_capacity === 0) return null;
-    return event.max_capacity - (event.current_registrations || 0);
+    if (event.maxCapacity === 0) return null;
+    return event.maxCapacity - (event.currentRegistrations || 0);
+  };
+
+  const formatPrice = (price: number | undefined, isFree: boolean) => {
+    if (isFree) return null;
+    if (price === undefined || price === null) return '0 Ar';
+    return price.toLocaleString() + ' Ar';
+  };
+
+  const openEventDetails = (event: Event) => {
+    setSelectedEvent(event);
+    setShowModal(true);
   };
 
   const stats = {
     total: events.length,
-    types: new Set(events.map(e => e.event_type)).size,
-    upcoming: events.filter(e => new Date(e.start_datetime) > new Date()).length,
+    types: new Set(events.map(e => e.type)).size,
+    upcoming: events.filter(e => new Date(e.startDate) > new Date()).length,
   };
 
-  // Style du fond d'écran dynamique
   const backgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundImage: `url(${pageBackground.image_url})`,
     backgroundPosition: pageBackground.position || 'center',
@@ -187,9 +228,13 @@ export default function EventsPage() {
     backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 30) / 100})`,
   } : {};
 
+  // ============================================================
+  // SECTION 4 : ECRAN DE CHARGEMENT
+  // ============================================================
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-gray-500 font-medium">{language === 'fr' ? 'Chargement...' : 'Miandry...'}</p>
@@ -198,9 +243,14 @@ export default function EventsPage() {
     );
   }
 
+  // ============================================================
+  // SECTION 5 : RENDU PRINCIPAL
+  // ============================================================
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Section Hero avec fond d'écran dynamique */}
+    <div className="min-h-screen bg-gray-100">
+      
+      {/* SOUS-SECTION 5.1 : HERO AVEC FOND DYNAMIQUE */}
       <section className="relative h-screen w-full overflow-hidden">
         <div className="absolute inset-0">
           {backgroundStyle.backgroundImage ? (
@@ -220,7 +270,7 @@ export default function EventsPage() {
           </div>
           
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 leading-tight drop-shadow-lg">
-            {language === 'fr' ? 'Nos Événements' : 'Ny Hetsika Atolotray'}
+            {language === 'fr' ? 'Nos Evenements' : 'Ny Hetsika Atolotray'}
             <span className="block text-3xl md:text-4xl lg:text-5xl text-blue-200 mt-3">
               {language === 'fr' ? 'pour la jeunesse malgache' : 'ho an\'ny tanora malagasy'}
             </span>
@@ -228,7 +278,7 @@ export default function EventsPage() {
           
           <p className="text-lg md:text-xl text-white max-w-2xl mx-auto mb-8 drop-shadow-md">
             {language === 'fr' 
-              ? 'Participez à nos camps, ateliers et formations pour développer vos compétences'
+              ? 'Participez a nos camps, ateliers et formations pour developper vos competences'
               : 'Mandraisa anjara amin\'ny toby, atelier ary fampiofanana hanatsarana ny fahaizanao'}
           </p>
           
@@ -237,7 +287,7 @@ export default function EventsPage() {
               href="#events-list" 
               className="inline-flex items-center gap-2 bg-white text-blue-900 px-8 py-3 rounded-full font-semibold hover:bg-gray-100 transition shadow-lg hover:shadow-xl"
             >
-              {language === 'fr' ? 'Découvrir les événements' : 'Hijery ny hetsika'} <ArrowRight className="w-5 h-5" />
+              {language === 'fr' ? 'Decouvrir les evenements' : 'Hijery ny hetsika'} <ArrowRight className="w-5 h-5" />
             </a>
             <Link 
               href="/donate" 
@@ -255,13 +305,13 @@ export default function EventsPage() {
         </div>
       </section>
 
-      {/* Section Statistiques */}
+      {/* SOUS-SECTION 5.2 : STATISTIQUES */}
       <section className="relative -mt-16 z-20 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="bg-white rounded-2xl shadow-2xl p-8 md:p-10 border border-gray-100">
             <div className="text-center mb-8">
               <h2 className="text-2xl md:text-3xl font-bold text-gray-800">
-                {language === 'fr' ? 'Nos Événements en Chiffres' : 'Ny Hetsika Isanjohy'}
+                {language === 'fr' ? 'Nos Evenements en Chiffres' : 'Ny Hetsika Isanjohy'}
               </h2>
               <div className="w-20 h-1 bg-blue-600 mx-auto rounded-full mt-3"></div>
             </div>
@@ -271,42 +321,41 @@ export default function EventsPage() {
                   <Calendar className="w-8 h-8 text-blue-600 group-hover:text-white transition-colors" />
                 </div>
                 <p className="text-4xl font-bold text-gray-800 mb-2">{stats.total || 0}</p>
-                <p className="text-gray-500 font-medium">{language === 'fr' ? 'Événements organisés' : 'Hetsika natao'}</p>
+                <p className="text-gray-500 font-medium">{language === 'fr' ? 'Evenements organises' : 'Hetsika natao'}</p>
               </div>
               <div className="text-center group">
                 <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-600 transition-colors">
                   <Target className="w-8 h-8 text-blue-600 group-hover:text-white transition-colors" />
                 </div>
                 <p className="text-4xl font-bold text-gray-800 mb-2">{stats.types || 0}</p>
-                <p className="text-gray-500 font-medium">{language === 'fr' ? 'Types d\'événements' : 'Karazana hetsika'}</p>
+                <p className="text-gray-500 font-medium">{language === 'fr' ? 'Types d evenements' : 'Karazana hetsika'}</p>
               </div>
               <div className="text-center group">
                 <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-600 transition-colors">
                   <TrendingUp className="w-8 h-8 text-blue-600 group-hover:text-white transition-colors" />
                 </div>
                 <p className="text-4xl font-bold text-gray-800 mb-2">{stats.upcoming || 0}</p>
-                <p className="text-gray-500 font-medium">{language === 'fr' ? 'À venir' : 'Ho avy'}</p>
+                <p className="text-gray-500 font-medium">{language === 'fr' ? 'A venir' : 'Ho avy'}</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Section Filtres et Recherche */}
+      {/* SOUS-SECTION 5.3 : FILTRES ET RECHERCHE */}
       <section className="max-w-7xl mx-auto px-4 py-16" id="events-list">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">
-            {language === 'fr' ? 'Prochains Événements' : 'Hetsika Ho Avy'}
+            {language === 'fr' ? 'Prochains Evenements' : 'Hetsika Ho Avy'}
           </h2>
           <div className="w-24 h-1 bg-blue-600 mx-auto rounded-full"></div>
           <p className="text-gray-500 mt-4 max-w-2xl mx-auto">
             {language === 'fr' 
-              ? 'Rejoignez-nous pour des moments de partage, d\'apprentissage et de développement'
+              ? 'Rejoignez-nous pour des moments de partage, d apprentissage et de developpement'
               : 'Miaraha aminay hizara, hianatra ary hamolavola ny tanora'}
           </p>
         </div>
 
-        {/* Barre de recherche */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-10">
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative">
@@ -314,7 +363,7 @@ export default function EventsPage() {
               <input
                 type="text"
                 placeholder={language === 'fr' 
-                  ? 'Rechercher un événement par titre, description ou lieu...'
+                  ? 'Rechercher un evenement...'
                   : 'Karohy ny hetsika...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -328,7 +377,7 @@ export default function EventsPage() {
                 className="px-5 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer"
               >
                 <option value="">{language === 'fr' ? 'Tous les types' : 'Karazana rehetra'}</option>
-                {eventTypes.map(type => {
+                {EVENT_TYPES.map(type => {
                   const Icon = type.icon;
                   return (
                     <option key={type.value} value={type.value}>
@@ -363,7 +412,6 @@ export default function EventsPage() {
             </div>
           </div>
           
-          {/* Filtres actifs */}
           {(searchTerm || selectedType) && (
             <div className="flex flex-wrap gap-2 mt-5 pt-5 border-t border-gray-100">
               {searchTerm && (
@@ -393,27 +441,31 @@ export default function EventsPage() {
           )}
         </div>
 
-        {/* Résultats */}
         <div className="mb-6">
           <p className="text-gray-600">
             <span className="font-semibold text-blue-600">{filteredEvents.length}</span> 
-            {language === 'fr' ? ' événement(s) trouvé(s)' : ' hetsika hita'}
+            {language === 'fr' ? ' evenement(s) trouve(s)' : ' hetsika hita'}
           </p>
         </div>
 
-        {/* Grille des événements */}
+        {/* SOUS-SECTION 5.4 : GRILLE DES EVENEMENTS */}
         {filteredEvents.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-lg p-20 text-center">
             <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-xl mb-2">{language === 'fr' ? 'Aucun événement trouvé' : 'Tsy misy hetsika hita'}</p>
-            <p className="text-gray-400">{language === 'fr' ? 'Revenez plus tard pour découvrir nos prochains événements' : 'Miverina any aoriana hijery ny hetsika ho avy'}</p>
+            <p className="text-gray-500 text-xl mb-2">
+              {language === 'fr' ? 'Aucun evenement disponible' : 'Tsy misy hetsika misy'}
+            </p>
+            <p className="text-gray-400">
+              {language === 'fr' ? 'Revenez plus tard pour decouvrir nos prochains evenements' : 'Miverina any aoriana hijery ny hetsika ho avy'}
+            </p>
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredEvents.map((event, index) => {
-              const EventIcon = getEventTypeIcon(event.event_type);
+            {filteredEvents.map((event) => {
+              const EventIcon = getEventTypeIcon(event.type);
               const eventFull = isFull(event);
               const spotsLeft = getAvailableSpots(event);
+              const priceDisplay = formatPrice(event.price, event.isFree);
               
               return (
                 <div 
@@ -431,13 +483,13 @@ export default function EventsPage() {
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200">
                         <Calendar className="w-16 h-16 text-blue-300 mb-2" />
-                        <span className="text-sm text-blue-400">{language === 'fr' ? 'Image à venir' : 'Sary ho avy'}</span>
+                        <span className="text-sm text-blue-400">{language === 'fr' ? 'Image a venir' : 'Sary ho avy'}</span>
                       </div>
                     )}
                     
                     <div className="absolute top-4 left-4">
                       <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full text-white font-medium shadow-lg bg-blue-600">
-                        <EventIcon className="w-3 h-3" /> {getEventTypeLabel(event.event_type)}
+                        <EventIcon className="w-3 h-3" /> {getEventTypeLabel(event.type)}
                       </span>
                     </div>
                     
@@ -451,7 +503,7 @@ export default function EventsPage() {
                     
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition duration-500 flex items-end justify-center pb-6">
                       <span className="bg-white text-gray-800 px-5 py-2 rounded-full text-sm font-semibold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition duration-300">
-                        {language === 'fr' ? 'S\'inscrire' : 'Misoratra anarana'} <Ticket className="w-4 h-4" />
+                        {language === 'fr' ? 'S inscrire' : 'Misoratra anarana'} <Ticket className="w-4 h-4" />
                       </span>
                     </div>
                   </div>
@@ -463,11 +515,11 @@ export default function EventsPage() {
                     
                     <div className="flex items-center gap-3 text-sm text-gray-500 mb-3 flex-wrap">
                       <span className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" /> {formatDate(event.start_datetime)}
+                        <Calendar className="w-4 h-4" /> {formatDate(event.startDate)}
                       </span>
                       <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                       <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" /> {formatTime(event.start_datetime)}
+                        <Clock className="w-4 h-4" /> {formatTime(event.startDate)}
                       </span>
                     </div>
                     
@@ -481,10 +533,10 @@ export default function EventsPage() {
                     
                     <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                       <div className="flex flex-col">
-                        {event.is_free ? (
+                        {event.isFree ? (
                           <span className="text-sm font-semibold text-green-600">Gratuit</span>
                         ) : (
-                          <span className="text-sm font-semibold text-blue-600">{event.price_mga.toLocaleString()} Ar</span>
+                          <span className="text-sm font-semibold text-blue-600">{priceDisplay}</span>
                         )}
                         {spotsLeft !== null && spotsLeft > 0 && spotsLeft < 10 && (
                           <span className="text-xs text-orange-500 flex items-center gap-1 mt-1">
@@ -505,8 +557,10 @@ export default function EventsPage() {
         ) : (
           <div className="space-y-4">
             {filteredEvents.map((event) => {
-              const EventIcon = getEventTypeIcon(event.event_type);
+              const EventIcon = getEventTypeIcon(event.type);
               const eventFull = isFull(event);
+              const priceDisplay = formatPrice(event.price, event.isFree);
+              
               return (
                 <div 
                   key={event.id}
@@ -527,7 +581,7 @@ export default function EventsPage() {
                     )}
                     <div className="absolute top-3 left-3">
                       <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full text-white font-medium bg-blue-600">
-                        <EventIcon className="w-3 h-3" /> {getEventTypeLabel(event.event_type)}
+                        <EventIcon className="w-3 h-3" /> {getEventTypeLabel(event.type)}
                       </span>
                     </div>
                     {eventFull && (
@@ -541,17 +595,17 @@ export default function EventsPage() {
                       {getEventTitle(event)}
                     </h3>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-3">
-                      <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {formatDate(event.start_datetime)}</span>
-                      <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {formatTime(event.start_datetime)}</span>
+                      <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {formatDate(event.startDate)}</span>
+                      <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {formatTime(event.startDate)}</span>
                       <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {event.location}</span>
                     </div>
                     <p className="text-gray-600 line-clamp-2 mb-4">{getEventDescription(event)}</p>
                     <div className="flex items-center justify-between">
                       <div>
-                        {event.is_free ? (
+                        {event.isFree ? (
                           <span className="text-sm font-semibold text-green-600">Gratuit</span>
                         ) : (
-                          <span className="text-sm font-semibold text-blue-600">{event.price_mga.toLocaleString()} Ar</span>
+                          <span className="text-sm font-semibold text-blue-600">{priceDisplay}</span>
                         )}
                       </div>
                       <span className="text-sm text-gray-400 group-hover:text-blue-600 transition flex items-center gap-1">
@@ -566,39 +620,39 @@ export default function EventsPage() {
         )}
       </section>
 
-      {/* Section Appel à l'action */}
+      {/* SOUS-SECTION 5.5 : APPEL A L ACTION */}
       <section className="bg-gradient-to-r from-blue-800 to-blue-900 py-20 mt-10">
         <div className="max-w-4xl mx-auto text-center px-4">
           <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-5 py-2 mb-6">
             <Ticket className="w-4 h-4 text-blue-300" />
-            <span className="text-sm text-white/90">{language === 'fr' ? 'Ne manquez aucun événement' : 'Aza adino ny hetsika'}</span>
+            <span className="text-sm text-white/90">{language === 'fr' ? 'Ne manquez aucun evenement' : 'Aza adino ny hetsika'}</span>
           </div>
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            {language === 'fr' ? 'Restez informé de nos prochains événements' : 'Mijanòna ho voaomana amin\'ny hetsika ho avy'}
+            {language === 'fr' ? 'Restez informe de nos prochains evenements' : 'Mijanòna ho voaomana amin\'ny hetsika ho avy'}
           </h2>
           <p className="text-lg text-blue-100 mb-8 max-w-2xl mx-auto">
             {language === 'fr' 
-              ? 'Inscrivez-vous à notre newsletter pour recevoir toutes les actualités et opportunités'
-              : 'Misoratra anarana amin\'ny gazetintsika hahazoana ny vaovao sy ny fahafahana rehetra'}
+              ? 'Inscrivez-vous a notre newsletter pour recevoir toutes les actualites'
+              : 'Misoratra anarana amin\'ny gazetintsika'}
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <Link 
               href="/contact" 
               className="inline-flex items-center gap-2 bg-white text-blue-800 px-8 py-3 rounded-full font-semibold hover:bg-gray-100 transition shadow-lg"
             >
-              <Heart className="w-5 h-5" /> {language === 'fr' ? 'S\'abonner' : 'Misoratra anarana'}
+              <Heart className="w-5 h-5" /> {language === 'fr' ? 'S abonner' : 'Misoratra anarana'}
             </Link>
             <Link 
               href="/volunteers" 
               className="inline-flex items-center gap-2 bg-blue-500/30 backdrop-blur-sm text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-500/50 transition border border-white/30"
             >
-              <Users className="w-5 h-5" /> {language === 'fr' ? 'Devenir bénévole' : 'Mpanao asa soa'} <ArrowRight className="w-5 h-5" />
+              <Users className="w-5 h-5" /> {language === 'fr' ? 'Devenir benevole' : 'Mpanao asa soa'} <ArrowRight className="w-5 h-5" />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Modal Détails Événement */}
+      {/* SOUS-SECTION 5.6 : MODAL DETAILS */}
       {showModal && selectedEvent && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -622,7 +676,7 @@ export default function EventsPage() {
 
             <div className="p-6 border-t bg-gray-50">
               <h3 className="font-semibold text-lg text-gray-800 mb-3">
-                {language === 'fr' ? 'À propos de cet événement' : 'Momba ity hetsika ity'}
+                {language === 'fr' ? 'A propos de cet evenement' : 'Momba ity hetsika ity'}
               </h3>
               <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">
                 {getEventDescription(selectedEvent)}
@@ -632,7 +686,7 @@ export default function EventsPage() {
             <div className="p-6 border-t grid grid-cols-2 gap-4 bg-gray-50">
               <div className="bg-white p-4 rounded-xl shadow-sm">
                 <p className="text-sm text-gray-500 mb-1">{language === 'fr' ? 'Date et heure' : 'Daty sy ora'}</p>
-                <p className="font-medium text-gray-800">{formatDate(selectedEvent.start_datetime)} à {formatTime(selectedEvent.start_datetime)}</p>
+                <p className="font-medium text-gray-800">{formatDate(selectedEvent.startDate)} a {formatTime(selectedEvent.startDate)}</p>
               </div>
               <div className="bg-white p-4 rounded-xl shadow-sm">
                 <p className="text-sm text-gray-500 mb-1">{language === 'fr' ? 'Lieu' : 'Toerana'}</p>
@@ -653,7 +707,7 @@ export default function EventsPage() {
                 <Ticket className="w-5 h-5" /> 
                 {isFull(selectedEvent) 
                   ? (language === 'fr' ? 'Complet' : 'Feno')
-                  : (language === 'fr' ? "S'inscrire" : 'Misoratra anarana')
+                  : (language === 'fr' ? 'S inscrire' : 'Misoratra anarana')
                 }
               </Link>
               <Link 

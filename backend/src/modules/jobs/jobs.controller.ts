@@ -10,28 +10,15 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { FilesInterceptor } from '@nestjs/platform-express';
-
-enum UserRole {
-  SUPER_ADMIN = 'super_admin',
-  ADMIN = 'admin',
-  STAFF = 'staff',
-  PARTNER = 'partner',
-}
+import { UserRole } from '../../entities/user.entity';
 
 @Controller('jobs')
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
   // ============================================================
-  // OFFRES D'EMPLOI
+  // SECTION 1 : ROUTES PUBLIQUES POUR LES OFFRES D EMPLOI
   // ============================================================
-
-  @Post('offers')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF, UserRole.PARTNER)
-  async createOffer(@Body() createDto: CreateJobOfferDto, @CurrentUser() user: any) {
-    return this.jobsService.create(createDto, user.id);
-  }
 
   @Public()
   @Get('offers')
@@ -75,6 +62,17 @@ export class JobsController {
     return this.jobsService.findOne(id);
   }
 
+  // ============================================================
+  // SECTION 2 : ROUTES PROTEGEES POUR LA GESTION DES OFFRES
+  // ============================================================
+
+  @Post('offers')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF, UserRole.PARTNER)
+  async createOffer(@Body() createDto: CreateJobOfferDto, @CurrentUser() user: any) {
+    return this.jobsService.create(createDto, user.id);
+  }
+
   @Patch('offers/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF, UserRole.PARTNER)
@@ -94,11 +92,11 @@ export class JobsController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async removeOffer(@Param('id') id: string) {
     await this.jobsService.remove(id);
-    return { success: true, message: 'Offre supprimée avec succès' };
+    return { success: true, message: 'Offre supprimee avec succes' };
   }
 
   // ============================================================
-  // CANDIDATURES
+  // SECTION 3 : ROUTES POUR LES CANDIDATURES
   // ============================================================
 
   @Public()
@@ -114,6 +112,16 @@ export class JobsController {
   async applyAuth(@Body() createDto: CreateJobApplicationDto, @UploadedFiles() files: any, @CurrentUser() user: any) {
     return this.jobsService.apply(createDto, files, user.id);
   }
+
+  @Get('applications/my')
+  @UseGuards(JwtAuthGuard)
+  async getMyApplications(@CurrentUser() user: any, @Query('page') page: string = '1', @Query('limit') limit: string = '10') {
+    return this.jobsService.getUserApplications(user.id, parseInt(page), parseInt(limit));
+  }
+
+  // ============================================================
+  // SECTION 4 : ROUTES ADMIN POUR LA GESTION DES CANDIDATURES
+  // ============================================================
 
   @Get('offers/:id/applications')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -143,12 +151,6 @@ export class JobsController {
     @CurrentUser() user: any,
   ) {
     return this.jobsService.updateApplicationStatus(id, updateDto, user.id);
-  }
-
-  @Get('applications/my')
-  @UseGuards(JwtAuthGuard)
-  async getMyApplications(@CurrentUser() user: any, @Query('page') page: string = '1', @Query('limit') limit: string = '10') {
-    return this.jobsService.getUserApplications(user.id, parseInt(page), parseInt(limit));
   }
 
   @Get('applications/all')

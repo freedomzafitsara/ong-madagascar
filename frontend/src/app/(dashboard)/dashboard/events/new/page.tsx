@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { eventsApi } from '@/lib/api';
 import { 
   ArrowLeft, Save, Calendar, MapPin, Users, DollarSign, 
   Clock, Loader2, CheckCircle, AlertCircle, X, 
@@ -18,12 +17,12 @@ const EVENT_TYPES = [
   { value: 'camp', label: 'Camp' },
   { value: 'workshop', label: 'Atelier' },
   { value: 'hackathon', label: 'Hackathon' },
-  { value: 'conference', label: 'Conférence' },
+  { value: 'conference', label: 'Conference' },
   { value: 'formation', label: 'Formation' }
 ];
 
 // ============================================================
-// COMPOSANT D'UPLOAD D'IMAGE
+// SECTION 1 : COMPOSANT D UPLOAD D IMAGE VERS CLOUDINARY
 // ============================================================
 
 interface ImageUploadProps {
@@ -62,14 +61,14 @@ function ImageUploadComponent({
     setPreviewUrl(localPreview);
 
     if (!token) {
-      onUploadError('Vous devez être connecté');
+      onUploadError('Vous devez etre connecte');
       setLocalUploading(false);
       return;
     }
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      onUploadError('Format non supporté (JPG, PNG, WEBP, GIF)');
+      onUploadError('Format non supporte (JPG, PNG, WEBP, GIF)');
       setPreviewUrl(currentImageUrl || null);
       setLocalUploading(false);
       return;
@@ -103,21 +102,24 @@ function ImageUploadComponent({
       const imageUrl = data.url || data.data?.url || data.fileUrl;
       
       onUploadComplete(imageUrl);
-      toast.success('Image uploadée avec succès');
+      toast.success('Image uploadee avec succes');
     } catch (error) {
       console.error('Upload error:', error);
       onUploadError(error instanceof Error ? error.message : 'Erreur upload');
       setPreviewUrl(currentImageUrl || null);
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de l upload');
     } finally {
       setLocalUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
   const handleRemove = () => {
     setPreviewUrl(null);
     onUploadComplete('');
-    toast.success('Image supprimée');
+    toast.success('Image supprimee');
   };
 
   return (
@@ -126,7 +128,7 @@ function ImageUploadComponent({
         <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
           <img 
             src={previewUrl} 
-            alt="Aperçu" 
+            alt="Apercu" 
             className="w-full h-48 object-cover"
             onError={() => setPreviewUrl(null)}
           />
@@ -135,7 +137,7 @@ function ImageUploadComponent({
               type="button"
               onClick={() => window.open(previewUrl, '_blank')}
               className="p-2 bg-white/90 text-gray-700 rounded-lg hover:bg-white transition shadow-md"
-              title="Voir l'image"
+              title="Voir l image"
             >
               <Eye className="w-4 h-4" />
             </button>
@@ -143,7 +145,7 @@ function ImageUploadComponent({
               onClick={handleRemove}
               className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-md"
               type="button"
-              title="Supprimer l'image"
+              title="Supprimer l image"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -177,7 +179,7 @@ function ImageUploadComponent({
 }
 
 // ============================================================
-// COMPOSANT PRINCIPAL
+// SECTION 2 : COMPOSANT PRINCIPAL
 // ============================================================
 
 export default function NewEventPage() {
@@ -206,10 +208,10 @@ export default function NewEventPage() {
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-800">Accès non autorisé</h1>
-          <p className="text-gray-500 mt-2">Vous n'avez pas les droits pour créer un événement.</p>
+          <h1 className="text-2xl font-bold text-gray-800">Acces non autorise</h1>
+          <p className="text-gray-500 mt-2">Vous n avez pas les droits pour creer un evenement.</p>
           <Link href="/dashboard/events" className="mt-4 inline-flex items-center gap-2 text-blue-600 hover:underline">
-            Retour aux événements
+            Retour aux evenements
           </Link>
         </div>
       </div>
@@ -246,13 +248,13 @@ export default function NewEventPage() {
       return false;
     }
     if (!formData.startDate) {
-      setError('La date et heure de début sont requises');
+      setError('La date et heure de debut sont requises');
       return false;
     }
     
     const startDateObj = new Date(formData.startDate);
     if (isNaN(startDateObj.getTime())) {
-      setError('La date de début est invalide');
+      setError('La date de debut est invalide');
       return false;
     }
     
@@ -263,7 +265,7 @@ export default function NewEventPage() {
         return false;
       }
       if (endDateObj < startDateObj) {
-        setError('La date de fin doit être postérieure à la date de début');
+        setError('La date de fin doit etre posterieure a la date de debut');
         return false;
       }
     }
@@ -308,7 +310,7 @@ export default function NewEventPage() {
         endDate: formData.endDate ? new Date(formData.endDate) : undefined,
         maxCapacity: formData.maxCapacity && formData.maxCapacity !== '' 
           ? parseInt(formData.maxCapacity) 
-          : undefined,
+          : 0,
         isFree: formData.isFree,
         price: !formData.isFree && formData.price && formData.price !== ''
           ? parseInt(formData.price)
@@ -317,7 +319,7 @@ export default function NewEventPage() {
         imageUrl: imageUrl || undefined
       };
 
-      console.log('📤 Données envoyées:', eventData);
+      console.log('Envoi au backend:', eventData);
 
       const response = await fetch(`${API_URL}/events`, {
         method: 'POST',
@@ -332,18 +334,18 @@ export default function NewEventPage() {
 
       if (response.ok) {
         setSuccess(true);
-        toast.success('Événement créé avec succès !');
+        toast.success('Evenement cree avec succes');
         setTimeout(() => {
           router.push('/dashboard/events');
         }, 2000);
       } else {
-        console.error('❌ Erreur backend:', data);
-        const errorMsg = data.message || data.error || 'Erreur lors de la création';
-        setError(errorMsg);
-        toast.error(errorMsg);
+        console.error('Erreur backend:', data);
+        const errorMsg = data.message || data.error || 'Erreur lors de la creation';
+        setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+        toast.error(typeof errorMsg === 'string' ? errorMsg : 'Erreur lors de la creation');
       }
     } catch (err: any) {
-      console.error('❌ Erreur réseau:', err);
+      console.error('Erreur reseau:', err);
       const errorMsg = err.message || 'Erreur de connexion au serveur';
       setError(errorMsg);
       toast.error(errorMsg);
@@ -352,6 +354,10 @@ export default function NewEventPage() {
     }
   };
 
+  // ============================================================
+  // SECTION 3 : ECRAN DE SUCCES
+  // ============================================================
+
   if (success) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -359,9 +365,9 @@ export default function NewEventPage() {
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Événement créé avec succès !</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Evenement cree avec succes</h2>
           <p className="text-gray-600 mb-6">
-            L'événement "{formData.title}" a été enregistré.
+            L evenement "{formData.title}" a ete enregistre.
           </p>
           {imageUrl && (
             <div className="mb-6 rounded-lg overflow-hidden">
@@ -373,7 +379,7 @@ export default function NewEventPage() {
               Voir la liste
             </Link>
             <Link href="/dashboard/events/new" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-              Créer un autre
+              Creer un autre
             </Link>
           </div>
         </div>
@@ -381,9 +387,14 @@ export default function NewEventPage() {
     );
   }
 
+  // ============================================================
+  // SECTION 4 : FORMULAIRE DE CREATION
+  // ============================================================
+
   return (
     <div className="max-w-4xl mx-auto">
-      {/* EN-TÊTE */}
+      
+      {/* SOUS-SECTION 4.1 : EN-TETE */}
       <div className="flex items-center gap-4 mb-6">
         <Link href="/dashboard/events" className="p-2 hover:bg-gray-100 rounded-lg transition">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -394,14 +405,14 @@ export default function NewEventPage() {
               <Calendar className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">Nouvel événement</h1>
-              <p className="text-gray-500 text-sm mt-0.5">Créez un camp, atelier, hackathon ou formation</p>
+              <h1 className="text-2xl font-bold text-gray-800">Nouvel evenement</h1>
+              <p className="text-gray-500 text-sm mt-0.5">Creez un camp, atelier, hackathon ou formation</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* MESSAGES D'ERREUR */}
+      {/* SOUS-SECTION 4.2 : MESSAGE D ERREUR */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-2">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -409,11 +420,10 @@ export default function NewEventPage() {
         </div>
       )}
 
-      {/* FORMULAIRE */}
+      {/* SOUS-SECTION 4.3 : FORMULAIRE */}
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
         <div className="p-6 space-y-6">
           
-          {/* SECTION UPLOAD IMAGE */}
           <div className="border-b border-gray-200 pb-4">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <div className="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -429,15 +439,14 @@ export default function NewEventPage() {
               onUploadError={handleImageUploadError}
             />
             <p className="text-xs text-gray-400 mt-2">
-              Une image de qualité améliore la visibilité de votre événement
+              Une image de qualite ameliore la visibilite de votre evenement
             </p>
           </div>
 
-          {/* TITRES */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Titre (français) <span className="text-red-500">*</span>
+                Titre (francais)
               </label>
               <input
                 type="text"
@@ -445,7 +454,7 @@ export default function NewEventPage() {
                 value={formData.title}
                 onChange={(e) => setFormData({...formData, title: e.target.value})}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                placeholder="Titre en français"
+                placeholder="Titre en francais"
               />
             </div>
             <div>
@@ -460,10 +469,9 @@ export default function NewEventPage() {
             </div>
           </div>
 
-          {/* TYPE ET STATUT */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Type d'événement</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Type d evenement</label>
               <select
                 value={formData.type}
                 onChange={(e) => setFormData({...formData, type: e.target.value})}
@@ -482,16 +490,15 @@ export default function NewEventPage() {
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer"
               >
                 <option value="draft">Brouillon</option>
-                <option value="published">Publié directement</option>
+                <option value="published">Publie directement</option>
               </select>
             </div>
           </div>
 
-          {/* DATE ET LIEU */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Date et heure <span className="text-red-500">*</span>
+                Date et heure
               </label>
               <div className="relative">
                 <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -506,7 +513,7 @@ export default function NewEventPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Lieu <span className="text-red-500">*</span>
+                Lieu
               </label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -516,15 +523,14 @@ export default function NewEventPage() {
                   value={formData.location}
                   onChange={(e) => setFormData({...formData, location: e.target.value})}
                   className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  placeholder="Ex: Antananarivo, Mahamasina"
+                  placeholder="Ex: Antananarivo"
                 />
               </div>
             </div>
           </div>
 
-          {/* RÉGION */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Région</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Region</label>
             <div className="relative">
               <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -532,12 +538,11 @@ export default function NewEventPage() {
                 value={formData.region}
                 onChange={(e) => setFormData({...formData, region: e.target.value})}
                 className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                placeholder="Ex: Analamanga, Vakinankaratra"
+                placeholder="Ex: Analamanga"
               />
             </div>
           </div>
 
-          {/* DATE DE FIN */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Date de fin (optionnelle)</label>
             <div className="relative">
@@ -551,10 +556,9 @@ export default function NewEventPage() {
             </div>
           </div>
 
-          {/* CAPACITÉ ET PRIX */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Capacité maximale</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Capacite maximale</label>
               <div className="relative">
                 <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -563,12 +567,12 @@ export default function NewEventPage() {
                   value={formData.maxCapacity}
                   onChange={(e) => setFormData({...formData, maxCapacity: e.target.value})}
                   className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  placeholder="0 = illimité"
+                  placeholder="0 = illimite"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Événement gratuit ?</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Evenement gratuit ?</label>
               <select
                 value={formData.isFree ? 'true' : 'false'}
                 onChange={(e) => setFormData({...formData, isFree: e.target.value === 'true'})}
@@ -580,7 +584,6 @@ export default function NewEventPage() {
             </div>
           </div>
 
-          {/* PRIX */}
           {!formData.isFree && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Prix (Ariary)</label>
@@ -598,10 +601,9 @@ export default function NewEventPage() {
             </div>
           )}
 
-          {/* DESCRIPTIONS */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Description (français) <span className="text-red-500">*</span>
+              Description (francais)
             </label>
             <textarea
               rows={5}
@@ -609,7 +611,7 @@ export default function NewEventPage() {
               value={formData.description}
               onChange={(e) => setFormData({...formData, description: e.target.value})}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-              placeholder="Description détaillée de l'événement..."
+              placeholder="Description detaillee de l evenement..."
             />
           </div>
 
@@ -625,7 +627,6 @@ export default function NewEventPage() {
           </div>
         </div>
 
-        {/* BOUTONS D'ACTION */}
         <div className="flex justify-end gap-3 p-6 bg-gray-50 border-t border-gray-200">
           <Link
             href="/dashboard/events"
@@ -641,12 +642,12 @@ export default function NewEventPage() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Création en cours...
+                Creation en cours...
               </>
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                Créer l'événement
+                Creer l evenement
               </>
             )}
           </button>
@@ -654,7 +655,7 @@ export default function NewEventPage() {
       </form>
 
       <div className="mt-5 text-center text-xs text-gray-400">
-        Les données sont stockées dans PostgreSQL via l'API NestJS - Connexion sécurisée JWT
+        Les donnees sont stockees dans PostgreSQL via l API NestJS - Connexion securisee JWT - Images sur Cloudinary
       </div>
     </div>
   );

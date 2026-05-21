@@ -1,6 +1,3 @@
-// frontend/src/app/(dashboard)/dashboard/members/new/page.tsx
-// VERSION FINALE CORRIGEE - PLACE AU SOUTENANCE
-
 'use client';
 
 import { useState } from 'react';
@@ -9,9 +6,9 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   ArrowLeft, Save, User, Mail, Phone, MapPin, 
-  CreditCard, Calendar, Award, AlertCircle, CheckCircle,
+  Calendar, Award, AlertCircle, CheckCircle,
   Loader2, Database, X, Star, Heart, Users,
-  PlusCircle, Info, ChevronDown, ChevronUp, DollarSign,
+  PlusCircle, Info, ChevronDown, ChevronUp,
   ShieldCheck, QrCode
 } from 'lucide-react';
 
@@ -20,7 +17,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 const REGIONS = [
   'Analamanga', 'Diana', 'Sava', 'Itasy', 'Vakinankaratra',
   'Bongolava', 'Sofia', 'Boeny', 'Betsiboka', 'Melaky',
-  'Alaotra-Mangoro', 'Atsinanana', 'Analanjirofo', 'Amoron\'i Mania',
+  'Alaotra-Mangoro', 'Atsinanana', 'Analanjirofo', 'Amoron i Mania',
   'Haute Matsiatra', 'Vatovavy-Fitovinany', 'Ihorombe', 'Atsimo-Atsinanana',
   'Menabe', 'Atsimo-Andrefana', 'Androy', 'Anosy'
 ];
@@ -37,7 +34,7 @@ const MEMBERSHIP_PRICES: Record<MembershipType, number> = {
 const MEMBERSHIP_LABELS: Record<MembershipType, string> = { 
   standard: 'Standard', 
   premium: 'Premium', 
-  student: 'Étudiant', 
+  student: 'Etudiant', 
   honorary: 'Honoraire' 
 };
 
@@ -69,8 +66,8 @@ export default function NewMemberPage() {
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-800">Accès non autorisé</h1>
-          <p className="text-gray-500 mt-2">Vous n'avez pas les droits pour ajouter un membre.</p>
+          <h1 className="text-2xl font-bold text-gray-800">Acces non autorise</h1>
+          <p className="text-gray-500 mt-2">Vous n avez pas les droits pour ajouter un membre.</p>
           <Link href="/dashboard" className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg">
             Retour au tableau de bord
           </Link>
@@ -89,7 +86,7 @@ export default function NewMemberPage() {
     paymentMethod: 'mvola' as 'mvola' | 'orange_money' | 'airtel' | 'bank' | 'cash',
     amountPaid: 25000,
     startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+    expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
   });
 
   const handleTypeChange = (type: MembershipType) => {
@@ -101,12 +98,12 @@ export default function NewMemberPage() {
   };
 
   const validate = () => {
-    if (!formData.firstName.trim()) { setError('Prénom requis'); return false; }
+    if (!formData.firstName.trim()) { setError('Prenom requis'); return false; }
     if (!formData.lastName.trim()) { setError('Nom requis'); return false; }
     if (!formData.email.trim()) { setError('Email requis'); return false; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) { setError('Email invalide'); return false; }
     if (formData.amountPaid <= 0 && formData.membershipType !== 'honorary') { 
-      setError('Le montant payé doit être supérieur à 0'); 
+      setError('Le montant paye doit etre superieur a 0'); 
       return false; 
     }
     return true;
@@ -127,12 +124,14 @@ export default function NewMemberPage() {
           phone: formData.phone.trim(),
           region: formData.region,
         },
-        membership_type: formData.membershipType,
-        payment_method: formData.paymentMethod,
-        amount_paid: formData.amountPaid,
-        start_date: formData.startDate,
-        end_date: formData.endDate,
+        membershipType: formData.membershipType,
+        paymentMethod: formData.paymentMethod,
+        amountPaid: formData.amountPaid,
+        startDate: formData.startDate,
+        endDate: formData.expiryDate,
       };
+
+      console.log('Envoi au backend:', memberData);
 
       const response = await fetch(`${API_URL}/members`, {
         method: 'POST',
@@ -155,9 +154,14 @@ export default function NewMemberPage() {
         });
         setTimeout(() => router.push('/dashboard/members'), 3000);
       } else {
-        setError(result.message || 'Erreur lors de la création');
+        console.error('Erreur backend:', result);
+        const errorMessage = Array.isArray(result.message) 
+          ? result.message.join(', ') 
+          : result.message || result.error || 'Erreur lors de la creation';
+        setError(errorMessage);
       }
-    } catch {
+    } catch (err) {
+      console.error('Erreur reseau:', err);
       setError('Erreur de connexion au serveur');
     } finally {
       setLoading(false);
@@ -171,9 +175,9 @@ export default function NewMemberPage() {
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Membre ajouté avec succès !</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Membre ajoute avec succes</h2>
           <p className="text-gray-600 mb-4">
-            {created.firstName} {created.lastName} a été enregistré.
+            {created.firstName} {created.lastName} a ete enregistre.
           </p>
           <div className="bg-blue-600 rounded-xl p-6 mb-6 text-white">
             <div className="flex justify-between items-start">
@@ -206,13 +210,14 @@ export default function NewMemberPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
+      
       <div className="flex justify-between items-center mb-6">
         <div>
           <Link href="/dashboard/members" className="inline-flex items-center gap-2 text-gray-500 hover:text-blue-600 mb-2">
             <ArrowLeft className="w-4 h-4" /> Retour
           </Link>
           <h1 className="text-2xl font-bold text-gray-800">Ajouter un membre</h1>
-          <p className="text-gray-500 text-sm">Créez une nouvelle adhésion</p>
+          <p className="text-gray-500 text-sm">Creez une nouvelle adhesion</p>
         </div>
         <button
           onClick={() => setShowHelp(!showHelp)}
@@ -226,7 +231,7 @@ export default function NewMemberPage() {
       {showHelp && (
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
-            Le numéro de membre est généré automatiquement. Une carte membre avec QR code sera créée.
+            Le numero de membre est genere automatiquement. Une carte membre avec QR code sera creee et stockee sur Cloudinary.
           </p>
         </div>
       )}
@@ -238,13 +243,14 @@ export default function NewMemberPage() {
       )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+        
         <div className="p-6 border-b">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <User className="w-5 h-5 text-blue-600" /> Informations
+            <User className="w-5 h-5 text-blue-600" /> Informations personnelles
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Prénom *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Prenom</label>
               <input
                 type="text"
                 required
@@ -254,7 +260,7 @@ export default function NewMemberPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
               <input
                 type="text"
                 required
@@ -264,7 +270,7 @@ export default function NewMemberPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
                 type="email"
                 required
@@ -274,7 +280,7 @@ export default function NewMemberPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
               <input
                 type="tel"
                 value={formData.phone}
@@ -283,7 +289,7 @@ export default function NewMemberPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Région *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Region</label>
               <select
                 required
                 value={formData.region}
@@ -298,7 +304,7 @@ export default function NewMemberPage() {
 
         <div className="p-6 border-b bg-gray-50">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Award className="w-5 h-5 text-blue-600" /> Type d'adhésion
+            <Award className="w-5 h-5 text-blue-600" /> Type d adhesion
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
             {(['standard', 'premium', 'student', 'honorary'] as const).map((type) => (
@@ -334,11 +340,11 @@ export default function NewMemberPage() {
                 <option value="orange_money">Orange Money</option>
                 <option value="airtel">Airtel Money</option>
                 <option value="bank">Virement bancaire</option>
-                <option value="cash">Espèces</option>
+                <option value="cash">Especes</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Montant (Ar) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Montant (Ar)</label>
               <input
                 type="number"
                 required
@@ -354,11 +360,11 @@ export default function NewMemberPage() {
 
         <div className="p-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-blue-600" /> Période
+            <Calendar className="w-5 h-5 text-blue-600" /> Periode de validite
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date de début</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date de debut</label>
               <input
                 type="date"
                 required
@@ -368,12 +374,12 @@ export default function NewMemberPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date d'expiration</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date d expiration</label>
               <input
                 type="date"
                 required
-                value={formData.endDate}
-                onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                value={formData.expiryDate}
+                onChange={e => setFormData({ ...formData, expiryDate: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
@@ -399,8 +405,9 @@ export default function NewMemberPage() {
       </form>
 
       <div className="mt-4 text-center text-xs text-gray-400">
-        <Database className="w-3 h-3 inline mr-1" /> Données stockées dans PostgreSQL
-        <ShieldCheck className="w-3 h-3 inline ml-2 mr-1" /> Sécurisé JWT
+        <Database className="w-3 h-3 inline mr-1" /> PostgreSQL
+        <ShieldCheck className="w-3 h-3 inline ml-2 mr-1" /> JWT
+        <QrCode className="w-3 h-3 inline ml-2 mr-1" /> Cloudinary
       </div>
     </div>
   );

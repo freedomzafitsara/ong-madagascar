@@ -1,3 +1,4 @@
+// backend/src/modules/members/members.controller.ts
 import { Controller, Get, Post, Body, Param, Query, UseGuards, Put } from '@nestjs/common';
 import { MembersService } from './members.service';
 import { CreateMemberDto, UpdateMemberStatusDto } from './dto/create-member.dto';
@@ -12,10 +13,12 @@ import { UserRole } from '../../entities/user.entity';
 export class MembersController {
   constructor(private readonly membersService: MembersService) {}
 
+  // Route pour creer un nouveau membre (avec creation d utilisateur)
   @Post()
-  @UseGuards(JwtAuthGuard)
-  async createMembership(@CurrentUser() user: any, @Body() createMemberDto: CreateMemberDto) {
-    return this.membersService.createMembership(user.id, createMemberDto);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  async createMembership(@Body() createMemberDto: CreateMemberDto) {
+    return this.membersService.createMembership(createMemberDto);
   }
 
   @Get('me')

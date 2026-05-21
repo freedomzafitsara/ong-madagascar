@@ -6,13 +6,10 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link';
 import { 
   ArrowLeft, Loader2, AlertCircle, CheckCircle, Palette, 
-  Image as ImageIcon, X, Save, Eye, EyeOff, Upload, RefreshCw
+  X, Save, Eye, EyeOff, Upload, RefreshCw,
+  Trash2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-// ============================================================
-// TYPES
-// ============================================================
 
 interface BackgroundSettings {
   id?: string;
@@ -29,10 +26,6 @@ interface BackgroundSettings {
   updated_at?: string;
 }
 
-// ============================================================
-// LISTE DES PAGES
-// ============================================================
-
 const pagesList = [
   { value: 'home', label: 'Accueil', label_mg: 'Fandraisana' },
   { value: 'projects', label: 'Projets', label_mg: 'Tetikasa' },
@@ -48,17 +41,46 @@ const pagesList = [
   { value: 'profile', label: 'Profil', label_mg: 'Momba ahy' }
 ];
 
-// ============================================================
-// SERVICE API
-// ============================================================
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+
+// Champs autorises pour la mise a jour (a ne pas confondre avec les proprietes systeme)
+const ALLOWED_UPDATE_FIELDS = [
+  'image_url', 'mobile_url', 'thumbnail_url', 'is_active',
+  'overlay_opacity', 'position', 'size', 'alt_text'
+];
+
+// Proprietes systeme a ne jamais envoyer au backend
+const SYSTEM_FIELDS = ['id', 'created_at', 'updated_at', 'createdAt', 'updatedAt'];
+
+function cleanDataForUpdate(data: Record<string, any>): Record<string, any> {
+  const cleaned: Record<string, any> = {};
+  for (const field of ALLOWED_UPDATE_FIELDS) {
+    if (data[field] !== undefined) {
+      cleaned[field] = data[field];
+    }
+  }
+  return cleaned;
+}
 
 async function apiRequest(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem('access_token') || localStorage.getItem('token');
   
+  let body = options.body;
+  
+  // Nettoyer les donnees pour les requetes PUT
+  if (options.method === 'PUT' && body && typeof body === 'string') {
+    try {
+      const parsedBody = JSON.parse(body);
+      const cleanedBody = cleanDataForUpdate(parsedBody);
+      body = JSON.stringify(cleanedBody);
+    } catch (e) {
+      // Ignorer l'erreur de parsing
+    }
+  }
+  
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
+    body: body,
     headers: {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -67,8 +89,8 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: `Erreur ${response.status}` }));
-    throw new Error(error.message || `Erreur HTTP ${response.status}`);
+    const error = await response.json().catch(() => ({ message: 'Erreur ' + response.status }));
+    throw new Error(error.message || 'Erreur HTTP ' + response.status);
   }
 
   return response.json();
@@ -88,7 +110,7 @@ async function uploadImage(file: File): Promise<string> {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: `Erreur ${response.status}` }));
+    const error = await response.json().catch(() => ({ message: 'Erreur ' + response.status }));
     throw new Error(error.message || 'Erreur lors de l upload');
   }
 
@@ -98,7 +120,7 @@ async function uploadImage(file: File): Promise<string> {
 
 async function getBackground(page: string): Promise<BackgroundSettings | null> {
   try {
-    return await apiRequest(`/pages/backgrounds/${page}`);
+    return await apiRequest('/pages/backgrounds/' + page);
   } catch (error) {
     if (error instanceof Error && error.message.includes('404')) {
       return null;
@@ -108,9 +130,10 @@ async function getBackground(page: string): Promise<BackgroundSettings | null> {
 }
 
 async function updateBackground(page: string, data: Partial<BackgroundSettings>): Promise<BackgroundSettings> {
-  return await apiRequest(`/pages/backgrounds/${page}`, {
+  const cleanedData = cleanDataForUpdate(data as Record<string, any>);
+  return await apiRequest('/pages/backgrounds/' + page, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: JSON.stringify(cleanedData),
   });
 }
 
@@ -124,10 +147,6 @@ async function getAllBackgrounds(): Promise<BackgroundSettings[]> {
   }
 }
 
-// ============================================================
-// VALEUR PAR DEFAUT
-// ============================================================
-
 const getDefaultBackground = (page: string): BackgroundSettings => ({
   page: page,
   image_url: '',
@@ -137,10 +156,6 @@ const getDefaultBackground = (page: string): BackgroundSettings => ({
   size: 'cover',
   alt_text: ''
 });
-
-// ============================================================
-// COMPOSANT D'UPLOAD D'IMAGE
-// ============================================================
 
 interface ImageUploaderProps {
   onUploadComplete: (url: string) => void;
@@ -173,7 +188,7 @@ function ImageUploaderComponent({
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      onUploadError('Veuillez selectionner une image (JPG, PNG, WEBP, GIF)');
+      onUploadError('Veuillez selectionner une image JPG, PNG, WEBP ou GIF');
       return;
     }
 
@@ -190,7 +205,7 @@ function ImageUploaderComponent({
     try {
       const imageUrl = await uploadImage(file);
       onUploadComplete(imageUrl);
-      toast.success('Image uploadée avec succès');
+      toast.success('Image uploadee avec succes');
     } catch (error) {
       console.error('Upload error:', error);
       onUploadError(error instanceof Error ? error.message : 'Erreur lors de l upload');
@@ -207,7 +222,7 @@ function ImageUploaderComponent({
   const handleRemove = () => {
     setPreviewUrl(null);
     onUploadComplete('');
-    toast.success('Image supprimée');
+    toast.success('Image supprimee');
   };
 
   return (
@@ -224,7 +239,7 @@ function ImageUploaderComponent({
             onClick={handleRemove}
             className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow-md"
             type="button"
-            title="Supprimer l'image"
+            title="Supprimer l image"
           >
             <X className="w-4 h-4" />
           </button>
@@ -256,14 +271,11 @@ function ImageUploaderComponent({
   );
 }
 
-// ============================================================
-// COMPOSANT DE CARTE DE PAGE
-// ============================================================
-
 interface PageCardProps {
   page: typeof pagesList[0];
   background: BackgroundSettings | null;
   onUpdate: (data: Partial<BackgroundSettings>) => Promise<void>;
+  onDelete?: (page: string) => Promise<void>;
   isSaving: boolean;
   isUploading: boolean;
   onUploadStart: () => void;
@@ -277,6 +289,7 @@ function PageCard({
   page, 
   background, 
   onUpdate, 
+  onDelete,
   isSaving, 
   isUploading, 
   onUploadStart, 
@@ -289,6 +302,7 @@ function PageCard({
   const [localBackground, setLocalBackground] = useState<Partial<BackgroundSettings>>(background || {});
   const [hasChanges, setHasChanges] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+  const [deleting, setDeleting] = useState<boolean>(false);
 
   const pageLabel = language === 'fr' ? page.label : page.label_mg;
 
@@ -312,6 +326,17 @@ function PageCard({
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
     onRefresh();
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Supprimer le fond d ecran de la page "' + pageLabel + '" ? Cette action est irreversible.')) return;
+    
+    if (onDelete) {
+      setDeleting(true);
+      await onDelete(page.value);
+      setDeleting(false);
+      onRefresh();
+    }
   };
 
   const handleImageUploadComplete = (url: string) => {
@@ -341,8 +366,8 @@ function PageCard({
             <button
               onClick={() => setShowPreview(!showPreview)}
               className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
-              aria-label={showPreview ? "Masquer l apercu" : "Voir l apercu"}
-              title={showPreview ? "Masquer l apercu" : "Voir l apercu"}
+              aria-label={showPreview ? 'Masquer l apercu' : 'Voir l apercu'}
+              title={showPreview ? 'Masquer l apercu' : 'Voir l apercu'}
             >
               {showPreview ? (
                 <EyeOff className="w-4 h-4 text-gray-500" />
@@ -369,7 +394,6 @@ function PageCard({
           />
         </div>
 
-        {/* Apercu du rendu */}
         {showPreview && hasImage && (
           <div className="bg-gray-100 rounded-lg p-3">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -387,7 +411,7 @@ function PageCard({
               />
               <div 
                 className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                style={{ backgroundColor: `rgba(0, 0, 0, ${(localBackground.overlay_opacity || 0) / 100})` }}
+                style={{ backgroundColor: 'rgba(0, 0, 0, ' + ((localBackground.overlay_opacity || 0) / 100) + ')' }}
               >
                 <div className="bg-white/90 p-3 rounded-lg text-center">
                   <p className="text-sm font-medium text-gray-800">Apercu du contenu</p>
@@ -401,7 +425,6 @@ function PageCard({
           </div>
         )}
 
-        {/* Options avancees - uniquement si image presente */}
         {hasImage && (
           <>
             <div className="border-t border-gray-100 my-2" />
@@ -479,28 +502,44 @@ function PageCard({
               </p>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer pt-2">
-              <input
-                type="checkbox"
-                checked={localBackground.is_active || false}
-                onChange={(e) => handleChange('is_active', e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                disabled={isSaving}
-              />
-              <span className="text-sm text-gray-700">
-                Activer ce fond d ecran sur la page {pageLabel}
-              </span>
-            </label>
+            <div className="flex items-center justify-between pt-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localBackground.is_active || false}
+                  onChange={(e) => handleChange('is_active', e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  disabled={isSaving}
+                />
+                <span className="text-sm text-gray-700">
+                  Activer ce fond d ecran sur la page {pageLabel}
+                </span>
+              </label>
+              
+              {onDelete && localBackground.image_url && (
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition"
+                  title="Supprimer le fond d ecran"
+                >
+                  {deleting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+              )}
+            </div>
 
             <div className="pt-2">
               <button
                 onClick={handleSave}
                 disabled={isSaving || !hasChanges}
-                className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-200 ${
-                  hasChanges && !isSaving
+                className={'w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-200 ' +
+                  (hasChanges && !isSaving
                     ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed')}
               >
                 {isSaving ? (
                   <>
@@ -528,10 +567,6 @@ function PageCard({
   );
 }
 
-// ============================================================
-// COMPOSANT PRINCIPAL
-// ============================================================
-
 export default function BackgroundsManagementPage() {
   const { user, isAuthenticated } = useAuth();
   const { language } = useLanguage();
@@ -550,7 +585,7 @@ export default function BackgroundsManagementPage() {
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-gray-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-800">Acces non autorise</h1>
-          <p className="text-gray-500 mt-2">Vous n'avez pas les droits pour acceder a cette page.</p>
+          <p className="text-gray-500 mt-2">Vous n avez pas les droits pour acceder a cette page.</p>
           <Link href="/dashboard" className="mt-4 inline-flex items-center gap-2 text-blue-600 hover:underline">
             Retour au tableau de bord
           </Link>
@@ -605,7 +640,8 @@ export default function BackgroundsManagementPage() {
     setMessage(null);
 
     try {
-      const updated = await updateBackground(page, data);
+      const cleanedData = cleanDataForUpdate(data as Record<string, any>);
+      const updated = await updateBackground(page, cleanedData);
       
       setBackgrounds(prev => ({
         ...prev,
@@ -614,11 +650,11 @@ export default function BackgroundsManagementPage() {
       
       setMessage({ 
         type: 'success', 
-        text: `Fond d ecran de la page ${page} mis a jour avec succes` 
+        text: 'Fond d ecran de la page ' + page + ' mis a jour avec succes' 
       });
       
       setTimeout(() => setMessage(null), 3000);
-      toast.success(`Fond d ecran de la page ${page} mis a jour`);
+      toast.success('Fond d ecran de la page ' + page + ' mis a jour');
     } catch (error) {
       console.error('Erreur de mise a jour:', error);
       const errorMsg = error instanceof Error ? error.message : 'Erreur lors de la mise a jour';
@@ -630,6 +666,43 @@ export default function BackgroundsManagementPage() {
     }
   }, []);
 
+  const deleteBackgroundHandler = useCallback(async (page: string) => {
+    setMessage(null);
+
+    try {
+      const cleanedData: Partial<BackgroundSettings> = {
+        image_url: '',
+        is_active: false,
+        overlay_opacity: 30,
+        position: 'center',
+        size: 'cover',
+        alt_text: ''
+      };
+      
+      const updated = await updateBackground(page, cleanedData);
+      
+      setBackgrounds(prev => ({
+        ...prev,
+        [page]: updated
+      }));
+      
+      setMessage({ 
+        type: 'success', 
+        text: 'Fond d ecran de la page ' + page + ' supprime avec succes' 
+      });
+      
+      setTimeout(() => setMessage(null), 3000);
+      toast.success('Fond d ecran de la page ' + page + ' supprime');
+    } catch (error) {
+      console.error('Erreur de suppression:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Erreur lors de la suppression';
+      setMessage({ type: 'error', text: errorMsg });
+      toast.error(errorMsg);
+      setTimeout(() => setMessage(null), 3000);
+    }
+  }, []);
+
+  // AJOUTER CES TROIS FONCTIONS MANQUANTES
   const handleImageUploadStart = useCallback((page: string) => {
     setUploading(prev => ({ ...prev, [page]: true }));
   }, []);
@@ -691,11 +764,10 @@ export default function BackgroundsManagementPage() {
       </div>
 
       {message && (
-        <div className={`p-4 rounded-lg flex items-center gap-3 ${
-          message.type === 'success' 
+        <div className={'p-4 rounded-lg flex items-center gap-3 ' +
+          (message.type === 'success' 
             ? 'bg-green-50 text-green-800 border border-green-200' 
-            : 'bg-red-50 text-red-800 border border-red-200'
-        }`}>
+            : 'bg-red-50 text-red-800 border border-red-200')}>
           {message.type === 'success' 
             ? <CheckCircle className="w-5 h-5 text-green-600" /> 
             : <AlertCircle className="w-5 h-5 text-red-600" />
@@ -712,10 +784,11 @@ export default function BackgroundsManagementPage() {
 
           return (
             <PageCard
-              key={`${page.value}-${refreshKey}`}
+              key={page.value + '-' + refreshKey}
               page={page}
               background={bg || null}
               onUpdate={(data) => updateBackgroundHandler(page.value, data)}
+              onDelete={deleteBackgroundHandler}
               isSaving={isSaving}
               isUploading={isUploading}
               onUploadStart={() => handleImageUploadStart(page.value)}

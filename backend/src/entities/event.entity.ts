@@ -1,15 +1,13 @@
-// backend/src/entities/event.entity.ts
-// VERSION CORRESPONDANT EXACTEMENT À VOTRE BASE DE DONNÉES
-
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { User } from './user.entity';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
+import { EventRegistration } from './event-registration.entity';
 
 export enum EventType {
   CAMP = 'camp',
   WORKSHOP = 'workshop',
   HACKATHON = 'hackathon',
   CONFERENCE = 'conference',
-  FORMATION = 'formation'
+  FORMATION = 'formation',
+  OTHER = 'other'
 }
 
 export enum EventStatus {
@@ -20,6 +18,7 @@ export enum EventStatus {
 }
 
 @Entity('events')
+@Index(['status', 'startDate'])
 export class Event {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -27,24 +26,22 @@ export class Event {
   @Column({ length: 255 })
   title: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ name: 'title_mg', length: 255, nullable: true })
   title_mg: string;
 
   @Column({ type: 'text' })
   description: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'description_mg', type: 'text', nullable: true })
   description_mg: string;
 
-  @Column({ type: 'varchar', length: 50 })
+  @Column({ length: 50 })
   type: string;
 
-  @Column({ type: 'varchar', length: 50, default: 'published' })
+  @Column({ length: 50, default: EventStatus.DRAFT })
   status: string;
 
-  // ⚠️ CORRECTION IMPORTANTE : La colonne 'address' n'existe PAS dans votre BDD
-  // Utilisez 'location' à la place (cette colonne existe dans votre table events)
-  @Column({ length: 255, nullable: true })
+  @Column({ length: 255 })
   location: string;
 
   @Column({ length: 100, nullable: true })
@@ -53,26 +50,32 @@ export class Event {
   @Column({ name: 'startDate', type: 'timestamp' })
   startDate: Date;
 
-  @Column({ name: 'endDate', type: 'timestamp' })
+  @Column({ name: 'endDate', type: 'timestamp', nullable: true })
   endDate: Date;
 
-  @Column({ name: 'maxCapacity', type: 'int', nullable: true })
+  @Column({ name: 'maxCapacity', default: 0 })
   maxCapacity: number;
 
-  @Column({ name: 'currentRegistrations', type: 'int', default: 0 })
+  @Column({ name: 'currentRegistrations', default: 0 })
   currentRegistrations: number;
 
-  @Column({ name: 'isFree', type: 'boolean', default: true })
+  @Column({ name: 'isFree', default: true })
   isFree: boolean;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   price: number;
 
-  @Column({ name: 'imageUrl', length: 255, nullable: true })
+  @Column({ name: 'imageUrl', length: 500, nullable: true })
   imageUrl: string;
 
-  @Column({ type: 'text', array: true, nullable: true })
-  galleryImages: string[];
+  @Column({ name: 'image_url', type: 'text', nullable: true })
+  image_url: string;
+
+  @Column({ name: 'galleryImages', type: 'text', nullable: true })
+  galleryImages: string;
+
+  @Column({ name: 'gallery_images', type: 'text', nullable: true })
+  gallery_images: string;
 
   @Column({ type: 'text', nullable: true })
   program: string;
@@ -80,29 +83,15 @@ export class Event {
   @Column({ type: 'text', nullable: true })
   speakers: string;
 
-  @Column({ name: 'createdBy', type: 'uuid', nullable: true })
+  @Column({ name: 'createdBy', nullable: true })
   createdBy: string;
 
-  @Column({ name: 'createdAt', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn({ name: 'createdAt' })
   createdAt: Date;
 
-  @Column({ name: 'updatedAt', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @UpdateDateColumn({ name: 'updatedAt' })
   updatedAt: Date;
 
-  // Champs supplémentaires de votre BDD
-  @Column({ type: 'text', nullable: true })
-  image_url: string;
-
-  @Column({ type: 'text', nullable: true })
-  gallery_images: string;
-
-  @Column({ type: 'timestamp', default: () => 'now()' })
-  created_at: Date;
-
-  @Column({ type: 'timestamp', default: () => 'now()' })
-  updated_at: Date;
-
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'createdBy' })
-  creator: User;
+  @OneToMany(() => EventRegistration, (registration) => registration.event)
+  registrations: EventRegistration[];
 }

@@ -23,7 +23,6 @@ export default function LoginPage() {
     loadPageBackground();
   }, []);
 
-  // Chargement du fond d'ecran depuis l'espace super-admin
   const loadPageBackground = async () => {
     try {
       const background = await pageService.getBackground('login');
@@ -48,11 +47,9 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      console.log('Connexion reussie');
       router.push('/dashboard');
       router.refresh();
     } catch (err: any) {
-      console.error('Erreur connexion:', err);
       const message = err.message || 'Email ou mot de passe incorrect';
       setError(message);
     } finally {
@@ -60,17 +57,16 @@ export default function LoginPage() {
     }
   };
 
-  // Style du fond d'ecran plein ecran
   const overlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 40) / 100})`,
   } : {};
 
   if (!mounted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Chargement...</p>
+          <p className="text-gray-500">Chargement</p>
         </div>
       </div>
     );
@@ -78,7 +74,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section avec fond d'ecran plein ecran */}
       <section className="relative min-h-screen w-full overflow-hidden">
         <div className="absolute inset-0">
           {pageBackground?.image_url && pageBackground.is_active ? (
@@ -96,20 +91,17 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* Contenu centre */}
         <div className="relative z-10 h-full flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8">
-            {/* Bouton retour */}
             <div className="mb-6">
               <Link href="/" className="inline-flex items-center gap-2 text-gray-500 hover:text-blue-600 transition">
                 <ArrowLeft className="w-4 h-4" />
-                <span>Retour a l accueil</span>
+                <span>Retour à l accueil</span>
               </Link>
             </div>
 
-            {/* En-tete */}
             <div className="text-center mb-8">
-              <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-1.5 mb-4">
+              <div className="inline-flex items-center gap-2 bg-gray-100 rounded-full px-4 py-1.5 mb-4">
                 <Sparkles className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-medium text-gray-700">Y-Mad Madagascar</span>
               </div>
@@ -117,10 +109,9 @@ export default function LoginPage() {
                 <Mail className="w-8 h-8 text-blue-600" />
               </div>
               <h2 className="text-3xl font-bold text-gray-800">Connexion</h2>
-              <p className="text-gray-500 mt-2">Connectez-vous a votre compte Y-Mad</p>
+              <p className="text-gray-500 mt-2">Connectez vous à votre compte Y-Mad</p>
             </div>
 
-            {/* Message d'erreur */}
             {error && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-2">
                 <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -128,12 +119,10 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Formulaire */}
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Champ Email */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Adresse email *
+                  Adresse email
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -149,10 +138,9 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Champ Mot de passe */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mot de passe *
+                  Mot de passe
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -175,7 +163,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Options supplementaires */}
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input 
@@ -192,11 +179,10 @@ export default function LoginPage() {
                   <span className="text-sm text-gray-600">Se souvenir de moi</span>
                 </label>
                 <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
-                  Mot de passe oublie ?
+                  Mot de passe oublié
                 </Link>
               </div>
 
-              {/* Bouton de connexion */}
               <button
                 type="submit"
                 disabled={loading}
@@ -205,7 +191,7 @@ export default function LoginPage() {
                 {loading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Connexion en cours...
+                    Connexion en cours
                   </>
                 ) : (
                   'Se connecter'
@@ -213,10 +199,9 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* Lien vers l'inscription */}
             <div className="mt-6 text-center">
               <p className="text-gray-600">
-                Pas encore de compte ?{' '}
+                Pas encore de compte{' '}
                 <Link href="/register" className="text-blue-600 font-semibold hover:underline">
                   S inscrire
                 </Link>

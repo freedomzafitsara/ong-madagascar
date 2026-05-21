@@ -1,67 +1,51 @@
-// backend/src/modules/auth/dto/update-profile.dto.ts
-
 import { IsString, IsOptional, IsUrl, Length } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateProfileDto {
-  @ApiPropertyOptional({ example: 'Jean' })
-  @IsString()
+  @IsString({ message: 'Le prenom doit être une chaîne de caracteres' })
   @IsOptional()
   firstName?: string;
 
-  @ApiPropertyOptional({ example: 'Rakoto' })
-  @IsString()
+  @IsString({ message: 'Le nom doit être une chaîne de caracteres' })
   @IsOptional()
   lastName?: string;
 
-  @ApiPropertyOptional({ example: '0341234567' })
-  @IsString()
+  @IsString({ message: 'Le telephone doit être une chaîne de caracteres' })
   @IsOptional()
   phone?: string;
 
-  @ApiPropertyOptional({ example: 'Analamanga' })
-  @IsString()
+  @IsString({ message: 'La region doit être une chaîne de caracteres' })
   @IsOptional()
   region?: string;
 
-  @ApiPropertyOptional({ example: 'Développeur fullstack...' })
-  @IsString()
+  @IsString({ message: 'La biographie doit être une chaîne de caracteres' })
   @IsOptional()
   bio?: string;
 
-  @ApiPropertyOptional({ example: 'Développeur Senior' })
-  @IsString()
+  @IsString({ message: 'Le poste doit être une chaîne de caracteres' })
   @IsOptional()
   position?: string;
 
-  @ApiPropertyOptional({ example: 'Technique' })
-  @IsString()
+  @IsString({ message: 'Le département doit être une chaîne de caracteres' })
   @IsOptional()
   department?: string;
 
-  @ApiPropertyOptional({ example: 'React, Node.js, TypeScript' })
-  @IsString()
+  @IsString({ message: 'Les compétences doivent être une chaîne de caracteres' })
   @IsOptional()
   skills?: string;
 
-  @ApiPropertyOptional({ example: 'https://linkedin.com/in/...' })
-  @IsUrl()
+  @IsUrl({}, { message: 'Le lien LinkedIn doit être une URL valide' })
   @IsOptional()
   socialLinkedin?: string;
 
-  @ApiPropertyOptional({ example: 'https://twitter.com/...' })
-  @IsUrl()
+  @IsUrl({}, { message: 'Le lien Twitter doit être une URL valide' })
   @IsOptional()
   socialTwitter?: string;
 
-  @ApiPropertyOptional({ example: 'https://github.com/...' })
-  @IsUrl()
+  @IsUrl({}, { message: 'Le lien GitHub doit être une URL valide' })
   @IsOptional()
   socialGithub?: string;
 
-  // ✅ AJOUTER CETTE LIGNE
-  @ApiPropertyOptional({ example: 'https://cloudinary.com/avatar.jpg' })
-  @IsString()
+  @IsString({ message: 'L URL de l avatar doit être une chaîne de caracteres' })
   @IsOptional()
   avatar_url?: string;
 }

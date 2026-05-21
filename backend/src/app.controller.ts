@@ -1,28 +1,26 @@
 ﻿import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Public } from './modules/auth/decorators/public.decorator';
 
-@ApiTags('API - Accueil')
 @Controller()
 export class AppController {
   
+  @Public()
   @Get()
-  @ApiOperation({ summary: "Page d'accueil de l'API" })
-  @ApiResponse({ status: 200, description: 'API operationnelle' })
   getHello() {
     const baseUrl = process.env.API_URL || 'http://localhost:4001';
     
     return {
-      message: "Bienvenue sur l'API Y-Mad",
-      association: "Youthful Madagascar",
-      slogan: "Ensemble, construisons le Madagascar de demain",
+      message: 'Bienvenue sur l API Y-Mad',
+      association: 'Youthful Madagascar',
+      slogan: 'Ensemble, construisons le Madagascar de demain',
       version: '1.0.0',
       status: 'online',
       timestamp: new Date().toISOString(),
       contact: {
-        address: "Carion, Antananarivo, Madagascar",
-        phone: "+261 32 04 856 97",
-        email: "ymad.mg@gmail.com",
-        website: "https://y-mad.mg"
+        address: 'Carion, Antananarivo, Madagascar',
+        phone: '+261 32 04 856 97',
+        email: 'ymad.mg@gmail.com',
+        website: 'https://y-mad.mg'
       },
       documentation: baseUrl + '/api/docs',
       health: baseUrl + '/health',
@@ -183,9 +181,8 @@ export class AppController {
     };
   }
 
+  @Public()
   @Get('health')
-  @ApiOperation({ summary: 'Verification de l etat du serveur' })
-  @ApiResponse({ status: 200, description: 'Serveur operationnel' })
   @HttpCode(HttpStatus.OK)
   getHealth() {
     const memoryUsage = process.memoryUsage();
@@ -235,16 +232,15 @@ export class AppController {
     };
   }
 
+  @Public()
   @Get('info')
-  @ApiOperation({ summary: 'Informations sur l API' })
-  @ApiResponse({ status: 200, description: 'Informations recuperees' })
   getInfo() {
     return {
       association: {
         name: 'Y-Mad',
         fullName: 'Youthful Madagascar',
         slogan: 'Ensemble, construisons le Madagascar de demain',
-        description: "Association de jeunesse et developpement basee a Madagascar",
+        description: 'Association de jeunesse et developpement basee a Madagascar',
         founded: '2020',
         status: 'Association Enregistree MG',
         contact: {
@@ -261,8 +257,7 @@ export class AppController {
       },
       api: {
         name: 'Y-Mad API',
-        fullName: 'Youthful Madagascar Application Programming Interface',
-        description: "API RESTful pour le site web de l'association Y-Mad",
+        description: 'API RESTful pour le site web de l association Y-Mad',
         version: '1.0.0',
         releaseDate: 'Mai 2026',
         license: 'MIT',
@@ -275,7 +270,7 @@ export class AppController {
         language: 'TypeScript',
         database: 'PostgreSQL 16',
         orm: 'TypeORM',
-        documentation: 'Swagger/OpenAPI 3.0',
+        documentation: 'Swagger',
         hosting: 'Contabo VPS',
         cdn: 'Cloudflare',
         storage: 'Cloudinary',
@@ -283,133 +278,25 @@ export class AppController {
         sms: 'Telerivet',
       },
       features: [
-        'Authentification multi-roles avec JWT (7 roles)',
+        'Authentification multi-roles avec JWT',
         'Gestion des membres avec cartes QR code',
         'Module emploi complet avec offres et candidatures',
-        'Gestion d evenements avec inscriptions et QR codes',
-        'Dons Mobile Money (MVola, Orange Money, Airtel)',
-        'Blog bilingue (Francais et Malagasy)',
+        'Gestion d evenements avec inscriptions',
+        'Dons Mobile Money',
+        'Blog bilingue',
         'Projets avec indicateurs d impact',
-        'Gestion des beneficiaires et suivi',
-        'Partenaires avec espace prive',
-        'Volontaires avec suivi des heures',
+        'Gestion des beneficiaires',
         'Generation de rapports PDF',
         'Journal d audit complet',
-        'Newsletter automatique',
-        'Upload de fichiers vers Cloudinary',
-        'Emails transactionnels avec Brevo',
-        'SMS de rappel avec Telerivet',
       ],
       modules: [
         'auth', 'users', 'members', 'projects', 'beneficiaries',
         'events', 'jobs', 'donations', 'blog', 'volunteers',
         'partners', 'pages', 'newsletter', 'reports', 'upload',
-        'footer', 'audit', 'payments', 'notifications', 'backgrounds'
+        'footer', 'audit', 'payments', 'backgrounds'
       ],
       endpointsCount: 85,
       tablesCount: 17,
-      roles: {
-        super_admin: 'Acces total au systeme',
-        admin: 'Gestion avancee des modules',
-        staff: 'Gestion quotidienne',
-        member: 'Acces espace membre',
-        volunteer: 'Acces espace benevole',
-        partner: 'Acces espace partenaire',
-        visitor: 'Acces public uniquement',
-      },
-      regions: [
-        'Antananarivo', 'Analamanga', 'Vakinankaratra', 'Haute Matsiatra',
-        'Atsimo Atsinanana', 'Ihorombe', 'Amoron i Mania', 'Bongolava',
-        'Sofia', 'Boeny', 'Betioky', 'Anosy', 'Androy', 'Menabe', 'Melaky'
-      ],
-    };
-  }
-
-  @Get('status')
-  @ApiOperation({ summary: 'Statut complet de l API' })
-  @ApiResponse({ status: 200, description: 'Statut recupere' })
-  async getStatus() {
-    return {
-      status: 'operational',
-      association: 'Y-Mad (Youthful Madagascar)',
-      contact: {
-        address: 'Carion, Antananarivo, Madagascar',
-        phone: '+261 32 04 856 97',
-        email: 'ymad.mg@gmail.com',
-      },
-      timestamp: new Date().toISOString(),
-      api: {
-        version: '1.0.0',
-        prefix: '/api',
-        docs: '/api/docs',
-        health: '/health',
-        info: '/info',
-      },
-      server: {
-        node: process.version,
-        platform: process.platform,
-        arch: process.arch,
-        pid: process.pid,
-        title: process.title,
-      },
-      uptime: {
-        process: process.uptime(),
-      },
-      dependencies: {
-        database: 'connected',
-        storage: 'cloudinary',
-        email: 'brevo',
-        sms: 'telerivet',
-      },
-      statistics: {
-        totalUsers: 'En attente de connexion BDD',
-        totalMembers: 'En attente de connexion BDD',
-        totalProjects: 'En attente de connexion BDD',
-        totalEvents: 'En attente de connexion BDD',
-        totalJobs: 'En attente de connexion BDD',
-        totalDonations: 'En attente de connexion BDD',
-      },
-    };
-  }
-
-  @Get('contact')
-  @ApiOperation({ summary: 'Informations de contact de Y-Mad' })
-  @ApiResponse({ status: 200, description: 'Informations de contact recuperees' })
-  getContact() {
-    return {
-      association: 'Y-Mad (Youthful Madagascar)',
-      slogan: 'Ensemble, construisons le Madagascar de demain',
-      address: {
-        street: 'Carion',
-        city: 'Antananarivo',
-        country: 'Madagascar',
-        full: 'Carion, Antananarivo, Madagascar',
-      },
-      phone: {
-        primary: '+261 32 04 856 97',
-        secondary: '+261 34 00 000 00',
-      },
-      email: {
-        general: 'ymad.mg@gmail.com',
-        support: 'contact@y-mad.mg',
-        partenariat: 'partners@y-mad.mg',
-      },
-      website: 'https://y-mad.mg',
-      socialMedia: {
-        facebook: 'https://facebook.com/ymad.mg',
-        instagram: 'https://instagram.com/ymad.mg',
-        linkedin: 'https://linkedin.com/company/ymad-mg',
-        twitter: 'https://twitter.com/ymad_mg',
-      },
-      openingHours: {
-        mondayToFriday: '08:00 - 17:00',
-        saturday: '09:00 - 13:00',
-        sunday: 'Ferme',
-      },
-      mapCoordinates: {
-        latitude: '-18.8792',
-        longitude: '47.5079',
-      },
     };
   }
 }

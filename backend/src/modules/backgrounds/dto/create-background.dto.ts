@@ -1,3 +1,4 @@
+import { PartialType } from '@nestjs/mapped-types';
 import { IsString, IsOptional, IsBoolean, IsNumber, Min, Max } from 'class-validator';
 
 export class CreateBackgroundDto {
@@ -39,5 +40,3 @@ export class CreateBackgroundDto {
 }
 
 export class UpdateBackgroundDto extends PartialType(CreateBackgroundDto) {}
-
-import { PartialType } from '@nestjs/mapped-types';

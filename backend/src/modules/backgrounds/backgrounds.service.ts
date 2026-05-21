@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Background, BackgroundPage } from '../../entities/background.entity';
+import { Background } from '../../entities/background.entity';
 import { CreateBackgroundDto, UpdateBackgroundDto } from './dto/create-background.dto';
 
 @Injectable()
@@ -11,30 +11,22 @@ export class BackgroundsService {
     private backgroundRepository: Repository<Background>,
   ) {}
 
-  async create(createDto: CreateBackgroundDto, userRole: string): Promise<Background> {
-    if (userRole !== 'super_admin' && userRole !== 'admin') {
-      throw new ForbiddenException('Seul un administrateur peut gérer les fonds d\'écran');
-    }
-
+  async create(createDto: CreateBackgroundDto): Promise<Background> {
     const background = this.backgroundRepository.create(createDto);
     return this.backgroundRepository.save(background);
   }
 
-  async findAll(userRole: string): Promise<Background[]> {
-    if (userRole !== 'super_admin' && userRole !== 'admin') {
-      throw new ForbiddenException('Accès non autorisé');
-    }
+  async findAll(): Promise<Background[]> {
     return this.backgroundRepository.find({
       order: { page: 'ASC' },
     });
   }
 
-  async findOne(id: string, userRole: string): Promise<Background> {
-    if (userRole !== 'super_admin' && userRole !== 'admin') {
-      throw new ForbiddenException('Accès non autorisé');
-    }
+  async findOne(id: string): Promise<Background> {
     const background = await this.backgroundRepository.findOne({ where: { id } });
-    if (!background) throw new NotFoundException('Fond d\'écran non trouvé');
+    if (!background) {
+      throw new NotFoundException('Fond d ecran non trouve');
+    }
     return background;
   }
 
@@ -44,18 +36,12 @@ export class BackgroundsService {
     });
   }
 
-  async update(id: string, updateDto: UpdateBackgroundDto, userRole: string): Promise<Background> {
-    if (userRole !== 'super_admin' && userRole !== 'admin') {
-      throw new ForbiddenException('Seul un administrateur peut modifier les fonds d\'écran');
-    }
+  async update(id: string, updateDto: UpdateBackgroundDto): Promise<Background> {
     await this.backgroundRepository.update(id, updateDto);
-    return this.findOne(id, userRole);
+    return this.findOne(id);
   }
 
-  async delete(id: string, userRole: string): Promise<void> {
-    if (userRole !== 'super_admin' && userRole !== 'admin') {
-      throw new ForbiddenException('Seul un administrateur peut supprimer les fonds d\'écran');
-    }
+  async delete(id: string): Promise<void> {
     await this.backgroundRepository.delete(id);
   }
 

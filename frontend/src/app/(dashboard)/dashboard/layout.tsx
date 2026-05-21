@@ -1,8 +1,4 @@
-﻿// frontend/src/app/(dashboard)/dashboard/layout.tsx
-// VERSION FINALE PROFESSIONNELLE - Y-Mad Dashboard Layout
-// COULEURS UNIQUEMENT : BLEU (#3B82F6, #2563EB) et GRIS (#6B7280, #9CA3AF, #F3F4F6)
-
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,17 +10,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-// ============================================================
-// INTERFACE
-// ============================================================
-
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
-
-// ============================================================
-// COMPOSANT PRINCIPAL
-// ============================================================
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { isAuthenticated, loading, user, logout } = useAuth();
@@ -34,12 +22,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [currentDateTime, setCurrentDateTime] = useState<string>('');
   const [mounted, setMounted] = useState<boolean>(false);
 
-  // Hydratation - éviter les erreurs SSR
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Mise à jour de la date et l'heure
   useEffect(() => {
     const updateDateTime = () => {
       const now = new Date();
@@ -58,7 +44,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // Gestion de l'authentification
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       router.push('/login');
@@ -68,7 +53,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [loading, isAuthenticated, router, user]);
 
-  // Fermer le menu profil au clic extérieur
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
@@ -81,7 +65,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [isProfileOpen]);
 
-  // Sauvegarde de l'état de la sidebar
   useEffect(() => {
     const savedState = localStorage.getItem('sidebarOpen');
     if (savedState !== null) {
@@ -97,10 +80,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     });
   }, []);
 
-  // Affichage pendant le chargement
   if (loading || !mounted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
       </div>
     );
@@ -115,7 +97,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                        user?.email?.charAt(0)?.toUpperCase() || 'U';
   
   const userDisplayName = user?.firstName && user?.lastName 
-    ? `${user.firstName} ${user.lastName}` 
+    ? user.firstName + ' ' + user.lastName 
     : user?.email?.split('@')[0] || 'Utilisateur';
   
   const userRoleDisplay = user?.role?.replace(/_/g, ' ') || 'Super Admin';
@@ -123,26 +105,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Sidebar */}
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
-      {/* Header */}
       <header className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
         <div className="flex items-center justify-between px-4 py-3">
           
-          {/* ==================== PARTIE GAUCHE ==================== */}
           <div className="flex items-center gap-3">
-            {/* Bouton menu burger */}
             <button
               onClick={toggleSidebar}
               className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              aria-label={isSidebarOpen ? "Fermer le menu" : "Ouvrir le menu"}
-              title={isSidebarOpen ? "Fermer le menu" : "Ouvrir le menu"}
+              aria-label={isSidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+              title={isSidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
             >
               <Menu className="w-5 h-5 text-gray-600" />
             </button>
             
-            {/* Logo Y-Mad */}
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
                 <span className="text-white font-bold text-sm">Y</span>
@@ -155,21 +132,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
           </div>
 
-          {/* ==================== PARTIE DROITE ==================== */}
           <div className="flex items-center gap-4">
             
-            {/* Date et heure */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
               <Clock className="w-3.5 h-3.5 text-gray-500" />
               <span className="text-xs text-gray-600 font-medium">{currentDateTime}</span>
             </div>
             
-            {/* Version mobile - icône seulement */}
             <div className="sm:hidden">
               <Clock className="w-4 h-4 text-gray-500" />
             </div>
             
-            {/* Menu profil */}
             <div className="relative profile-menu">
               <button
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -183,10 +156,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <ChevronDown className="w-4 h-4 text-gray-500 hidden md:block" />
               </button>
 
-              {/* Dropdown profil */}
               {isProfileOpen && (
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 animate-fadeIn">
-                  {/* Informations utilisateur */}
                   <div className="px-4 py-3 border-b border-gray-100">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center shadow-sm">
@@ -199,7 +170,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     </div>
                   </div>
                   
-                  {/* Actions */}
                   <Link 
                     href="/dashboard/profile" 
                     onClick={() => setIsProfileOpen(false)} 
@@ -215,10 +185,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     <SettingsIcon className="w-4 h-4 text-gray-500" />
-                    Paramètres
+                    Parametres
                   </Link>
                   
-                  {/* Déconnexion */}
                   <div className="border-t border-gray-100 mt-1 pt-1">
                     <button 
                       onClick={() => { 
@@ -228,7 +197,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <LogOut className="w-4 h-4" />
-                      Déconnexion
+                      Deconnexion
                     </button>
                   </div>
                 </div>
@@ -238,12 +207,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       </header>
 
-      {/* Contenu principal */}
       <main className="p-4 lg:p-6">
         {children}
       </main>
 
-      {/* ==================== STYLES GLOBAUX ==================== */}
       <style jsx global>{`
         @keyframes fadeIn {
           from {

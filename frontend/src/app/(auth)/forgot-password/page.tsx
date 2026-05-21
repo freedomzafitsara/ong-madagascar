@@ -10,6 +10,8 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -30,7 +32,7 @@ export default function ForgotPasswordPage() {
     }
 
     try {
-      const response = await fetch('http://localhost:4001/auth/forgot-password', {
+      const response = await fetch(`${API_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -56,17 +58,17 @@ export default function ForgotPasswordPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Email envoyé !</h2>
+          <CheckCircle className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Email envoyé</h2>
           <p className="text-gray-600 mb-2">
             Un lien de réinitialisation a été envoyé à <strong>{email}</strong>
           </p>
           <p className="text-gray-500 text-sm mb-6">
-            Vérifiez vos emails (y compris les spams)
+            Veuillez vérifier vos emails, y compris dans les spams
           </p>
           <Link
             href="/login"
-            className="inline-flex items-center gap-2 text-blue-600 font-semibold hover:underline"
+            className="inline-flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-700 transition"
           >
             <ArrowLeft className="w-4 h-4" />
             Retour à la connexion
@@ -95,7 +97,7 @@ export default function ForgotPasswordPage() {
           </div>
           <h2 className="text-3xl font-bold text-gray-800">Mot de passe oublié</h2>
           <p className="text-gray-500 mt-2">
-            Entrez votre email pour recevoir un lien de réinitialisation
+            Saisissez votre adresse email pour recevoir un lien de réinitialisation
           </p>
         </div>
 
@@ -109,7 +111,7 @@ export default function ForgotPasswordPage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Adresse email *
+              Adresse email
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -119,7 +121,7 @@ export default function ForgotPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                placeholder="votre@email.com"
+                placeholder="exemple@email.com"
                 autoComplete="email"
               />
             </div>
@@ -133,7 +135,7 @@ export default function ForgotPasswordPage() {
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Envoi en cours...
+                Envoi en cours
               </>
             ) : (
               'Envoyer le lien de réinitialisation'
@@ -143,9 +145,9 @@ export default function ForgotPasswordPage() {
 
         <div className="mt-6 text-center">
           <p className="text-gray-600">
-            Pas encore de compte ?{' '}
+            Pas encore de compte{' '}
             <Link href="/register" className="text-blue-600 font-semibold hover:underline">
-              S'inscrire
+              S inscrire
             </Link>
           </p>
         </div>

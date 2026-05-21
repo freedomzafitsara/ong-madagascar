@@ -1,10 +1,6 @@
-// backend/src/entities/member.entity.ts
-// VERSION AVEC RELATION
-
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { User } from './user.entity';
 
-// Exporter les enums
 export enum MembershipStatus {
   PENDING = 'pending',
   ACTIVE = 'active',
@@ -27,49 +23,90 @@ export enum PaymentMethod {
 }
 
 @Entity('members')
+@Index(['userId', 'status'])
+@Index(['memberNumber'])
 export class Member {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'memberNumber', unique: true })
+  @Column({ name: 'memberNumber', unique: true, length: 50 })
   memberNumber: string;
 
   @Column({ name: 'userId' })
   userId: string;
 
-  // AJOUT: Relation ManyToOne avec User
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  @Column({ type: 'varchar', default: MembershipStatus.PENDING })
+  @Column({ 
+    type: 'varchar', 
+    length: 20,
+    default: MembershipStatus.PENDING 
+  })
   status: string;
 
-  @Column({ name: 'membershipType', type: 'varchar' })
+  @Column({ 
+    name: 'membershipType', 
+    type: 'varchar', 
+    length: 20
+  })
   membershipType: string;
 
-  @Column({ name: 'startDate', type: 'date' })
+  @Column({ 
+    name: 'startDate', 
+    type: 'date'
+  })
   startDate: Date;
 
-  @Column({ name: 'expiryDate', type: 'date' })
+  @Column({ 
+    name: 'expiryDate', 
+    type: 'date'
+  })
   expiryDate: Date;
 
-  @Column({ name: 'amountPaid', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ 
+    name: 'amountPaid', 
+    type: 'decimal', 
+    precision: 10, 
+    scale: 2, 
+    default: 0 
+  })
   amountPaid: number;
 
-  @Column({ name: 'paymentMethod', nullable: true })
+  @Column({ 
+    name: 'paymentMethod', 
+    length: 50, 
+    nullable: true 
+  })
   paymentMethod: string;
 
-  @Column({ name: 'transactionId', nullable: true })
+  @Column({ 
+    name: 'transactionId', 
+    length: 255, 
+    nullable: true 
+  })
   transactionId: string;
 
-  @Column({ name: 'cardUrl', nullable: true, type: 'text' })
+  @Column({ 
+    name: 'cardUrl', 
+    type: 'text', 
+    nullable: true 
+  })
   cardUrl: string;
 
-  @Column({ name: 'qrCode', nullable: true, type: 'text' })
+  @Column({ 
+    name: 'qrCode', 
+    type: 'text', 
+    nullable: true 
+  })
   qrCode: string;
 
-  @Column({ name: 'qrCodeData', nullable: true, type: 'text' })
+  @Column({ 
+    name: 'qrCodeData', 
+    type: 'text', 
+    nullable: true 
+  })
   qrCodeData: string;
 
   @CreateDateColumn({ name: 'createdAt' })

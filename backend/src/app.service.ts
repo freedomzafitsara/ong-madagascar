@@ -1,25 +1,49 @@
-// backend/src/app.service.ts
-// SERVICE PRINCIPAL DE L'API Y-MAD
-// Conforme au Cahier des Charges - Sections 1.1, 1.2, 6.1
-
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class AppService {
-  
-  /**
-   * Message d'accueil de l'API
-   * Conforme CDC §1.2 - Mission et valeurs
-   */
-  getHello(): string {
-    return 'Bienvenue sur l\'API Y-Mad - Youthful Madagascar';
+
+  getHello() {
+    return {
+      message: 'Bienvenue sur l API Y-Mad',
+      version: '1.0.0',
+      status: 'online',
+      documentation: 'http://localhost:4001/api/docs',
+      endpoints: {
+        auth: {
+          login: 'POST /auth/login',
+          register: 'POST /auth/register',
+        },
+        projects: {
+          list: 'GET /projects',
+          detail: 'GET /projects/:id',
+        },
+        jobs: {
+          list: 'GET /jobs/offers',
+          detail: 'GET /jobs/offers/:id',
+          apply: 'POST /jobs/apply',
+          applications: 'GET /jobs/offers/:id/applications',
+        },
+        events: {
+          list: 'GET /events',
+          register: 'POST /events/register',
+        },
+        donations: {
+          create: 'POST /donations',
+          myDonations: 'GET /donations/my-donations',
+        },
+        members: {
+          list: 'GET /members',
+          card: 'GET /members/card/:memberNumber',
+        },
+        blog: {
+          list: 'GET /blog',
+        },
+      },
+    };
   }
 
-  /**
-   * Statut de sante du serveur
-   * Conforme CDC §10.1 - Monitoring UptimeRobot
-   */
-  getHealthStatus() {
+  getHealth() {
     const uptimeSeconds = process.uptime();
     const days = Math.floor(uptimeSeconds / 86400);
     const hours = Math.floor((uptimeSeconds % 86400) / 3600);
@@ -35,37 +59,39 @@ export class AppService {
     return {
       status: 'ok',
       service: 'Y-Mad API',
-      association: 'Youthful Madagascar',
-      slogan: 'Ensemble, construisons le Madagascar de demain',
-      contact: {
-        address: 'Carion, Antananarivo, Madagascar',
-        phone: '+261 32 04 856 97',
-        email: 'ymad.mg@gmail.com',
-      },
       timestamp: new Date().toISOString(),
       uptime: {
         seconds: uptimeSeconds,
         human: uptimeHuman,
       },
-      memory: {
-        rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB`,
-        heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)} MB`,
-        heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB`,
-        external: `${Math.round(process.memoryUsage().external / 1024 / 1024)} MB`,
-      },
-      environment: process.env.NODE_ENV || 'development',
       database: {
         status: 'connected',
         type: 'PostgreSQL',
-        version: '16',
       },
+      environment: process.env.NODE_ENV || 'development',
     };
   }
 
-  /**
-   * Informations completes sur l'association et l'API
-   * Conforme CDC §1.1 - Presentation de Y-Mad
-   */
+  getInfo() {
+    return {
+      name: 'Y-Mad API',
+      version: '1.0.0',
+      author: 'Y-Mad Association',
+      description: 'API REST pour l association Y-Mad',
+      documentation: '/api/docs',
+      features: [
+        'Authentification JWT',
+        'Gestion des membres',
+        'Module emploi',
+        'Gestion des evenements',
+        'Dons Mobile Money',
+        'Blog bilingue',
+        'Dashboard administrateur',
+        'Generation de rapports PDF',
+      ],
+    };
+  }
+
   getApiInfo() {
     return {
       association: {
@@ -88,69 +114,22 @@ export class AppService {
       api: {
         name: 'Y-Mad API',
         version: '1.0.0',
-        description: 'API RESTful pour le site web de l\'association Y-Mad',
-        author: 'Y-Mad Association',
-        license: 'MIT',
-        repository: 'https://github.com/freedomzafitsara/ong-madagascar',
+        description: 'API RESTful pour le site web de l association Y-Mad',
         documentation: '/api/docs',
-        swaggerUI: '/api/docs',
-        swaggerJson: '/api/docs-json',
-      },
-      technologies: {
-        backend: {
-          framework: 'NestJS',
-          version: '10.x',
-          runtime: 'Node.js',
-          language: 'TypeScript',
-        },
-        database: {
-          orm: 'TypeORM',
-          type: 'PostgreSQL',
-          version: '16',
-        },
-        hosting: {
-          vps: 'Contabo',
-          cdn: 'Cloudflare',
-          storage: 'Cloudinary',
-          email: 'Brevo',
-          sms: 'Telerivet',
-        },
       },
       features: [
-        'Authentification multi-roles avec JWT (7 roles)',
+        'Authentification multi-roles avec JWT',
         'Gestion des membres avec cartes QR code',
-        'Module emploi complet avec offres et candidatures',
-        'Gestion d evenements avec inscriptions et QR codes',
-        'Dons Mobile Money (MVola, Orange Money, Airtel)',
-        'Blog bilingue (Francais et Malagasy)',
+        'Module emploi complet',
+        'Gestion d evenements',
+        'Dons Mobile Money',
+        'Blog bilingue',
         'Projets avec indicateurs d impact',
-        'Gestion des beneficiaires et suivi',
-        'Partenaires avec espace prive',
-        'Volontaires avec suivi des heures',
         'Generation de rapports PDF',
-        'Journal d audit complet',
-        'Newsletter automatique',
-        'Upload de fichiers vers Cloudinary',
-        'Emails transactionnels avec Brevo',
       ],
-      endpointsCount: 85,
-      tablesCount: 17,
-      roles: {
-        super_admin: 'Acces total au systeme',
-        admin: 'Gestion avancee des modules',
-        staff: 'Gestion quotidienne',
-        member: 'Acces espace membre',
-        volunteer: 'Acces espace benevole',
-        partner: 'Acces espace partenaire',
-        visitor: 'Acces public uniquement',
-      },
     };
   }
 
-  /**
-   * Liste complete des endpoints disponibles
-   * Conforme CDC §8.1 et §8.2 - Interfaces
-   */
   getEndpointsList() {
     const baseUrl = process.env.API_URL || 'http://localhost:4001';
     
@@ -159,7 +138,6 @@ export class AppService {
         base: baseUrl,
         health: baseUrl + '/health',
         info: baseUrl + '/info',
-        contact: baseUrl + '/contact',
         docs: baseUrl + '/api/docs',
       },
       auth: {
@@ -168,208 +146,42 @@ export class AppService {
         profile: 'GET /api/auth/profile',
         forgotPassword: 'POST /api/auth/forgot-password',
         resetPassword: 'POST /api/auth/reset-password',
-        verifyEmail: 'GET /api/auth/verify-email/:token',
-        changePassword: 'PUT /api/auth/change-password',
-        uploadPhoto: 'POST /api/auth/upload-photo',
-        users: 'GET /api/auth/users',
-        updateRole: 'PUT /api/auth/users/:id/role',
-        toggleStatus: 'PUT /api/auth/users/:id/toggle-status',
       },
       projects: {
         list: 'GET /api/projects',
         detail: 'GET /api/projects/:id',
-        featured: 'GET /api/projects/featured',
-        stats: 'GET /api/projects/stats',
         create: 'POST /api/projects',
-        update: 'PATCH /api/projects/:id',
-        updateProgress: 'PATCH /api/projects/:id/progress',
-        delete: 'DELETE /api/projects/:id',
       },
       jobs: {
-        offers: {
-          list: 'GET /api/jobs/offers',
-          detail: 'GET /api/jobs/offers/:id',
-          featured: 'GET /api/jobs/offers/featured',
-          stats: 'GET /api/jobs/offers/stats',
-          create: 'POST /api/jobs/offers',
-          update: 'PATCH /api/jobs/offers/:id',
-          updateStatus: 'PATCH /api/jobs/offers/:id/status',
-          delete: 'DELETE /api/jobs/offers/:id',
-        },
-        applications: {
-          apply: 'POST /api/jobs/apply',
-          applyAuth: 'POST /api/jobs/apply/auth',
-          offerApplications: 'GET /api/jobs/offers/:id/applications',
-          detail: 'GET /api/jobs/applications/:id',
-          updateStatus: 'PATCH /api/jobs/applications/:id/status',
-          myApplications: 'GET /api/jobs/applications/my',
-          allApplications: 'GET /api/jobs/applications/all',
-        },
+        list: 'GET /api/jobs/offers',
+        detail: 'GET /api/jobs/offers/:id',
+        apply: 'POST /api/jobs/apply',
+        myApplications: 'GET /api/jobs/applications/my',
       },
       events: {
         list: 'GET /api/events',
-        public: 'GET /api/events/public',
         detail: 'GET /api/events/:id',
-        stats: 'GET /api/events/stats',
-        create: 'POST /api/events',
-        update: 'PATCH /api/events/:id',
-        updateStatus: 'PATCH /api/events/:id/status',
-        delete: 'DELETE /api/events/:id',
         register: 'POST /api/events/:id/register',
-        myRegistrations: 'GET /api/events/my-registrations',
-        eventRegistrations: 'GET /api/events/:id/registrations',
       },
       donations: {
-        list: 'GET /api/donations',
-        stats: 'GET /api/donations/stats/all',
         create: 'POST /api/donations',
-        createAuth: 'POST /api/donations/auth',
-        confirm: 'POST /api/donations/confirm',
         myDonations: 'GET /api/donations/my-donations',
-        detail: 'GET /api/donations/:id',
       },
       members: {
-        list: 'GET /api/members',
-        stats: 'GET /api/members/stats/all',
-        myMember: 'GET /api/members/me',
-        detail: 'GET /api/members/:id',
         create: 'POST /api/members',
-        updateStatus: 'PUT /api/members/:id/status',
-        generateCard: 'GET /api/members/card/:memberNumber',
+        myMember: 'GET /api/members/me',
+        card: 'GET /api/members/card/:memberNumber',
       },
       blog: {
         list: 'GET /api/blog',
-        stats: 'GET /api/blog/stats/all',
         detail: 'GET /api/blog/:id',
-        create: 'POST /api/blog',
-        update: 'PUT /api/blog/:id',
-        publish: 'PUT /api/blog/:id/publish',
-        delete: 'DELETE /api/blog/:id',
-      },
-      volunteers: {
-        list: 'GET /api/volunteers',
-        detail: 'GET /api/volunteers/:id',
-        create: 'POST /api/volunteers',
-        assignments: 'GET /api/volunteers/assignments',
-        certificates: 'GET /api/volunteers/certificates',
-        hours: 'POST /api/volunteers/:id/hours',
-      },
-      partners: {
-        list: 'GET /api/partners',
-        detail: 'GET /api/partners/:id',
-        featured: 'GET /api/partners/featured',
-        create: 'POST /api/partners',
-        update: 'PUT /api/partners/:id',
-        delete: 'DELETE /api/partners/:id',
-        submitJob: 'POST /api/partners/:id/jobs',
-      },
-      beneficiaries: {
-        list: 'GET /api/beneficiaries',
-        stats: 'GET /api/beneficiaries/stats',
-        detail: 'GET /api/beneficiaries/:id',
-        create: 'POST /api/beneficiaries',
-        update: 'PUT /api/beneficiaries/:id',
-        delete: 'DELETE /api/beneficiaries/:id',
-        byRegion: 'GET /api/beneficiaries/region/:region',
-      },
-      pages: {
-        list: 'GET /api/pages',
-        public: 'GET /api/pages/public/:page',
-        admin: 'GET /api/pages/:page',
-        update: 'PUT /api/pages/:page',
-        backgroundsAll: 'GET /api/pages/backgrounds/all',
-        background: 'GET /api/pages/backgrounds/:page',
-        updateBackground: 'PUT /api/pages/backgrounds/:page',
-        deleteBackground: 'DELETE /api/pages/backgrounds/:id',
-        initialize: 'POST /api/pages/initialize',
-      },
-      newsletter: {
-        subscribe: 'POST /api/newsletter/subscribe',
-        unsubscribe: 'DELETE /api/newsletter/unsubscribe',
-        subscribers: 'GET /api/newsletter/subscribers',
-        send: 'POST /api/newsletter/send',
-      },
-      reports: {
-        activity: 'GET /api/reports/activity',
-        financial: 'GET /api/reports/financial',
-        impact: 'GET /api/reports/impact',
-        export: 'GET /api/reports/export/:type',
-      },
-      upload: {
-        profile: 'POST /api/upload/profile',
-        single: 'POST /api/upload/single',
-        multiple: 'POST /api/upload/multiple',
-        getImages: 'GET /api/upload',
-        delete: 'DELETE /api/upload',
-      },
-      footer: {
-        get: 'GET /api/footer',
-        update: 'PUT /api/footer',
-        contacts: 'GET /api/footer/contacts',
-        links: 'GET /api/footer/links',
-      },
-      audit: {
-        logs: 'GET /api/audit/logs',
-        userLogs: 'GET /api/audit/user/:userId',
-        export: 'GET /api/audit/export',
       },
     };
   }
 
-  /**
-   * Statistiques techniques de l'API
-   * Conforme CDC §5.1 - Performance et disponibilite
-   */
-  getApiStats() {
-    const uptimeSeconds = process.uptime();
-    const days = Math.floor(uptimeSeconds / 86400);
-    const hours = Math.floor((uptimeSeconds % 86400) / 3600);
-    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
-    const seconds = Math.floor(uptimeSeconds % 60);
-    
-    let uptimeHuman = '';
-    if (days > 0) uptimeHuman += days + 'j ';
-    if (hours > 0) uptimeHuman += hours + 'h ';
-    if (minutes > 0) uptimeHuman += minutes + 'm ';
-    uptimeHuman += seconds + 's';
-    
-    return {
-      association: 'Y-Mad (Youthful Madagascar)',
-      contact: {
-        address: 'Carion, Antananarivo, Madagascar',
-        phone: '+261 32 04 856 97',
-        email: 'ymad.mg@gmail.com',
-      },
-      uptime: {
-        seconds: uptimeSeconds,
-        human: uptimeHuman,
-      },
-      memoryUsage: {
-        rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB`,
-        heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)} MB`,
-        heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB`,
-        external: `${Math.round(process.memoryUsage().external / 1024 / 1024)} MB`,
-        arrayBuffers: `${Math.round(process.memoryUsage().arrayBuffers / 1024 / 1024)} MB`,
-      },
-      nodeVersion: process.version,
-      platform: process.platform,
-      arch: process.arch,
-      pid: process.pid,
-      title: process.title,
-      cpu: {
-        cores: require('os').cpus().length,
-        model: require('os').cpus()[0]?.model || 'Unknown',
-      },
-      environment: process.env.NODE_ENV || 'development',
-    };
-  }
-
-  /**
-   * Coordonnees de contact de l'association
-   */
   getContactInfo() {
     return {
-      association: 'Y-Mad (Youthful Madagascar)',
+      association: 'Y-Mad',
       slogan: 'Ensemble, construisons le Madagascar de demain',
       address: {
         street: 'Carion',
@@ -384,23 +196,12 @@ export class AppService {
       email: {
         general: 'ymad.mg@gmail.com',
         support: 'contact@y-mad.mg',
-        partenariat: 'partners@y-mad.mg',
       },
       website: 'https://y-mad.mg',
       socialMedia: {
         facebook: 'https://facebook.com/ymad.mg',
         instagram: 'https://instagram.com/ymad.mg',
         linkedin: 'https://linkedin.com/company/ymad-mg',
-        twitter: 'https://twitter.com/ymad_mg',
-      },
-      openingHours: {
-        mondayToFriday: '08:00 - 17:00',
-        saturday: '09:00 - 13:00',
-        sunday: 'Ferme',
-      },
-      mapCoordinates: {
-        latitude: '-18.8792',
-        longitude: '47.5079',
       },
     };
   }
