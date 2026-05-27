@@ -72,7 +72,46 @@ export class UploadController {
   }
 
   // ============================================================
-  // SECTION 3 : UPLOAD CV
+  // SECTION 3 : UPLOAD PHOTO DE BENEVOLE
+  // ============================================================
+
+  @Post('volunteer-photo')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadVolunteerPhoto(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
+    if (!file) {
+      throw new BadRequestException('Aucun fichier fourni');
+    }
+
+    const volunteerId = req.body.volunteerId;
+    if (!volunteerId) {
+      throw new BadRequestException('Identifiant du benevole manquant');
+    }
+
+    const result = await this.uploadService.uploadToCloudinary(file, `ymad/volunteers/${volunteerId}`, {
+      width: 400,
+      height: 400,
+      crop: 'fill',
+      quality: 'auto',
+    });
+
+    await this.uploadService.updateVolunteerPhoto(volunteerId, result.secureUrl);
+
+    return {
+      success: true,
+      url: result.secureUrl,
+      secureUrl: result.secureUrl,
+      publicId: result.publicId,
+      width: result.width,
+      height: result.height,
+      format: result.format,
+      bytes: result.bytes,
+      message: 'Photo du benevole mise a jour avec succes',
+    };
+  }
+
+  // ============================================================
+  // SECTION 4 : UPLOAD CV
   // ============================================================
 
   @Post('cv')
@@ -101,7 +140,7 @@ export class UploadController {
   }
 
   // ============================================================
-  // SECTION 4 : UPLOAD DOCUMENT (DIPLOME, ATTESTATION)
+  // SECTION 5 : UPLOAD DOCUMENT (DIPLOME, ATTESTATION)
   // ============================================================
 
   @Post('document')
@@ -129,7 +168,7 @@ export class UploadController {
   }
 
   // ============================================================
-  // SECTION 5 : UPLOAD IMAGE BLOG
+  // SECTION 6 : UPLOAD IMAGE BLOG
   // ============================================================
 
   @Post('blog')
@@ -158,7 +197,7 @@ export class UploadController {
   }
 
   // ============================================================
-  // SECTION 6 : UPLOAD IMAGE PROJET
+  // SECTION 7 : UPLOAD IMAGE PROJET
   // ============================================================
 
   @Post('project')
@@ -187,7 +226,7 @@ export class UploadController {
   }
 
   // ============================================================
-  // SECTION 7 : UPLOAD FOND D ECRAN
+  // SECTION 8 : UPLOAD FOND D ECRAN
   // ============================================================
 
   @Post('background')
@@ -215,7 +254,7 @@ export class UploadController {
   }
 
   // ============================================================
-  // SECTION 8 : SUPPRESSION DE FICHIER
+  // SECTION 9 : SUPPRESSION DE FICHIER
   // ============================================================
 
   @Delete()
@@ -237,7 +276,7 @@ export class UploadController {
   }
 
   // ============================================================
-  // SECTION 9 : URL OPTIMISEE
+  // SECTION 10 : URL OPTIMISEE
   // ============================================================
 
   @Get('optimized-url')
@@ -259,7 +298,7 @@ export class UploadController {
   }
 
   // ============================================================
-  // SECTION 10 : TEST ENDPOINT
+  // SECTION 11 : TEST ENDPOINT
   // ============================================================
 
   @Public()
@@ -272,6 +311,7 @@ export class UploadController {
       endpoints: {
         single: 'POST /api/upload/single',
         profile: 'POST /api/upload/profile',
+        'volunteer-photo': 'POST /api/upload/volunteer-photo',
         cv: 'POST /api/upload/cv',
         document: 'POST /api/upload/document',
         blog: 'POST /api/upload/blog',

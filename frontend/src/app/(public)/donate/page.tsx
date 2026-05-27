@@ -11,7 +11,8 @@ import {
   Heart, Sparkles, Gift, Shield, TrendingUp, Users, 
   TreePine, BookOpen, HandHeart, ArrowRight, CheckCircle,
   Smartphone, Building, CreditCard, Loader2, AlertCircle,
-  ChevronRight, Target, Globe, Leaf
+  ChevronRight, Target, Globe, Leaf, Lock, Mail, Phone,
+  User, Calendar, DollarSign, Wallet, Zap
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -34,6 +35,7 @@ interface DonationResponse {
     id: string;
     transaction_id: string;
     amount: number;
+    receipt_number: string;
   };
   message?: string;
 }
@@ -45,6 +47,8 @@ export default function DonatePage() {
   const { language } = useLanguage();
   const { user, token, isAuthenticated } = useAuth();
   const router = useRouter();
+  
+  // State
   const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState<string>('');
@@ -61,11 +65,13 @@ export default function DonatePage() {
   const [donationAmount, setDonationAmount] = useState<number>(0);
   const [featuredProjects, setFeaturedProjects] = useState<Project[]>([]);
   const [stats, setStats] = useState({
-    total_donations: 12450,
-    projects_completed: 50,
-    trees_planted: 15780,
-    beneficiaries: 12450
+    total_donations: 0,
+    projects_completed: 42,
+    trees_planted: 12500,
+    beneficiaries: 8500
   });
+  const [donationId, setDonationId] = useState<string>('');
+  const [receiptNumber, setReceiptNumber] = useState<string>('');
 
   useEffect(() => {
     loadPageBackground();
@@ -73,13 +79,13 @@ export default function DonatePage() {
     loadDonationStats();
     
     if (isAuthenticated && user) {
-      const firstName = (user as any).firstName || (user as any).first_name || '';
-      const lastName = (user as any).lastName || (user as any).last_name || '';
+      const firstName = (user as any).first_name || (user as any).firstName || '';
+      const lastName = (user as any).last_name || (user as any).lastName || '';
       const userEmail = (user as any).email || '';
       setFullName(`${firstName} ${lastName}`.trim());
       setEmail(userEmail);
     }
-  }, []);
+  }, [isAuthenticated, user]);
 
   const loadPageBackground = async () => {
     try {
@@ -95,7 +101,7 @@ export default function DonatePage() {
   const loadFeaturedProjects = async () => {
     try {
       const response = await projectsApi.getFeatured();
-      if (response && response.data) {
+      if (response && response.data && response.data.length > 0) {
         setFeaturedProjects(response.data.slice(0, 3));
       } else {
         setFeaturedProjects([
@@ -103,17 +109,25 @@ export default function DonatePage() {
             id: 'education',
             title: 'Education pour tous',
             title_mg: 'Fampianarana ho an\'ny rehetra',
-            description: 'Soutenir l education des jeunes defavorises',
-            description_mg: 'Fanohanana ny fampianarana ho an\'ny tanora sahirana',
+            description: 'Soutenir l education des jeunes defavorises a Madagascar',
+            description_mg: 'Fanohanana ny fampianarana ho an\'ny tanora sahirana eto Madagasikara',
             progress: 65
           },
           {
             id: 'environment',
-            title: 'Reforestation',
-            title_mg: 'Fambolena hazo',
-            description: 'Lutter contre la deforestation',
-            description_mg: 'Miady amin\'ny fanapahana hazo tafahoatra',
+            title: 'Reforestation Madagascar',
+            title_mg: 'Fambolena hazo eto Madagasikara',
+            description: 'Lutter contre la deforestation et restaurer les ecosystemes',
+            description_mg: 'Miady amin\'ny fanapahana hazo tafahoatra sy famerenana ny tontolo iainana',
             progress: 40
+          },
+          {
+            id: 'entrepreneurship',
+            title: 'Entrepreneuriat jeune',
+            title_mg: 'Fandraharahana tanora',
+            description: 'Accompagner les jeunes dans la creation d entreprise',
+            description_mg: 'Manampy ny tanora hamorona orinasa',
+            progress: 55
           }
         ]);
       }
@@ -124,14 +138,16 @@ export default function DonatePage() {
 
   const loadDonationStats = async () => {
     try {
-      const response = await fetch(`${API_URL}/donations/stats/all`);
-      const data = await response.json();
-      if (data && data.totalAmount) {
+      const response = await fetch(`${API_URL}/donations/stats`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (response.ok) {
+        const data = await response.json();
         setStats({
-          total_donations: Math.floor(data.totalAmount / 1000),
-          projects_completed: 50,
-          trees_planted: 15780,
-          beneficiaries: Math.floor(data.totalAmount / 500)
+          total_donations: Math.floor(data.total_amount / 1000) || 12450,
+          projects_completed: 42,
+          trees_planted: 12500,
+          beneficiaries: Math.floor(data.total_amount / 500) || 8500
         });
       }
     } catch (error) {
@@ -160,7 +176,7 @@ export default function DonatePage() {
 
   const getFinalAmount = (): number => {
     if (selectedAmount) return selectedAmount;
-    if (customAmount) return parseInt(customAmount);
+    if (customAmount) return parseInt(customAmount, 10);
     return 0;
   };
 
@@ -189,10 +205,12 @@ export default function DonatePage() {
     try {
       const donationData = {
         amount: finalAmount,
-        payment_provider: paymentMethod,
+        currency: 'MGA',
+        payment_method: paymentMethod,
         phone_number: phoneNumber || undefined,
         donor_name: !isAnonymous ? fullName : undefined,
         donor_email: !isAnonymous ? email : undefined,
+        donor_phone: phoneNumber || undefined,
         message: message || undefined,
         is_anonymous: isAnonymous,
         is_recurring: isRecurring,
@@ -213,12 +231,23 @@ export default function DonatePage() {
       
       const data: DonationResponse = await response.json();
       
-      if (response.ok) {
-        setShowSuccess(true);
-        toast.success(getText('Merci pour votre generosite !', 'Misaotra tamin\'ny fanomezanao !'));
-        setTimeout(() => {
-          router.push('/');
-        }, 3000);
+      if (response.ok && data.data) {
+        setDonationId(data.data.id);
+        setReceiptNumber(data.data.receipt_number || '');
+        
+        if (paymentMethod === 'mvola' && phoneNumber) {
+          await initiateMobilePayment(data.data.id, 'mvola', phoneNumber);
+        } else if (paymentMethod === 'orange_money' && phoneNumber) {
+          await initiateMobilePayment(data.data.id, 'orange', phoneNumber);
+        } else if (paymentMethod === 'airtel_money' && phoneNumber) {
+          await initiateMobilePayment(data.data.id, 'airtel', phoneNumber);
+        } else {
+          setShowSuccess(true);
+          toast.success(getText('Merci pour votre generosite !', 'Misaotra tamin\'ny fanomezanao !'));
+          setTimeout(() => {
+            router.push('/');
+          }, 3000);
+        }
       } else {
         toast.error(data.message || getText('Erreur lors du don', 'Nisy hadisoana tamin\'ny fanomezana'));
       }
@@ -230,14 +259,49 @@ export default function DonatePage() {
     }
   };
 
+  const initiateMobilePayment = async (donationId: string, provider: string, phone: string) => {
+    try {
+      let endpoint = '';
+      if (provider === 'mvola') endpoint = `${API_URL}/donations/${donationId}/pay/mvola`;
+      else if (provider === 'orange') endpoint = `${API_URL}/donations/${donationId}/pay/orange`;
+      else endpoint = `${API_URL}/donations/${donationId}/pay/airtel`;
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: phone })
+      });
+      
+      if (response.ok) {
+        setShowSuccess(true);
+        toast.success(getText('Paiement initie, veuillez confirmer sur votre telephone', 'Voaombona ny fandoavam-bola, azafady mba hamafiso eo amin\'ny telefaoninao'));
+        setTimeout(() => {
+          router.push('/');
+        }, 4000);
+      } else {
+        toast.error(getText('Erreur lors de l initiation du paiement', 'Nisy hadisoana tamin\'ny fanombohana ny fandoavam-bola'));
+      }
+    } catch (error) {
+      console.error('Erreur paiement mobile:', error);
+      toast.error(getText('Erreur de paiement', 'Tsy nahomby ny fandoavam-bola'));
+    }
+  };
+
   const statsData = [
     { value: stats.beneficiaries.toLocaleString(), labelFr: 'Beneficiaires', labelMg: 'Tompondaka', icon: Users },
     { value: stats.projects_completed.toString(), labelFr: 'Projets realises', labelMg: 'Tetikasa vita', icon: Target },
     { value: stats.trees_planted.toLocaleString(), labelFr: 'Arbres plantes', labelMg: 'Hazo nambolena', icon: Leaf },
-    { value: '100%', labelFr: 'Transparence', labelMg: 'Fahamarinana', icon: Shield },
+    { value: `${Math.floor(stats.total_donations / 1000)}+`, labelFr: 'Dons recus', labelMg: 'Fanomezana voaray', icon: Heart },
   ];
 
-  // Style du fond d ecran PLEIN ECRAN - comme la section hero
+  const paymentMethods = [
+    { id: 'mvola', name: 'MVola', icon: Smartphone, color: 'text-green-600', bgColor: 'bg-green-50' },
+    { id: 'orange_money', name: 'Orange Money', icon: Smartphone, color: 'text-orange-500', bgColor: 'bg-orange-50' },
+    { id: 'airtel_money', name: 'Airtel Money', icon: Smartphone, color: 'text-red-600', bgColor: 'bg-red-50' },
+    { id: 'bank', name: 'Virement bancaire', icon: Building, color: 'text-gray-600', bgColor: 'bg-gray-50' }
+  ];
+
+  // Style du fond d ecran PLEIN ECRAN
   const overlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 40) / 100})`,
   } : {};
@@ -258,13 +322,18 @@ export default function DonatePage() {
               `Ny fanomezanao ${donationAmount.toLocaleString()} Ar dia voarakitra tsara.`
             )}
           </p>
+          {receiptNumber && (
+            <p className="text-sm text-gray-500 mb-2">
+              {getText('Numero de reçu:', 'Laharan\'ny taratasy fanamarinana:')} <span className="font-mono">{receiptNumber}</span>
+            </p>
+          )}
           <p className="text-sm text-gray-500 mb-6">
             {getText(
               'Vous allez recevoir un recu par email.',
               'Hahazo taratasy fanamarinana amin\'ny mailaka ianao.'
             )}
           </p>
-          <div className="animate-pulse w-16 h-1 bg-blue-500 rounded-full mx-auto"></div>
+          <div className="animate-pulse w-16 h-1 bg-blue-600 rounded-full mx-auto"></div>
         </div>
       </div>
     );
@@ -463,54 +532,24 @@ export default function DonatePage() {
                         {getText('Moyen de paiement', 'Fomba fandoavam-bola')} *
                       </label>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod('mvola')}
-                          className={`p-3 rounded-xl border-2 transition flex items-center gap-2 justify-center ${
-                            paymentMethod === 'mvola'
-                              ? 'border-blue-600 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <Smartphone className="w-5 h-5 text-green-600" />
-                          <span className="font-medium text-sm">MVola</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod('orange_money')}
-                          className={`p-3 rounded-xl border-2 transition flex items-center gap-2 justify-center ${
-                            paymentMethod === 'orange_money'
-                              ? 'border-blue-600 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <Smartphone className="w-5 h-5 text-orange-500" />
-                          <span className="font-medium text-sm">Orange</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod('airtel_money')}
-                          className={`p-3 rounded-xl border-2 transition flex items-center gap-2 justify-center ${
-                            paymentMethod === 'airtel_money'
-                              ? 'border-blue-600 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <Smartphone className="w-5 h-5 text-red-600" />
-                          <span className="font-medium text-sm">Airtel</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod('bank')}
-                          className={`p-3 rounded-xl border-2 transition flex items-center gap-2 justify-center ${
-                            paymentMethod === 'bank'
-                              ? 'border-blue-600 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <Building className="w-5 h-5 text-gray-600" />
-                          <span className="font-medium text-sm">{getText('Virement', 'Fandefasana')}</span>
-                        </button>
+                        {paymentMethods.map((method) => {
+                          const Icon = method.icon;
+                          return (
+                            <button
+                              key={method.id}
+                              type="button"
+                              onClick={() => setPaymentMethod(method.id)}
+                              className={`p-3 rounded-xl border-2 transition flex items-center gap-2 justify-center ${
+                                paymentMethod === method.id
+                                  ? 'border-blue-600 bg-blue-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <Icon className={`w-5 h-5 ${method.color}`} />
+                              <span className="font-medium text-sm">{method.name}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -560,7 +599,7 @@ export default function DonatePage() {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
                   >
                     {isLoading ? (
                       <>
@@ -580,7 +619,7 @@ export default function DonatePage() {
 
             {/* Sidebar d information */}
             <div className="space-y-6">
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 text-white">
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg">
                 <Gift className="w-12 h-12 mb-4 opacity-80" />
                 <h3 className="text-xl font-bold mb-2">
                   {getText('Pourquoi donner ?', 'Maninona no manome?')}
@@ -649,6 +688,10 @@ export default function DonatePage() {
                     'Ny fifanakalozana rehetra dia azo antoka ary hahazo taratasy fanamarinana amin\'ny mailaka ianao.'
                   )}
                 </p>
+                <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-200">
+                  <Lock className="w-4 h-4 text-green-600" />
+                  <span className="text-xs text-gray-500">Paiement 100% sécurisé</span>
+                </div>
               </div>
             </div>
           </div>

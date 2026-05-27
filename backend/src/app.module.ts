@@ -1,3 +1,5 @@
+// backend/src/app.module.ts
+
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -16,6 +18,10 @@ import { UploadModule } from './modules/upload/upload.module';
 import { PagesModule } from './modules/pages/pages.module';
 import { BeneficiariesModule } from './modules/beneficiaries/beneficiaries.module';
 import { BackgroundsModule } from './modules/backgrounds/backgrounds.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { VolunteersModule } from './modules/volunteers/volunteers.module';
+import { PartnersModule } from './modules/partners/partners.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 // Guards
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -39,6 +45,9 @@ import { PageContent } from './entities/page-content.entity';
 import { PageBackground } from './entities/page-background.entity';
 import { Beneficiary } from './entities/beneficiary.entity';
 import { Background } from './entities/background.entity';
+import { Volunteer } from './entities/volunteer.entity';
+import { Partner } from './entities/partner.entity';
+import { Report } from './entities/report.entity';
 
 @Module({
   imports: [
@@ -73,6 +82,9 @@ import { Background } from './entities/background.entity';
           PageBackground,
           Beneficiary,
           Background,
+          Volunteer,
+          Partner,
+          Report,
         ],
         synchronize: false,
         logging: true,
@@ -91,6 +103,10 @@ import { Background } from './entities/background.entity';
     PagesModule,
     BeneficiariesModule,
     BackgroundsModule,
+    PaymentsModule,
+    VolunteersModule,
+    PartnersModule,
+    ReportsModule,
   ],
   providers: [
     {

@@ -1,91 +1,118 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+// backend/src/modules/donations/donations.service.ts
+
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Donation, DonationStatus, PaymentProvider } from '../../entities/donation.entity';
-import { CreateDonationDto, ConfirmDonationDto } from './dto/create-donation.dto';
+import { CreateDonationDto, UpdateDonationStatusDto } from './dto/create-donation.dto';
 
 @Injectable()
 export class DonationsService {
+  private readonly logger = new Logger(DonationsService.name);
+
   constructor(
     @InjectRepository(Donation)
     private donationRepository: Repository<Donation>,
   ) {}
 
-  async create(createDonationDto: CreateDonationDto, userId?: string): Promise<Donation> {
-    try {
-      const donation = this.donationRepository.create({
-        ...createDonationDto,
-        user_id: userId,
-        status: DonationStatus.PENDING,
-        transaction_id: `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-      });
-      
-      return await this.donationRepository.save(donation);
-    } catch (error) {
-      throw new BadRequestException('Erreur lors de la création du don');
-    }
+  private generateReceiptNumber(): string {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `YM-DON-${year}${month}${day}-${random}`;
   }
 
-  async confirm(confirmDto: ConfirmDonationDto): Promise<Donation> {
-    const donation = await this.donationRepository.findOne({
-      where: { transaction_id: confirmDto.transaction_id }
+  async create(createDto: CreateDonationDto, userId?: string): Promise<Donation> {
+    const donation = this.donationRepository.create({
+      amount: createDto.amount,
+      currency: createDto.currency || 'MGA',
+      payment_provider: createDto.payment_provider,
+      phone_number: createDto.phone_number,
+      donor_name: createDto.donor_name,
+      donor_email: createDto.donor_email,
+      donor_phone: createDto.donor_phone,
+      project_id: createDto.project_id,
+      message: createDto.message,
+      is_anonymous: createDto.is_anonymous || false,
+      is_recurring: createDto.is_recurring || false,
+      recurring_interval: createDto.recurring_interval,
+      user_id: userId || null,
+      status: DonationStatus.PENDING,
     });
 
-    if (!donation) {
-      throw new NotFoundException('Don non trouvé');
-    }
-
-    donation.status = DonationStatus.COMPLETED;
-    donation.receipt_url = `/receipts/${donation.id}.pdf`;
-    
-    return await this.donationRepository.save(donation);
+    const saved = await this.donationRepository.save(donation);
+    this.logger.log(`Don créé: ${saved.id} - ${saved.amount} ${saved.currency}`);
+    return saved;
   }
 
-  async findAll(page: number = 1, limit: number = 10, status?: string) {
-    const skip = (page - 1) * limit;
-    const query = this.donationRepository.createQueryBuilder('donation');
-
-    if (status) {
-      query.andWhere('donation.status = :status', { status });
-    }
-
-    const [data, total] = await query
-      .orderBy('donation.created_at', 'DESC')
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
-
-    return { data, total, page, totalPages: Math.ceil(total / limit), limit };
-  }
-
-  async findOne(id: string): Promise<Donation> {
-    const donation = await this.donationRepository.findOne({ where: { id } });
-    if (!donation) {
-      throw new NotFoundException('Don non trouvé');
-    }
-    return donation;
-  }
-
-  async getUserDonations(userId: string) {
+  async findAll(): Promise<Donation[]> {
     return this.donationRepository.find({
-      where: { user_id: userId },
+      relations: ['user', 'project'],
       order: { created_at: 'DESC' },
     });
   }
 
-  async getStats() {
-    const total = await this.donationRepository.count();
-    const completed = await this.donationRepository.count({ where: { status: DonationStatus.COMPLETED } });
-    const totalAmount = await this.donationRepository
-      .createQueryBuilder('donation')
-      .select('SUM(donation.amount)', 'total')
-      .where('donation.status = :status', { status: DonationStatus.COMPLETED })
-      .getRawOne();
-    
-    return { 
-      total, 
-      completed, 
-      totalAmount: totalAmount?.total || 0 
+  async findOne(id: string): Promise<Donation> {
+    const donation = await this.donationRepository.findOne({
+      where: { id },
+      relations: ['user', 'project'],
+    });
+    if (!donation) {
+      throw new NotFoundException(`Don avec l'id ${id} non trouvé`);
+    }
+    return donation;
+  }
+
+  async updateStatus(id: string, updateDto: UpdateDonationStatusDto): Promise<Donation> {
+    const donation = await this.findOne(id);
+    donation.status = updateDto.status;
+    if (updateDto.notes) {
+      donation.message = updateDto.notes;
+    }
+    return this.donationRepository.save(donation);
+  }
+
+  async getStats(): Promise<{
+    total: number;
+    completed: number;
+    pending: number;
+    failed: number;
+    total_amount: number;
+    monthly_amount: number;
+  }> {
+    const [total, completed, pending, failed, totalAmountResult, monthlyAmountResult] = await Promise.all([
+      this.donationRepository.count(),
+      this.donationRepository.count({ where: { status: DonationStatus.COMPLETED } }),
+      this.donationRepository.count({ where: { status: DonationStatus.PENDING } }),
+      this.donationRepository.count({ where: { status: DonationStatus.FAILED } }),
+      this.donationRepository
+        .createQueryBuilder('d')
+        .select('SUM(d.amount)', 'total')
+        .where('d.status = :status', { status: DonationStatus.COMPLETED })
+        .getRawOne(),
+      this.donationRepository
+        .createQueryBuilder('d')
+        .select('SUM(d.amount)', 'total')
+        .where('d.status = :status', { status: DonationStatus.COMPLETED })
+        .andWhere('EXTRACT(MONTH FROM d.created_at) = EXTRACT(MONTH FROM CURRENT_DATE)')
+        .getRawOne(),
+    ]);
+
+    return {
+      total,
+      completed,
+      pending,
+      failed,
+      total_amount: parseFloat(totalAmountResult?.total || 0),
+      monthly_amount: parseFloat(monthlyAmountResult?.total || 0),
     };
+  }
+
+  async remove(id: string): Promise<void> {
+    const donation = await this.findOne(id);
+    await this.donationRepository.remove(donation);
+    this.logger.log(`Don supprimé: ${id}`);
   }
 }

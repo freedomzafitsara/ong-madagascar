@@ -1,9 +1,11 @@
+// backend/src/modules/payments/payments.module.ts
 import { Module } from '@nestjs/common';
-import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
+import { PayPalSandboxService } from './paypal-sandbox.service';
 
 @Module({
-  providers: [PaymentsService],
-  controllers: [PaymentsController]
+  controllers: [PaymentsController],
+  providers: [PayPalSandboxService],
+  exports: [PayPalSandboxService],
 })
 export class PaymentsModule {}

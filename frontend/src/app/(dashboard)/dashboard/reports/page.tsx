@@ -1,19 +1,26 @@
-﻿// src/app/(dashboard)/dashboard/reports/page.tsx
+﻿// src/app/dashboard/reports/page.tsx
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
   FileText, Download, Calendar, TrendingUp, Users, 
   Briefcase, Heart, MapPin, DollarSign,
-  BarChart3, PieChart, Activity, Printer, Mail,
-  CheckCircle, AlertCircle, Loader2, Eye, Award
+  Printer, CheckCircle, AlertCircle, Loader2, Award,
+  Handshake, Globe, Building, Star, RefreshCw,
+  ChevronLeft, ChevronRight, Eye, Clock
 } from 'lucide-react';
-import Link from 'next/link';
-import { PDFService } from '@/services/pdfService';
+import toast from 'react-hot-toast';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
 // ========================================
 // TYPES
 // ========================================
+
 interface Project {
   id: string;
   title: string;
@@ -21,90 +28,68 @@ interface Project {
   progress: number;
   budget: number;
   spent: number;
-  beneficiaries: number;
+  beneficiaries_count: number;
   region: string;
-  createdAt: string;
+  created_at: string;
 }
 
 interface Beneficiary {
   id: string;
-  firstName: string;
-  lastName: string;
+  first_name: string;
+  last_name: string;
   email: string;
   region: string;
   age: number;
-  employmentStatus: string;
-  educationLevel?: string;
-  beforeIncome?: number;
-  afterIncome?: number;
-  beforeYmad?: string;
-  afterYmad?: string;
-  createdAt: string;
+  employment_status: string;
+  education_level?: string;
+  before_income?: number;
+  after_income?: number;
+  created_at: string;
 }
 
 interface Volunteer {
   id: string;
-  fullName: string;
+  first_name: string;
+  last_name: string;
   email: string;
-  skills: string;
+  skills: string[];
   status: string;
-  hoursVolunteered: number;
-  registeredAt: string;
+  hours: number;
+  created_at: string;
 }
 
-interface Job {
+interface JobOffer {
   id: string;
   title: string;
-  department: string;
   location: string;
   status: string;
-  applicationsCount: number;
-  views: number;
-  createdAt: string;
-}
-
-interface Application {
-  id: string;
-  fullName: string;
-  email: string;
-  status: string;
-  jobTitle: string;
-  appliedAt: string;
+  applications_count: number;
+  views_count: number;
+  created_at: string;
 }
 
 interface Donation {
   id: string;
   amount: number;
-  donorName: string;
+  donor_name: string | null;
   status: string;
-  method: string;
-  createdAt: string;
+  payment_method: string;
+  created_at: string;
 }
 
-interface BlogPost {
-  id: string;
-  title: string;
-  viewsCount: number;
-  createdAt: string;
-}
-
-interface Event {
-  id: string;
-  title: string;
-  date: string;
-  registrations: number;
-  status: string;
-}
-
-interface ReportData {
-  projects: Project[];
-  beneficiaries: Beneficiary[];
-  volunteers: Volunteer[];
-  jobs: Job[];
-  applications: Application[];
-  donations: Donation[];
-  blogPosts: BlogPost[];
-  events: Event[];
+interface Stats {
+  totalProjects: number;
+  activeProjects: number;
+  completedProjects: number;
+  totalBeneficiaries: number;
+  totalVolunteers: number;
+  activeVolunteers: number;
+  totalJobs: number;
+  activeJobs: number;
+  totalApplications: number;
+  totalDonations: number;
+  monthlyDonations: number;
+  totalViews: number;
 }
 
 interface ImpactStats {
@@ -118,30 +103,23 @@ interface ImpactStats {
 // ========================================
 // COMPOSANT PRINCIPAL
 // ========================================
+
 export default function ReportsPage() {
+  const { token, user, isAuthenticated } = useAuth();
+  const router = useRouter();
+  
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [reportType, setReportType] = useState<'activity' | 'financial' | 'impact' | 'beneficiaries' | 'volunteers' | 'jobs' | 'donations'>('activity');
   const [dateRange, setDateRange] = useState<'week' | 'month' | 'quarter' | 'year' | 'all'>('month');
-  const [data, setData] = useState<ReportData>({
-    projects: [],
-    beneficiaries: [],
-    volunteers: [],
-    jobs: [],
-    applications: [],
-    donations: [],
-    blogPosts: [],
-    events: []
-  });
-  const [impactStats, setImpactStats] = useState<ImpactStats>({
-    employmentRate: 0,
-    averageIncomeIncrease: 0,
-    businessesCreated: 0,
-    trainingsCompleted: 0,
-    totalBeneficiaries: 0
-  });
-
-  const [stats, setStats] = useState({
+  
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
+  const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
+  const [jobs, setJobs] = useState<JobOffer[]>([]);
+  const [donations, setDonations] = useState<Donation[]>([]);
+  
+  const [stats, setStats] = useState<Stats>({
     totalProjects: 0,
     activeProjects: 0,
     completedProjects: 0,
@@ -151,160 +129,226 @@ export default function ReportsPage() {
     totalJobs: 0,
     activeJobs: 0,
     totalApplications: 0,
-    pendingApplications: 0,
-    acceptedApplications: 0,
-    rejectedApplications: 0,
     totalDonations: 0,
     monthlyDonations: 0,
-    totalViews: 0,
-    eventsCount: 0
+    totalViews: 0
+  });
+  
+  const [impactStats, setImpactStats] = useState<ImpactStats>({
+    employmentRate: 0,
+    averageIncomeIncrease: 0,
+    businessesCreated: 0,
+    trainingsCompleted: 0,
+    totalBeneficiaries: 0
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const hasAccess = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'staff';
 
   // ========================================
-  // CHARGEMENT DES DONNÉES - CORRIGÉ
+  // CHARGEMENT DES DONNÉES DEPUIS L'API
   // ========================================
-  const loadData = (): void => {
-    setLoading(true);
+
+  const fetchProjects = useCallback(async () => {
+    if (!token) return;
     try {
-      // Charger les données depuis localStorage
-      const projects: Project[] = JSON.parse(localStorage.getItem('ymad_projects') || '[]');
-      const beneficiaries: Beneficiary[] = JSON.parse(localStorage.getItem('ymad_beneficiaries') || '[]');
-      const volunteers: Volunteer[] = JSON.parse(localStorage.getItem('ymad_volunteers') || '[]');
-      const jobs: Job[] = JSON.parse(localStorage.getItem('ymad_jobs') || '[]');
-      const applications: Application[] = JSON.parse(localStorage.getItem('ymad_applications') || '[]');
-      const donations: Donation[] = JSON.parse(localStorage.getItem('ymad_donations') || '[]');
-      const blogPosts: BlogPost[] = JSON.parse(localStorage.getItem('ymad_blog_posts') || '[]');
-      const events: Event[] = JSON.parse(localStorage.getItem('ymad_events') || '[]');
-      
-      // ========================================
-      // CALCUL DES STATISTIQUES D'IMPACT - CORRIGÉ
-      // ========================================
-      
-      // 1. Taux d'emploi
-      const employedBeneficiaries = beneficiaries.filter(b => 
-        b.employmentStatus === 'Employé' || b.employmentStatus === 'Entrepreneur'
-      ).length;
-      const employmentRate = beneficiaries.length > 0 ? (employedBeneficiaries / beneficiaries.length) * 100 : 0;
-      
-      // 2. Augmentation moyenne des revenus
-      const incomeIncreases = beneficiaries
-        .filter(b => b.beforeIncome && b.afterIncome && b.afterIncome > 0)
-        .map(b => (b.afterIncome || 0) - (b.beforeIncome || 0));
-      
-      const averageIncomeIncrease = incomeIncreases.length > 0
-        ? incomeIncreases.reduce((a, b) => a + b, 0) / incomeIncreases.length
-        : 0;
-      
-      // 3. Entreprises créées
-      const businessesCreated = beneficiaries.filter(b => b.employmentStatus === 'Entrepreneur').length;
-      
-      // 4. Formations complétées - ✅ CORRIGÉ
-      const trainingsCompleted = beneficiaries.filter(b => 
-        b.employmentStatus === 'Formation' || 
-        b.educationLevel === 'Formation pro' ||
-        b.educationLevel === 'Formation professionnelle'
-      ).length;
-      
-      // ========================================
-      // CALCUL DES STATISTIQUES GÉNÉRALES
-      // ========================================
-      const activeProjects = projects.filter(p => p.status === 'active');
-      const completedProjects = projects.filter(p => p.status === 'completed');
-      const activeVolunteers = volunteers.filter(v => v.status === 'active');
-      const activeJobs = jobs.filter(j => j.status === 'open' || j.status === 'published');
-      const pendingApps = applications.filter(a => a.status === 'pending' || a.status === 'submitted');
-      const acceptedApps = applications.filter(a => a.status === 'accepted');
-      const rejectedApps = applications.filter(a => a.status === 'rejected');
-      const totalDonations = donations.reduce((sum, d) => sum + (d.amount || 0), 0);
-      
-      // Dons du mois
-      const now = new Date();
-      const monthlyDonations = donations
-        .filter(d => {
-          const dDate = new Date(d.createdAt);
-          return dDate.getMonth() === now.getMonth() && dDate.getFullYear() === now.getFullYear();
-        })
-        .reduce((sum, d) => sum + (d.amount || 0), 0);
-      
-      const totalViews = blogPosts.reduce((sum, post) => sum + (post.viewsCount || 0), 0);
-      
-      // Mise à jour des states
-      setData({
-        projects,
-        beneficiaries,
-        volunteers,
-        jobs,
-        applications,
-        donations,
-        blogPosts,
-        events
+      const response = await fetch(`${API_URL}/projects`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      
-      setImpactStats({
-        employmentRate,
-        averageIncomeIncrease,
-        businessesCreated,
-        trainingsCompleted,
-        totalBeneficiaries: beneficiaries.length
-      });
-      
-      setStats({
-        totalProjects: projects.length,
-        activeProjects: activeProjects.length,
-        completedProjects: completedProjects.length,
-        totalBeneficiaries: beneficiaries.length,
-        totalVolunteers: volunteers.length,
-        activeVolunteers: activeVolunteers.length,
-        totalJobs: jobs.length,
-        activeJobs: activeJobs.length,
-        totalApplications: applications.length,
-        pendingApplications: pendingApps.length,
-        acceptedApplications: acceptedApps.length,
-        rejectedApplications: rejectedApps.length,
-        totalDonations,
-        monthlyDonations,
-        totalViews,
-        eventsCount: events.length
-      });
-      
+      if (response.ok) {
+        const data = await response.json();
+        setProjects(data.data || []);
+      }
     } catch (error) {
-      console.error('Erreur chargement données:', error);
-    } finally {
-      setLoading(false);
+      console.error('Erreur chargement projets:', error);
     }
-  };
+  }, [token]);
+
+  const fetchBeneficiaries = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_URL}/beneficiaries`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setBeneficiaries(data.data || []);
+      }
+    } catch (error) {
+      console.error('Erreur chargement bénéficiaires:', error);
+    }
+  }, [token]);
+
+  const fetchVolunteers = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_URL}/volunteers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setVolunteers(data.data || []);
+      }
+    } catch (error) {
+      console.error('Erreur chargement bénévoles:', error);
+    }
+  }, [token]);
+
+  const fetchJobs = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_URL}/jobs/offers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setJobs(data.data || []);
+      }
+    } catch (error) {
+      console.error('Erreur chargement offres:', error);
+    }
+  }, [token]);
+
+  const fetchDonations = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_URL}/donations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setDonations(data.data || []);
+      }
+    } catch (error) {
+      console.error('Erreur chargement dons:', error);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+    if (!hasAccess) {
+      router.push('/dashboard');
+      return;
+    }
+    
+    Promise.all([
+      fetchProjects(),
+      fetchBeneficiaries(),
+      fetchVolunteers(),
+      fetchJobs(),
+      fetchDonations()
+    ]).finally(() => setLoading(false));
+  }, [isAuthenticated, hasAccess, fetchProjects, fetchBeneficiaries, fetchVolunteers, fetchJobs, fetchDonations]);
 
   // ========================================
-  // AUTRES FONCTIONS
+  // CALCUL DES STATISTIQUES
   // ========================================
-  
-  const getDateRangeFilter = (range: string): { start: Date; end: Date } => {
+
+  useEffect(() => {
+    // Statistiques projets
+    const activeProjects = projects.filter(p => p.status === 'active');
+    const completedProjects = projects.filter(p => p.status === 'completed');
+    
+    // Statistiques bénévoles
+    const activeVolunteers = volunteers.filter(v => v.status === 'active');
+    
+    // Statistiques offres d'emploi
+    const activeJobs = jobs.filter(j => j.status === 'published' || j.status === 'open');
+    const totalApplications = jobs.reduce((sum, j) => sum + (j.applications_count || 0), 0);
+    
+    // Statistiques dons
+    const totalDonations = donations.reduce((sum, d) => sum + (d.amount || 0), 0);
     const now = new Date();
-    const start = new Date();
+    const monthlyDonations = donations
+      .filter(d => {
+        const dDate = new Date(d.created_at);
+        return dDate.getMonth() === now.getMonth() && dDate.getFullYear() === now.getFullYear() && d.status === 'completed';
+      })
+      .reduce((sum, d) => sum + (d.amount || 0), 0);
+    
+    // Impact social
+    const employedBeneficiaries = beneficiaries.filter(b => 
+      b.employment_status === 'Employé' || b.employment_status === 'Entrepreneur' || 
+      b.employment_status === 'employe' || b.employment_status === 'entrepreneur'
+    ).length;
+    const employmentRate = beneficiaries.length > 0 ? (employedBeneficiaries / beneficiaries.length) * 100 : 0;
+    
+    const businessesCreated = beneficiaries.filter(b => 
+      b.employment_status === 'Entrepreneur' || b.employment_status === 'entrepreneur'
+    ).length;
+    
+    const trainingsCompleted = beneficiaries.filter(b => 
+      b.employment_status?.includes('Formation') || b.education_level?.includes('Formation')
+    ).length;
+    
+    // Calcul de l'augmentation moyenne des revenus
+    const incomeIncreases = beneficiaries
+      .filter(b => b.before_income && b.after_income && b.after_income > 0)
+      .map(b => (b.after_income || 0) - (b.before_income || 0));
+    
+    const averageIncomeIncrease = incomeIncreases.length > 0
+      ? incomeIncreases.reduce((a, b) => a + b, 0) / incomeIncreases.length
+      : 0;
+    
+    setStats({
+      totalProjects: projects.length,
+      activeProjects: activeProjects.length,
+      completedProjects: completedProjects.length,
+      totalBeneficiaries: beneficiaries.length,
+      totalVolunteers: volunteers.length,
+      activeVolunteers: activeVolunteers.length,
+      totalJobs: jobs.length,
+      activeJobs: activeJobs.length,
+      totalApplications: totalApplications,
+      totalDonations: totalDonations,
+      monthlyDonations: monthlyDonations,
+      totalViews: jobs.reduce((sum, j) => sum + (j.views_count || 0), 0)
+    });
+    
+    setImpactStats({
+      employmentRate,
+      averageIncomeIncrease,
+      businessesCreated,
+      trainingsCompleted,
+      totalBeneficiaries: beneficiaries.length
+    });
+    
+  }, [projects, beneficiaries, volunteers, jobs, donations]);
+
+  // ========================================
+  // FILTRES PAR DATE
+  // ========================================
+
+  const getDateRangeFilter = (range: string): { start: Date; end: Date } => {
+    const endDate = new Date();
+    const startDate = new Date();
     
     switch (range) {
       case 'week':
-        start.setDate(now.getDate() - 7);
+        startDate.setDate(endDate.getDate() - 7);
         break;
       case 'month':
-        start.setMonth(now.getMonth() - 1);
+        startDate.setMonth(endDate.getMonth() - 1);
         break;
       case 'quarter':
-        start.setMonth(now.getMonth() - 3);
+        startDate.setMonth(endDate.getMonth() - 3);
         break;
       case 'year':
-        start.setFullYear(now.getFullYear() - 1);
+        startDate.setFullYear(endDate.getFullYear() - 1);
         break;
       default:
-        return { start: new Date(0), end: now };
+        startDate.setFullYear(2000);
+        break;
     }
     
-    return { start, end: now };
+    return { start: startDate, end: endDate };
   };
+
+  // ========================================
+  // GÉNÉRATION RAPPORT
+  // ========================================
 
   const generatePDFReport = async (): Promise<void> => {
     setGenerating(true);
@@ -312,101 +356,51 @@ export default function ReportsPage() {
     try {
       const { start, end } = getDateRangeFilter(dateRange);
       
-      if (reportType === 'activity') {
-        const activities = [
-          ...data.projects.map(p => ({
-            title: p.title,
-            date: p.createdAt,
-            participants: p.beneficiaries || 0,
-            status: p.status === 'active' ? 'En cours' : p.status === 'completed' ? 'Terminé' : 'Planifié'
-          })),
-          ...data.events.map(e => ({
-            title: e.title,
-            date: e.date,
-            participants: e.registrations || 0,
-            status: new Date(e.date) > new Date() ? 'À venir' : 'Terminé'
-          }))
-        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 20);
-        
-        const blob = await PDFService.generateActivityReport({
-          period: { start, end },
-          stats: {
-            membersCount: stats.totalBeneficiaries,
-            eventsCount: stats.eventsCount,
-            projectsCount: stats.totalProjects,
-            beneficiariesCount: stats.totalBeneficiaries,
-            volunteersCount: stats.totalVolunteers
-          },
-          activities
-        });
-        
-        downloadBlob(blob, `rapport_activite_${formatDate()}.pdf`);
-        alert('✅ Rapport d\'activité généré avec succès');
-        
-      } else if (reportType === 'financial') {
-        const revenues = [
-          { source: 'Dons individuels', amount: stats.totalDonations * 0.6 },
-          { source: 'Partenariats', amount: stats.totalDonations * 0.3 },
-          { source: 'Événements', amount: stats.totalDonations * 0.1 }
-        ];
-        
-        const expenses = [
-          { category: 'Projets terrain', amount: stats.totalDonations * 0.5 },
-          { category: 'Administration', amount: stats.totalDonations * 0.2 },
-          { category: 'Communication', amount: stats.totalDonations * 0.15 },
-          { category: 'Formation', amount: stats.totalDonations * 0.15 }
-        ];
-        
-        const blob = await PDFService.generateFinancialReport({
-          period: { start, end },
-          revenues,
-          expenses,
-          totalRevenue: stats.totalDonations,
-          totalExpense: stats.totalDonations * 0.85,
-          balance: stats.totalDonations * 0.15
-        });
-        
-        downloadBlob(blob, `rapport_financier_${formatDate()}.pdf`);
-        alert('✅ Rapport financier généré avec succès');
-        
-      } else if (reportType === 'impact') {
-        const blob = await PDFService.generateImpactReport({
-          period: { start, end },
-          beneficiaries: data.beneficiaries,
-          impact: {
-            employmentRate: impactStats.employmentRate,
-            averageIncomeIncrease: impactStats.averageIncomeIncrease,
-            businessesCreated: impactStats.businessesCreated,
-            trainingsCompleted: impactStats.trainingsCompleted
-          }
-        });
-        
-        downloadBlob(blob, `rapport_impact_${formatDate()}.pdf`);
-        alert('✅ Rapport d\'impact généré avec succès');
+      const reportData = {
+        type: reportType,
+        title: `${getReportTitle()} - ${new Date().toLocaleDateString('fr-FR')}`,
+        period: dateRange,
+        period_start: start.toISOString(),
+        period_end: end.toISOString(),
+        data: {
+          projects: projects.slice(0, 20),
+          beneficiaries: beneficiaries.slice(0, 20),
+          volunteers: volunteers.slice(0, 20),
+          jobs: jobs.slice(0, 20),
+          donations: donations.slice(0, 20)
+        },
+        stats: stats,
+        impact: impactStats
+      };
+      
+      const response = await fetch(`${API_URL}/reports`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(reportData)
+      });
+      
+      if (response.ok) {
+        toast.success(`Rapport ${getReportTitle()} enregistré avec succès`);
+        // Simuler un téléchargement PDF (à intégrer avec une vraie librairie PDF si besoin)
+toast.success('Rapport enregistré avec succès. Fonctionnalité PDF à venir.');
+      } else {
+        toast.error('Erreur lors de la génération du rapport');
       }
       
     } catch (error) {
-      console.error('Erreur génération PDF:', error);
-      alert('❌ Erreur lors de la génération du PDF');
+      console.error('Erreur génération rapport:', error);
+      toast.error('Erreur de connexion');
     } finally {
       setGenerating(false);
     }
   };
 
-  const downloadBlob = (blob: Blob, filename: string): void => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const formatDate = (): string => {
-    return new Date().toISOString().split('T')[0];
-  };
+  // ========================================
+  // EXPORT CSV
+  // ========================================
 
   const exportToCSV = (): void => {
     let csvData: any[] = [];
@@ -414,78 +408,78 @@ export default function ReportsPage() {
     
     switch (reportType) {
       case 'activity':
-        csvData = data.projects.map(p => ({
+        csvData = projects.map(p => ({
           'Projet': p.title,
           'Statut': p.status === 'active' ? 'Actif' : p.status === 'completed' ? 'Terminé' : 'Planifié',
-          'Bénéficiaires': p.beneficiaries || 0,
+          'Bénéficiaires': p.beneficiaries_count || 0,
           'Région': p.region || 'N/A',
-          'Date création': new Date(p.createdAt).toLocaleDateString('fr-FR')
+          'Progression': `${p.progress || 0}%`,
+          'Date création': new Date(p.created_at).toLocaleDateString('fr-FR')
         }));
-        filename = `rapport_activite_${formatDate()}.csv`;
+        filename = `rapport_activite_${new Date().toISOString().split('T')[0]}.csv`;
         break;
         
       case 'beneficiaries':
-        csvData = data.beneficiaries.map(b => ({
-          'Nom': `${b.firstName} ${b.lastName}`,
+        csvData = beneficiaries.map(b => ({
+          'Nom': `${b.first_name} ${b.last_name}`,
           'Email': b.email,
           'Âge': b.age || 'N/A',
           'Région': b.region || 'N/A',
-          'Situation': b.employmentStatus || 'N/A',
-          'Revenu avant': b.beforeIncome?.toLocaleString() || '0',
-          'Revenu après': b.afterIncome?.toLocaleString() || '0',
-          'Date inscription': new Date(b.createdAt).toLocaleDateString('fr-FR')
+          'Situation': b.employment_status || 'N/A',
+          'Date inscription': new Date(b.created_at).toLocaleDateString('fr-FR')
         }));
-        filename = `rapport_beneficiaires_${formatDate()}.csv`;
+        filename = `rapport_beneficiaires_${new Date().toISOString().split('T')[0]}.csv`;
         break;
         
       case 'volunteers':
-        csvData = data.volunteers.map(v => ({
-          'Nom': v.fullName,
+        csvData = volunteers.map(v => ({
+          'Nom': `${v.first_name} ${v.last_name}`,
           'Email': v.email,
-          'Compétences': v.skills,
+          'Compétences': v.skills?.join(', ') || '',
           'Statut': v.status === 'active' ? 'Actif' : 'Inactif',
-          'Heures': v.hoursVolunteered || 0,
-          'Date inscription': new Date(v.registeredAt).toLocaleDateString('fr-FR')
+          'Heures': v.hours || 0,
+          'Date inscription': new Date(v.created_at).toLocaleDateString('fr-FR')
         }));
-        filename = `rapport_benevoles_${formatDate()}.csv`;
+        filename = `rapport_benevoles_${new Date().toISOString().split('T')[0]}.csv`;
         break;
         
       case 'jobs':
-        csvData = data.jobs.map(j => ({
+        csvData = jobs.map(j => ({
           'Titre': j.title,
-          'Département': j.department,
           'Lieu': j.location,
-          'Statut': j.status === 'open' ? 'Ouvert' : j.status === 'published' ? 'Publié' : 'Fermé',
-          'Candidatures': j.applicationsCount || 0,
-          'Vues': j.views || 0,
-          'Date création': new Date(j.createdAt).toLocaleDateString('fr-FR')
+          'Statut': j.status === 'published' ? 'Publié' : 'Fermé',
+          'Candidatures': j.applications_count || 0,
+          'Vues': j.views_count || 0,
+          'Date création': new Date(j.created_at).toLocaleDateString('fr-FR')
         }));
-        filename = `rapport_offres_${formatDate()}.csv`;
+        filename = `rapport_offres_${new Date().toISOString().split('T')[0]}.csv`;
         break;
         
       case 'donations':
-        csvData = data.donations.map(d => ({
-          'Donateur': d.donorName || 'Anonyme',
+        csvData = donations.filter(d => d.status === 'completed').map(d => ({
+          'Donateur': d.donor_name || 'Anonyme',
           'Montant': `${d.amount.toLocaleString()} Ar`,
-          'Méthode': d.method === 'mvola' ? 'MVola' : d.method === 'orange_money' ? 'Orange Money' : 'Virement',
-          'Statut': d.status === 'completed' ? 'Complété' : 'En attente',
-          'Date': new Date(d.createdAt).toLocaleDateString('fr-FR')
+          'Méthode': d.payment_method === 'mvola' ? 'MVola' : d.payment_method === 'orange_money' ? 'Orange Money' : d.payment_method === 'airtel' ? 'Airtel' : 'Autre',
+          'Date': new Date(d.created_at).toLocaleDateString('fr-FR')
         }));
-        filename = `rapport_dons_${formatDate()}.csv`;
+        filename = `rapport_dons_${new Date().toISOString().split('T')[0]}.csv`;
         break;
         
       case 'impact':
-        csvData = data.beneficiaries
-          .filter(b => b.beforeIncome && b.afterIncome)
+        csvData = beneficiaries
+          .filter(b => b.before_income && b.after_income)
           .map(b => ({
-            'Nom': `${b.firstName} ${b.lastName}`,
-            'Revenu avant': `${(b.beforeIncome || 0).toLocaleString()} Ar`,
-            'Revenu après': `${(b.afterIncome || 0).toLocaleString()} Ar`,
-            'Progression': `${((b.afterIncome || 0) - (b.beforeIncome || 0)).toLocaleString()} Ar`,
-            'Taux progression': `${((((b.afterIncome || 0) - (b.beforeIncome || 0)) / (b.beforeIncome || 1)) * 100).toFixed(0)}%`
+            'Nom': `${b.first_name} ${b.last_name}`,
+            'Revenu avant': `${(b.before_income || 0).toLocaleString()} Ar`,
+            'Revenu après': `${(b.after_income || 0).toLocaleString()} Ar`,
+            'Progression': `${((b.after_income || 0) - (b.before_income || 0)).toLocaleString()} Ar`,
+            'Taux progression': `${((((b.after_income || 0) - (b.before_income || 0)) / (b.before_income || 1)) * 100).toFixed(0)}%`
           }));
-        filename = `rapport_impact_${formatDate()}.csv`;
+        filename = `rapport_impact_${new Date().toISOString().split('T')[0]}.csv`;
         break;
+        
+      default:
+        return;
     }
     
     if (csvData.length > 0) {
@@ -494,9 +488,7 @@ export default function ReportsPage() {
         headers.join(';'),
         ...csvData.map(row => headers.map(h => {
           const value = row[h];
-          return typeof value === 'string' && (value.includes(';') || value.includes(',')) 
-            ? `"${value}"` 
-            : value;
+          return typeof value === 'string' && (value.includes(';') || value.includes(',')) ? `"${value}"` : value;
         }).join(';'))
       ];
       
@@ -508,9 +500,9 @@ export default function ReportsPage() {
       a.click();
       URL.revokeObjectURL(url);
       
-      alert(`✅ Export CSV ${reportType} réussi`);
+      toast.success(`Export CSV ${getReportTitle()} réussi`);
     } else {
-      alert('❌ Aucune donnée à exporter');
+      toast.error('Aucune donnée à exporter');
     }
   };
 
@@ -531,72 +523,98 @@ export default function ReportsPage() {
     return titles[reportType];
   };
 
-  if (loading) {
+  const formatCurrency = (amount: number): string => {
+    return amount.toLocaleString() + ' Ar';
+  };
+
+  if (!isAuthenticated || !hasAccess) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Chargement des données...</p>
+          <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-800">Accès non autorisé</h1>
+          <p className="text-gray-500 mt-2">Vous n'avez pas les droits pour accéder à cette page.</p>
+          <Link href="/dashboard" className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            Retour au tableau de bord
+          </Link>
         </div>
       </div>
     );
   }
 
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+        <p className="text-gray-500 font-medium">Chargement des données...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      {/* En-tête */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Rapports et statistiques</h1>
-          <p className="text-gray-500 mt-1">Analysez l'impact de vos actions</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={printReport}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
-          >
-            <Printer className="w-4 h-4" />
-            <span className="hidden sm:inline">Imprimer</span>
-          </button>
-          <button
-            onClick={exportToCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
-          >
-            <Download className="w-4 h-4" />
-            <span className="hidden sm:inline">Exporter CSV</span>
-          </button>
-          <button
-            onClick={generatePDFReport}
-            disabled={generating}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-          >
-            {generating ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <FileText className="w-4 h-4" />
-            )}
-            {generating ? 'Génération...' : 'PDF'}
-          </button>
+    <div className="space-y-6">
+      {/* En-tête Y-Mad - Bleu */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <FileText className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Rapports et statistiques</h1>
+              <p className="text-blue-100 text-sm mt-0.5">
+                Analysez l'impact de vos actions et générez des rapports
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={printReport}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-lg hover:bg-white/30 transition"
+            >
+              <Printer className="w-4 h-4" />
+              <span className="hidden sm:inline">Imprimer</span>
+            </button>
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-lg hover:bg-white/30 transition"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Exporter CSV</span>
+            </button>
+            <button
+              onClick={generatePDFReport}
+              disabled={generating}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-lg hover:bg-white/30 transition disabled:opacity-50"
+            >
+              {generating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4" />
+              )}
+              {generating ? 'Génération...' : 'PDF'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Sélecteur de rapport */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      {/* Sélecteur de rapport - Gris */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Type de rapport</label>
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value as any)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
             >
-              <option value="activity">📊 Rapport d'activité</option>
-              <option value="financial">💰 Rapport financier</option>
-              <option value="impact">🌍 Rapport d'impact social</option>
-              <option value="beneficiaries">👥 Rapport bénéficiaires</option>
-              <option value="volunteers">🤝 Rapport bénévoles</option>
-              <option value="jobs">💼 Rapport offres d'emploi</option>
-              <option value="donations">💝 Rapport dons</option>
+              <option value="activity">Rapport d'activité</option>
+              <option value="financial">Rapport financier</option>
+              <option value="impact">Rapport d'impact social</option>
+              <option value="beneficiaries">Rapport bénéficiaires</option>
+              <option value="volunteers">Rapport bénévoles</option>
+              <option value="jobs">Rapport offres d'emploi</option>
+              <option value="donations">Rapport dons</option>
             </select>
           </div>
           <div>
@@ -604,26 +622,26 @@ export default function ReportsPage() {
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value as any)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
             >
-              <option value="week">📅 Cette semaine</option>
-              <option value="month">📅 Ce mois-ci</option>
-              <option value="quarter">📅 Ce trimestre</option>
-              <option value="year">📅 Cette année</option>
-              <option value="all">📅 Toutes les données</option>
+              <option value="week">Cette semaine</option>
+              <option value="month">Ce mois-ci</option>
+              <option value="quarter">Ce trimestre</option>
+              <option value="year">Cette année</option>
+              <option value="all">Toutes les données</option>
             </select>
           </div>
           <div className="flex items-end">
-            <div className="text-sm text-gray-500 bg-gray-50 p-2 rounded-lg w-full">
-              <span className="font-semibold">{getReportTitle()}</span> - {dateRange === 'week' ? '7 derniers jours' : dateRange === 'month' ? '30 derniers jours' : dateRange === 'year' ? '12 derniers mois' : 'Toutes les données'}
+            <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg w-full border border-gray-200">
+              <span className="font-semibold text-gray-700">{getReportTitle()}</span> - {dateRange === 'week' ? '7 derniers jours' : dateRange === 'month' ? '30 derniers jours' : dateRange === 'year' ? '12 derniers mois' : 'Toutes les données'}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Cartes statistiques */}
+      {/* Cartes statistiques - Bleu et Gris */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-4 text-white">
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl shadow-lg p-4 text-white">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-blue-100 text-xs sm:text-sm">Projets</p>
@@ -634,18 +652,18 @@ export default function ReportsPage() {
           </div>
         </div>
         
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-4 text-white">
+        <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl shadow-lg p-4 text-white">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-green-100 text-xs sm:text-sm">Bénéficiaires</p>
+              <p className="text-emerald-100 text-xs sm:text-sm">Bénéficiaires</p>
               <p className="text-2xl font-bold">{stats.totalBeneficiaries}</p>
-              <p className="text-xs text-green-200 mt-1">Jeunes aidés</p>
+              <p className="text-xs text-emerald-200 mt-1">Jeunes aidés</p>
             </div>
             <Users className="w-8 h-8 opacity-80" />
           </div>
         </div>
         
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-4 text-white">
+        <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl shadow-lg p-4 text-white">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-purple-100 text-xs sm:text-sm">Offres d'emploi</p>
@@ -656,21 +674,21 @@ export default function ReportsPage() {
           </div>
         </div>
         
-        <div className="bg-gradient-to-br from-rose-500 to-rose-600 rounded-xl shadow-lg p-4 text-white">
+        <div className="bg-gradient-to-br from-rose-600 to-rose-700 rounded-xl shadow-lg p-4 text-white">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-rose-100 text-xs sm:text-sm">Dons collectés</p>
-              <p className="text-lg font-bold">{stats.totalDonations.toLocaleString()} Ar</p>
-              <p className="text-xs text-rose-200 mt-1">+{stats.monthlyDonations.toLocaleString()} Ar/mois</p>
+              <p className="text-lg font-bold">{formatCurrency(stats.totalDonations)}</p>
+              <p className="text-xs text-rose-200 mt-1">+{formatCurrency(stats.monthlyDonations)}/mois</p>
             </div>
             <Heart className="w-8 h-8 opacity-80" />
           </div>
         </div>
       </div>
 
-      {/* Indicateurs clés */}
+      {/* Indicateurs clés - Gris */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
           <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-blue-600" />
             Indicateurs clés
@@ -679,7 +697,7 @@ export default function ReportsPage() {
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-600">Projets actifs</span>
-                <span className="font-semibold">{stats.activeProjects} / {stats.totalProjects}</span>
+                <span className="font-semibold text-gray-800">{stats.activeProjects} / {stats.totalProjects}</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
@@ -691,35 +709,23 @@ export default function ReportsPage() {
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-600">Bénévoles actifs</span>
-                <span className="font-semibold">{stats.activeVolunteers} / {stats.totalVolunteers}</span>
+                <span className="font-semibold text-gray-800">{stats.activeVolunteers} / {stats.totalVolunteers}</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
-                  className="bg-green-600 rounded-full h-2 transition-all"
+                  className="bg-emerald-600 rounded-full h-2 transition-all"
                   style={{ width: `${stats.totalVolunteers > 0 ? (stats.activeVolunteers / stats.totalVolunteers) * 100 : 0}%` }}
                 />
               </div>
             </div>
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-600">Candidatures traitées</span>
-                <span className="font-semibold">{stats.totalApplications - stats.pendingApplications} / {stats.totalApplications}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-purple-600 rounded-full h-2 transition-all"
-                  style={{ width: `${stats.totalApplications > 0 ? ((stats.totalApplications - stats.pendingApplications) / stats.totalApplications) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-600">Taux d'emploi bénéficiaires</span>
-                <span className="font-semibold">{impactStats.employmentRate.toFixed(1)}%</span>
+                <span className="font-semibold text-gray-800">{impactStats.employmentRate.toFixed(1)}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
-                  className="bg-green-600 rounded-full h-2 transition-all"
+                  className="bg-emerald-600 rounded-full h-2 transition-all"
                   style={{ width: `${impactStats.employmentRate}%` }}
                 />
               </div>
@@ -727,25 +733,25 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
           <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <Award className="w-5 h-5 text-blue-600" />
             Impact social
           </h3>
           <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+            <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
               <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-600" />
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
                 <span className="text-sm text-gray-700">Taux d'emploi</span>
               </div>
-              <span className="font-semibold text-green-700">{impactStats.employmentRate.toFixed(1)}%</span>
+              <span className="font-semibold text-emerald-700">{impactStats.employmentRate.toFixed(1)}%</span>
             </div>
             <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
               <div className="flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-blue-600" />
                 <span className="text-sm text-gray-700">Augmentation revenu</span>
               </div>
-              <span className="font-semibold text-blue-700">+{impactStats.averageIncomeIncrease.toLocaleString()} Ar</span>
+              <span className="font-semibold text-blue-700">+{formatCurrency(impactStats.averageIncomeIncrease)}</span>
             </div>
             <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
               <div className="flex items-center gap-2">
@@ -766,8 +772,8 @@ export default function ReportsPage() {
       </div>
 
       {/* Résumé du rapport */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h3 className="font-semibold text-gray-800 flex items-center gap-2">
             <FileText className="w-5 h-5 text-blue-600" />
             Aperçu du rapport - {getReportTitle()}
@@ -775,101 +781,112 @@ export default function ReportsPage() {
         </div>
         <div className="p-6">
           {reportType === 'activity' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-gray-600">📊 <strong>{stats.totalProjects}</strong> projets au total</p>
-                <p className="text-gray-600">✅ <strong>{stats.activeProjects}</strong> projets actifs</p>
-                <p className="text-gray-600">🎯 <strong>{stats.completedProjects}</strong> projets terminés</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-3 bg-blue-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-blue-700">{stats.totalProjects}</p>
+                <p className="text-sm text-gray-600">Projets</p>
               </div>
-              <div className="space-y-2">
-                <p className="text-gray-600">👥 <strong>{stats.totalBeneficiaries}</strong> bénéficiaires touchés</p>
-                <p className="text-gray-600">🤝 <strong>{stats.totalVolunteers}</strong> bénévoles engagés</p>
-                <p className="text-gray-600">👁️ <strong>{stats.totalViews.toLocaleString()}</strong> vues totales</p>
+              <div className="p-3 bg-emerald-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-emerald-700">{stats.totalBeneficiaries}</p>
+                <p className="text-sm text-gray-600">Bénéficiaires</p>
+              </div>
+              <div className="p-3 bg-purple-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-purple-700">{stats.totalVolunteers}</p>
+                <p className="text-sm text-gray-600">Bénévoles</p>
               </div>
             </div>
           )}
           
           {reportType === 'financial' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-gray-600">💰 Total collecté: <strong>{stats.totalDonations.toLocaleString()} Ar</strong></p>
-                <p className="text-gray-600">📊 Dons mensuels: <strong>{stats.monthlyDonations.toLocaleString()} Ar</strong></p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-3 bg-blue-50 rounded-lg text-center">
+                <p className="text-xl font-bold text-blue-700">{formatCurrency(stats.totalDonations)}</p>
+                <p className="text-sm text-gray-600">Total collecté</p>
               </div>
-              <div className="space-y-2">
-                <p className="text-gray-600">💝 Nombre de dons: <strong>{data.donations.length}</strong></p>
-                <p className="text-gray-600">📈 Progression: <strong>+{stats.monthlyDonations > 0 ? ((stats.monthlyDonations / (stats.totalDonations / 12)) * 100).toFixed(0) : 0}%</strong></p>
+              <div className="p-3 bg-emerald-50 rounded-lg text-center">
+                <p className="text-xl font-bold text-emerald-700">{formatCurrency(stats.monthlyDonations)}</p>
+                <p className="text-sm text-gray-600">Dons mensuels</p>
+              </div>
+              <div className="p-3 bg-purple-50 rounded-lg text-center">
+                <p className="text-xl font-bold text-purple-700">{donations.length}</p>
+                <p className="text-sm text-gray-600">Nombre de dons</p>
               </div>
             </div>
           )}
           
           {reportType === 'impact' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-gray-600">📈 Taux d'emploi: <strong>{impactStats.employmentRate.toFixed(1)}%</strong></p>
-                <p className="text-gray-600">💰 Augmentation revenu: <strong>+{impactStats.averageIncomeIncrease.toLocaleString()} Ar</strong></p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-3 bg-emerald-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-emerald-700">{impactStats.employmentRate.toFixed(1)}%</p>
+                <p className="text-sm text-gray-600">Taux d'emploi</p>
               </div>
-              <div className="space-y-2">
-                <p className="text-gray-600">🚀 Entreprises créées: <strong>{impactStats.businessesCreated}</strong></p>
-                <p className="text-gray-600">🎓 Formations: <strong>{impactStats.trainingsCompleted}</strong></p>
+              <div className="p-3 bg-blue-50 rounded-lg text-center">
+                <p className="text-xl font-bold text-blue-700">+{formatCurrency(impactStats.averageIncomeIncrease)}</p>
+                <p className="text-sm text-gray-600">Augmentation revenu</p>
+              </div>
+              <div className="p-3 bg-purple-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-purple-700">{impactStats.businessesCreated}</p>
+                <p className="text-sm text-gray-600">Entreprises créées</p>
               </div>
             </div>
           )}
           
           {reportType === 'beneficiaries' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-gray-600">👥 <strong>{stats.totalBeneficiaries}</strong> bénéficiaires inscrits</p>
-                <p className="text-gray-600">📅 Dernier ajout: {data.beneficiaries[data.beneficiaries.length - 1]?.createdAt ? new Date(data.beneficiaries[data.beneficiaries.length - 1].createdAt).toLocaleDateString('fr-FR') : 'N/A'}</p>
+              <div className="p-3 bg-blue-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-blue-700">{stats.totalBeneficiaries}</p>
+                <p className="text-sm text-gray-600">Bénéficiaires inscrits</p>
               </div>
-              <div className="space-y-2">
-                <p className="text-gray-600">✅ <strong>{stats.acceptedApplications}</strong> en emploi</p>
-                <p className="text-gray-600">📚 <strong>{impactStats.trainingsCompleted}</strong> en formation</p>
+              <div className="p-3 bg-emerald-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-emerald-700">{impactStats.trainingsCompleted}</p>
+                <p className="text-sm text-gray-600">Formations complétées</p>
               </div>
             </div>
           )}
           
           {reportType === 'volunteers' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-gray-600">🤝 <strong>{stats.totalVolunteers}</strong> bénévoles inscrits</p>
-                <p className="text-gray-600">✅ <strong>{stats.activeVolunteers}</strong> actifs</p>
+              <div className="p-3 bg-blue-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-blue-700">{stats.totalVolunteers}</p>
+                <p className="text-sm text-gray-600">Bénévoles inscrits</p>
               </div>
-              <div className="space-y-2">
-                <p className="text-gray-600">⏱️ Heures totales: <strong>{data.volunteers.reduce((sum, v) => sum + (v.hoursVolunteered || 0), 0)}h</strong></p>
+              <div className="p-3 bg-emerald-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-emerald-700">{stats.activeVolunteers}</p>
+                <p className="text-sm text-gray-600">Bénévoles actifs</p>
               </div>
             </div>
           )}
           
           {reportType === 'jobs' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-gray-600">💼 <strong>{stats.totalJobs}</strong> offres publiées</p>
-                <p className="text-gray-600">✅ <strong>{stats.activeJobs}</strong> offres actives</p>
+              <div className="p-3 bg-blue-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-blue-700">{stats.totalJobs}</p>
+                <p className="text-sm text-gray-600">Offres publiées</p>
               </div>
-              <div className="space-y-2">
-                <p className="text-gray-600">📝 <strong>{stats.totalApplications}</strong> candidatures reçues</p>
-                <p className="text-gray-600">⏳ <strong>{stats.pendingApplications}</strong> en attente</p>
+              <div className="p-3 bg-emerald-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-emerald-700">{stats.totalApplications}</p>
+                <p className="text-sm text-gray-600">Candidatures reçues</p>
               </div>
             </div>
           )}
           
           {reportType === 'donations' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-gray-600">💰 Total collecté: <strong>{stats.totalDonations.toLocaleString()} Ar</strong></p>
-                <p className="text-gray-600">📊 Nombre de dons: <strong>{data.donations.length}</strong></p>
+              <div className="p-3 bg-blue-50 rounded-lg text-center">
+                <p className="text-xl font-bold text-blue-700">{formatCurrency(stats.totalDonations)}</p>
+                <p className="text-sm text-gray-600">Total collecté</p>
               </div>
-              <div className="space-y-2">
-                <p className="text-gray-600">💝 Don moyen: <strong>{data.donations.length > 0 ? (stats.totalDonations / data.donations.length).toLocaleString() : 0} Ar</strong></p>
-                <p className="text-gray-600">📈 Dons mensuels: <strong>{stats.monthlyDonations.toLocaleString()} Ar</strong></p>
+              <div className="p-3 bg-emerald-50 rounded-lg text-center">
+                <p className="text-xl font-bold text-emerald-700">{formatCurrency(stats.monthlyDonations)}</p>
+                <p className="text-sm text-gray-600">Dons ce mois</p>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Bouton d'action */}
-      <div className="flex justify-center">
+      {/* Bouton d'action - Bleu */}
+      <div className="flex justify-center pb-6">
         <button
           onClick={generatePDFReport}
           disabled={generating}

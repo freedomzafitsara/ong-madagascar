@@ -1,236 +1,540 @@
-﻿// src/app/dashboard/applications/page.tsx
-'use client';
+﻿'use client';
 
-import { useState, useEffect } from 'react';
-import { 
-  Eye, Search, X, CheckCircle, AlertCircle, FileText, 
-  User, Mail, Phone, MapPin, Calendar, Download, 
-  ChevronLeft, ChevronRight, Briefcase, Filter
-} from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { 
+  Eye, Search, X, XCircle, CheckCircle, AlertCircle, FileText, 
+  User, Mail, Phone, MapPin, Calendar, Download, 
+  ChevronLeft, ChevronRight, Briefcase, Filter,
+  Loader2, RefreshCw, Star, Award, Clock, Trash2,
+  ExternalLink, Building, Users, FileCheck, GraduationCap
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+
+type ApplicationStatus = 'submitted' | 'reviewing' | 'shortlisted' | 'interview' | 'accepted' | 'rejected';
 
 interface Application {
   id: string;
-  jobId: string;
-  jobTitle: string;
-  firstName: string;
-  lastName: string;
+  job_offer_id: string;
+  full_name: string;
   email: string;
   phone: string;
   address: string;
-  experience: string;
-  motivation: string;
-  cvUrl: string;
-  photoUrl?: string;
-  diplomaUrl?: string;
-  attestationUrl?: string;
-  disponibility?: string;
-  salaryExpectation?: string;
-  status: 'submitted' | 'reviewing' | 'shortlisted' | 'interview' | 'accepted' | 'rejected';
-  appliedAt: string;
-  notes?: string;
+  experience_years: number;
+  cover_letter: string;
+  photo_url: string;
+  cv_url: string;
+  diploma_url: string;
+  attestation_url: string;
+  status: ApplicationStatus;
+  notes: string;
+  created_at: string;
+  jobOffer?: {
+    id: string;
+    title: string;
+    company_name: string;
+  };
 }
 
-interface Job {
+interface JobOffer {
   id: string;
   title: string;
+  company_name: string;
 }
 
 const statusOptions = [
-  { value: 'submitted', label: '📥 Soumise', color: 'bg-gray-100 text-gray-700' },
-  { value: 'reviewing', label: '🔍 En révision', color: 'bg-blue-100 text-blue-700' },
-  { value: 'shortlisted', label: '⭐ Présélectionnée', color: 'bg-purple-100 text-purple-700' },
-  { value: 'interview', label: '🎯 Entretien', color: 'bg-yellow-100 text-yellow-700' },
-  { value: 'accepted', label: '✅ Acceptée', color: 'bg-green-100 text-green-700' },
-  { value: 'rejected', label: '❌ Refusée', color: 'bg-red-100 text-red-700' }
+  { value: 'submitted' as const, label: 'Soumise', color: 'bg-gray-100 text-gray-700', icon: Clock },
+  { value: 'reviewing' as const, label: 'En revision', color: 'bg-blue-100 text-blue-700', icon: Eye },
+  { value: 'shortlisted' as const, label: 'Préselectionnée', color: 'bg-purple-100 text-purple-700', icon: Star },
+  { value: 'interview' as const, label: 'Entretien', color: 'bg-yellow-100 text-yellow-700', icon: Calendar },
+  { value: 'accepted' as const, label: 'Acceptée', color: 'bg-green-100 text-green-700', icon: CheckCircle },
+  { value: 'rejected' as const, label: 'Refusée', color: 'bg-red-100 text-red-700', icon: XCircle },
 ];
 
-export default function ApplicationsManagement() {
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [filteredApps, setFilteredApps] = useState<Application[]>([]);
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterJob, setFilterJob] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [selectedApp, setSelectedApp] = useState<Application | null>(null);
-  const [showDetail, setShowDetail] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+function StatCard({ label, value, icon: Icon, isBlue = false }: { label: string; value: number; icon: any; isBlue?: boolean }) {
+  return (
+    <div className={`rounded-xl p-4 text-center ${isBlue ? 'bg-blue-600 text-white' : 'bg-gray-50 border border-gray-200'}`}>
+      <Icon className={`w-6 h-6 mx-auto mb-2 ${isBlue ? 'text-white/80' : 'text-gray-500'}`} />
+      <p className={`text-2xl font-bold ${isBlue ? 'text-white' : 'text-gray-800'}`}>{value}</p>
+      <p className={`text-xs font-medium mt-0.5 ${isBlue ? 'text-white/70' : 'text-gray-500'}`}>{label}</p>
+    </div>
+  );
+}
 
-  useEffect(() => { loadData(); }, []);
+function InfoDetail({ label, value, icon: Icon }: { label: string; value: string; icon: any }) {
+  return (
+    <div className="bg-gray-50 rounded-xl p-3">
+      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <div className="flex items-center gap-2">
+        <Icon className="w-4 h-4 text-gray-400" />
+        <span className="text-sm text-gray-800 font-medium">{value || 'Non renseigné'}</span>
+      </div>
+    </div>
+  );
+}
 
-  const loadData = () => {
-    try {
-      const apps = JSON.parse(localStorage.getItem('ymad_applications') || '[]');
-      const jobsList = JSON.parse(localStorage.getItem('ymad_jobs') || '[]').map((j: any) => ({ id: j.id, title: j.title }));
-      setApplications(apps);
-      setFilteredApps(apps);
-      setJobs(jobsList);
-    } catch (error) {
-      console.error('Erreur:', error);
-    } finally {
-      setLoading(false);
+function ApplicationDetailModal({ 
+  application, 
+  onClose, 
+  onUpdateStatus, 
+  onDelete,
+  formatDate 
+}: { 
+  application: Application; 
+  onClose: () => void; 
+  onUpdateStatus: (id: string, status: ApplicationStatus) => Promise<void>;
+  onDelete: (id: string, name: string) => Promise<void>;
+  formatDate: (date: string) => string;
+}) {
+  const [status, setStatus] = useState<ApplicationStatus>(application.status);
+  const [updating, setUpdating] = useState(false);
+
+  const handleStatusChange = async (newStatus: string) => {
+    setUpdating(true);
+    await onUpdateStatus(application.id, newStatus as ApplicationStatus);
+    setStatus(newStatus as ApplicationStatus);
+    setUpdating(false);
+  };
+
+  const handleDelete = async () => {
+    if (confirm(`Supprimer la candidature de ${application.full_name} ?`)) {
+      await onDelete(application.id, application.full_name);
+      onClose();
     }
   };
 
-  const updateStatus = (id: string, newStatus: Application['status']) => {
-    const updated = applications.map(app => app.id === id ? { ...app, status: newStatus } : app);
-    localStorage.setItem('ymad_applications', JSON.stringify(updated));
-    setApplications(updated);
-    setFilteredApps(updated);
-    if (selectedApp?.id === id) setSelectedApp({ ...selectedApp, status: newStatus });
-  };
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white p-6 border-b flex justify-between items-center">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <FileCheck className="w-4 h-4 text-white" />
+              </div>
+              <h2 className="text-xl font-bold">Détail de la candidature</h2>
+            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              {application.jobOffer?.title} - {application.jobOffer?.company_name}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleDelete} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+              <Trash2 className="w-5 h-5" />
+            </button>
+            <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="bg-gray-50 rounded-xl p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+            <select
+              value={status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={updating}
+              className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+            >
+              {statusOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <InfoDetail label="Nom complet" value={application.full_name} icon={User} />
+            <InfoDetail label="Email" value={application.email} icon={Mail} />
+            <InfoDetail label="Téléphone" value={application.phone || 'Non renseigné'} icon={Phone} />
+            <InfoDetail label="Adresse" value={application.address || 'Non renseignée'} icon={MapPin} />
+            <InfoDetail label="Expérience" value={application.experience_years ? `${application.experience_years} ans` : 'Non renseignée'} icon={Briefcase} />
+            <InfoDetail label="Date de candidature" value={formatDate(application.created_at)} icon={Calendar} />
+          </div>
+
+          {application.cover_letter && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Lettre de motivation</label>
+              <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 whitespace-pre-wrap">
+                {application.cover_letter}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Documents</label>
+            <div className="flex flex-wrap gap-3">
+              {application.cv_url && (
+                <a href={application.cv_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100">
+                  <FileText className="w-4 h-4" /> CV
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+              {application.diploma_url && (
+                <a href={application.diploma_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100">
+                  <GraduationCap className="w-4 h-4" /> Diplôme
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+              {application.attestation_url && (
+                <a href={application.attestation_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100">
+                  <FileText className="w-4 h-4" /> Attestation
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+          </div>
+
+          {application.photo_url && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Photo</label>
+              <img src={application.photo_url} alt={application.full_name} className="w-24 h-24 rounded-full object-cover" />
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 bg-gray-50 border-t flex justify-end gap-3">
+          <button onClick={onClose} className="px-5 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
+            Fermer
+          </button>
+          <Link
+            href={`/dashboard/jobs/${application.job_offer_id}`}
+            className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Voir l offre
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CandidaturesPage() {
+  const { token, user, isAuthenticated, logout } = useAuth();
+  const router = useRouter();
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [jobs, setJobs] = useState<JobOffer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterJob, setFilterJob] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
+
+  const hasAccess = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'staff';
+
+  const handleUnauthorized = useCallback(() => {
+    toast.error('Session expirée, veuillez vous reconnecter');
+    logout();
+    router.push('/login');
+  }, [logout, router]);
+
+  const fetchJobs = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_URL}/jobs/offers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 401) return handleUnauthorized();
+      if (response.ok) {
+        const data = await response.json();
+        setJobs(data.data || []);
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+    }
+  }, [token, handleUnauthorized]);
+
+  const fetchAllApplications = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      let url = `${API_URL}/jobs/applications/all?page=${currentPage}&limit=${itemsPerPage}`;
+      if (filterStatus !== 'all') url += `&status=${filterStatus}`;
+      
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.status === 401) return handleUnauthorized();
+      if (response.ok) {
+        const data = await response.json();
+        const apps = data.data || [];
+        const enrichedApps = apps.map((app: Application) => ({
+          ...app,
+          jobOffer: jobs.find(j => j.id === app.job_offer_id)
+        }));
+        setApplications(enrichedApps);
+        setTotalPages(data.totalPages || 1);
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      toast.error('Erreur de chargement');
+    } finally {
+      setLoading(false);
+    }
+  }, [token, currentPage, filterStatus, jobs, handleUnauthorized]);
 
   useEffect(() => {
-    let filtered = [...applications];
-    if (searchTerm) filtered = filtered.filter(a => a.firstName.toLowerCase().includes(searchTerm.toLowerCase()) || a.lastName.toLowerCase().includes(searchTerm.toLowerCase()) || a.email.toLowerCase().includes(searchTerm.toLowerCase()));
-    if (filterJob) filtered = filtered.filter(a => a.jobId === filterJob);
-    if (filterStatus) filtered = filtered.filter(a => a.status === filterStatus);
-    setFilteredApps(filtered);
-    setCurrentPage(1);
-  }, [searchTerm, filterJob, filterStatus, applications]);
+    if (!isAuthenticated) router.push('/login');
+    else if (!hasAccess) router.push('/dashboard');
+    else if (!token) handleUnauthorized();
+    else {
+      fetchJobs();
+      fetchAllApplications();
+    }
+  }, [isAuthenticated, hasAccess, token, router, handleUnauthorized, fetchJobs, fetchAllApplications]);
 
-  // Pagination
-  const paginatedApps = filteredApps.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPages = Math.ceil(filteredApps.length / itemsPerPage);
+  const updateStatus = async (applicationId: string, newStatus: ApplicationStatus) => {
+    if (!token) return;
+    setUpdatingStatus(true);
+    try {
+      const response = await fetch(`${API_URL}/jobs/applications/${applicationId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (response.status === 401) return handleUnauthorized();
+      if (response.ok) {
+        toast.success('Statut mis à jour');
+        fetchAllApplications();
+      }
+    } catch (error) {
+      toast.error('Erreur');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const deleteApplication = async (applicationId: string, name: string) => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_URL}/jobs/applications/${applicationId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 401) return handleUnauthorized();
+      if (response.ok) {
+        toast.success(`Candidature de ${name} supprimée`);
+        fetchAllApplications();
+      }
+    } catch (error) {
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  const formatDate = (date: string) => {
+    try {
+      return new Date(date).toLocaleDateString('fr-FR', {
+        day: '2-digit', month: '2-digit', year: 'numeric'
+      });
+    } catch {
+      return date;
+    }
+  };
+
+  const getStatusBadge = (status: ApplicationStatus) => {
+    const option = statusOptions.find(opt => opt.value === status);
+    return <span className={`px-2 py-1 text-xs rounded-full ${option?.color || 'bg-gray-100'}`}>{option?.label || status}</span>;
+  };
+
+  const filteredApplications = applications.filter(app => {
+    const matchSearch = app.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        app.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchJob = filterJob === '' || app.job_offer_id === filterJob;
+    const matchStatus = filterStatus === 'all' || app.status === filterStatus;
+    return matchSearch && matchJob && matchStatus;
+  });
+
+  const paginatedApps = filteredApplications.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesCount = Math.ceil(filteredApplications.length / itemsPerPage);
 
   const stats = {
     total: applications.length,
     submitted: applications.filter(a => a.status === 'submitted').length,
     reviewing: applications.filter(a => a.status === 'reviewing').length,
+    shortlisted: applications.filter(a => a.status === 'shortlisted').length,
+    interview: applications.filter(a => a.status === 'interview').length,
     accepted: applications.filter(a => a.status === 'accepted').length,
-    rejected: applications.filter(a => a.status === 'rejected').length
+    rejected: applications.filter(a => a.status === 'rejected').length,
   };
 
-  const getStatusBadge = (status: string) => {
-    const s = statusOptions.find(opt => opt.value === status) || statusOptions[0];
-    return <span className={`px-2 py-0.5 text-xs rounded-full ${s.color}`}>{s.label}</span>;
-  };
+  if (!isAuthenticated || !hasAccess) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold">Accès non autorisé</h1>
+          <Link href="/dashboard" className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg">
+            Retour
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
-  if (loading) return <div className="flex justify-center h-64"><div className="w-10 h-10 border-4 border-ymad-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center"><div><h1 className="text-2xl font-bold text-ymad-gray-800">📋 Gestion des candidatures</h1><p className="text-ymad-gray-500">Consultez et gérez toutes les candidatures reçues</p></div></div>
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="bg-white rounded-xl shadow-sm p-4 text-center"><FileText className="w-6 h-6 text-ymad-blue-600 mx-auto mb-2" /><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-ymad-gray-500">Total</p></div>
-        <div className="bg-white rounded-xl shadow-sm p-4 text-center"><div className="w-6 h-6 bg-gray-100 rounded-full mx-auto mb-2 flex items-center justify-center"><span className="text-gray-600 text-xs">📥</span></div><p className="text-2xl font-bold">{stats.submitted}</p><p className="text-xs text-ymad-gray-500">Soumises</p></div>
-        <div className="bg-white rounded-xl shadow-sm p-4 text-center"><div className="w-6 h-6 bg-blue-100 rounded-full mx-auto mb-2 flex items-center justify-center"><span className="text-blue-600 text-xs">🔍</span></div><p className="text-2xl font-bold">{stats.reviewing}</p><p className="text-xs text-ymad-gray-500">En révision</p></div>
-        <div className="bg-white rounded-xl shadow-sm p-4 text-center"><div className="w-6 h-6 bg-green-100 rounded-full mx-auto mb-2 flex items-center justify-center"><span className="text-green-600 text-xs">✅</span></div><p className="text-2xl font-bold">{stats.accepted}</p><p className="text-xs text-ymad-gray-500">Acceptées</p></div>
-        <div className="bg-white rounded-xl shadow-sm p-4 text-center"><div className="w-6 h-6 bg-red-100 rounded-full mx-auto mb-2 flex items-center justify-center"><span className="text-red-600 text-xs">❌</span></div><p className="text-2xl font-bold">{stats.rejected}</p><p className="text-xs text-ymad-gray-500">Refusées</p></div>
+      {/* En-tête */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 text-white">
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                <Users className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Gestion des candidatures</h1>
+                <p className="text-blue-100 text-sm">Consultez et gérez toutes les candidatures reçues</p>
+              </div>
+            </div>
+          </div>
+          <button onClick={fetchAllApplications} className="flex items-center gap-2 px-3 py-2 bg-white/20 rounded-lg hover:bg-white/30">
+            <RefreshCw className="w-4 h-4" /> Actualiser
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4"><div className="flex-1 relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ymad-gray-400 w-5 h-5" /><input type="text" placeholder="Rechercher par nom ou email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg" /></div><select value={filterJob} onChange={(e) => setFilterJob(e.target.value)} className="px-4 py-2 border rounded-lg"><option value="">📋 Toutes les offres</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}</select><select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-4 py-2 border rounded-lg"><option value="">📊 Tous les statuts</option>{statusOptions.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
+      {/* Statistiques */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <StatCard label="Total" value={stats.total} icon={Users} isBlue={true} />
+        <StatCard label="Soumises" value={stats.submitted} icon={Clock} isBlue={false} />
+        <StatCard label="En révision" value={stats.reviewing} icon={Eye} isBlue={false} />
+        <StatCard label="Préselection" value={stats.shortlisted} icon={Star} isBlue={false} />
+        <StatCard label="Entretien" value={stats.interview} icon={Calendar} isBlue={false} />
+        <StatCard label="Acceptées" value={stats.accepted} icon={CheckCircle} isBlue={false} />
+        <StatCard label="Refusées" value={stats.rejected} icon={XCircle} isBlue={false} />
+      </div>
 
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      {/* Filtres */}
+      <div className="bg-white rounded-xl border p-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher par nom ou email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          <select value={filterJob} onChange={(e) => setFilterJob(e.target.value)} className="px-3 py-2 border rounded-lg bg-white">
+            <option value="">Toutes les offres</option>
+            {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+          </select>
+          <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }} className="px-3 py-2 border rounded-lg bg-white">
+            <option value="all">Tous les statuts</option>
+            {statusOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Tableau */}
+      <div className="bg-white rounded-xl border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-ymad-gray-50 border-b">
+            <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="p-4 text-left">Candidat</th>
-                <th className="p-4 text-left">Poste</th>
-                <th className="p-4 text-left">Date</th>
-                <th className="p-4 text-left">Statut</th>
-                <th className="p-4 text-left">Actions</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Candidat</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Poste</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Contact</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Statut</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
-            <tbody>
-              {paginatedApps.map(app => (
-                <tr key={app.id} className="border-b hover:bg-ymad-gray-50">
-                  <td className="p-4">
-                    <p className="font-medium">{app.firstName} {app.lastName}</p>
-                    <p className="text-sm text-ymad-gray-500">{app.email}</p>
-                  </td>
-                  <td className="p-4">{app.jobTitle}</td>
-                  <td className="p-4">{new Date(app.appliedAt).toLocaleDateString('fr-FR')}</td>
-                  <td className="p-4">{getStatusBadge(app.status)}</td>
-                  <td className="p-4">
-                    <div className="flex gap-2">
-                      <button onClick={() => { setSelectedApp(app); setShowDetail(true); }} className="p-1 text-ymad-blue-600 hover:bg-ymad-blue-50 rounded">
-                        <Eye className="w-5 h-5" />
-                      </button>
-                    </div>
+            <tbody className="divide-y">
+              {paginatedApps.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center text-gray-500">
+                    Aucune candidature trouvée
                   </td>
                 </tr>
-              ))}
+              ) : (
+                paginatedApps.map((app) => (
+                  <tr key={app.id} className="hover:bg-gray-50">
+                    <td className="px-5 py-4">
+                      <p className="font-semibold">{app.full_name}</p>
+                      <p className="text-xs text-gray-500">{app.email}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="font-medium">{app.jobOffer?.title || '-'}</p>
+                      <p className="text-xs text-gray-500">{app.jobOffer?.company_name || ''}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-sm flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {app.email}</p>
+                      {app.phone && <p className="text-xs text-gray-500 mt-1"><Phone className="w-3.5 h-3.5 inline" /> {app.phone}</p>}
+                    </td>
+                    <td className="px-5 py-4 text-sm">{formatDate(app.created_at)}</td>
+                    <td className="px-5 py-4">
+                      <select
+                        value={app.status}
+                        onChange={(e) => updateStatus(app.id, e.target.value as ApplicationStatus)}
+                        disabled={updatingStatus}
+                        className="text-xs border rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
+                      >
+                        {statusOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <button onClick={() => { setSelectedApp(app); setShowDetailModal(true); }} className="p-1 text-gray-500 hover:text-blue-600 rounded">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-4">
-          <button
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            className="px-3 py-1 border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-ymad-gray-50"
-          >
+      {totalPagesCount > 1 && (
+        <div className="flex justify-center gap-2">
+          <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border rounded-lg disabled:opacity-50">
             ←
           </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-            <button
-              key={page}
-              onClick={() => setCurrentPage(page)}
-              className={`px-3 py-1 rounded-lg ${
-                currentPage === page
-                  ? 'bg-ymad-blue-600 text-white'
-                  : 'border hover:bg-ymad-gray-50'
-              }`}
-            >
+          {Array.from({ length: totalPagesCount }, (_, i) => i + 1).map(page => (
+            <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1 rounded-lg ${currentPage === page ? 'bg-blue-600 text-white' : 'border hover:bg-gray-50'}`}>
               {page}
             </button>
           ))}
-          <button
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-            className="px-3 py-1 border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-ymad-gray-50"
-          >
+          <button onClick={() => setCurrentPage(p => Math.min(totalPagesCount, p + 1))} disabled={currentPage === totalPagesCount} className="px-3 py-1 border rounded-lg disabled:opacity-50">
             →
           </button>
         </div>
       )}
 
-      {/* Modal Détail */}
-      {showDetail && selectedApp && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowDetail(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
-              <h2 className="text-xl font-bold">Candidature de {selectedApp.firstName} {selectedApp.lastName}</h2>
-              <button onClick={() => setShowDetail(false)}><X className="w-6 h-6" /></button>
-            </div>
-            <div className="p-6 space-y-5">
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">{getStatusBadge(selectedApp.status)}</div>
-                  <h3 className="text-lg font-semibold">{selectedApp.jobTitle}</h3>
-                  <p className="text-sm text-ymad-gray-500">Postulé le {new Date(selectedApp.appliedAt).toLocaleDateString('fr-FR')}</p>
-                </div>
-                <div className="flex gap-2">
-                  <select value={selectedApp.status} onChange={(e) => updateStatus(selectedApp.id, e.target.value as Application['status'])} className="px-3 py-1 border rounded-lg text-sm">
-                    {statusOptions.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 p-4 bg-ymad-gray-50 rounded-lg">
-                <div><p className="text-sm text-ymad-gray-500">Email</p><p className="font-medium">{selectedApp.email}</p></div>
-                <div><p className="text-sm text-ymad-gray-500">Téléphone</p><p className="font-medium">{selectedApp.phone}</p></div>
-                <div><p className="text-sm text-ymad-gray-500">Adresse</p><p className="font-medium">{selectedApp.address}</p></div>
-                {selectedApp.disponibility && <div><p className="text-sm text-ymad-gray-500">Disponibilité</p><p className="font-medium">{selectedApp.disponibility}</p></div>}
-                {selectedApp.salaryExpectation && <div><p className="text-sm text-ymad-gray-500">Prétention salariale</p><p className="font-medium">{selectedApp.salaryExpectation}</p></div>}
-              </div>
-              <div><h3 className="font-semibold mb-2">💼 Expérience professionnelle</h3><p className="text-ymad-gray-600">{selectedApp.experience || 'Non renseignée'}</p></div>
-              <div><h3 className="font-semibold mb-2">📝 Lettre de motivation</h3><p className="text-ymad-gray-600">{selectedApp.motivation}</p></div>
-              <div><h3 className="font-semibold mb-2">📎 Documents</h3><div className="space-y-2"><a href={selectedApp.cvUrl} target="_blank" className="flex items-center gap-2 text-ymad-blue-600 hover:underline"><FileText className="w-4 h-4" /> CV</a>{selectedApp.diplomaUrl && <a href={selectedApp.diplomaUrl} target="_blank" className="flex items-center gap-2 text-ymad-blue-600 hover:underline"><FileText className="w-4 h-4" /> Diplôme</a>}{selectedApp.attestationUrl && <a href={selectedApp.attestationUrl} target="_blank" className="flex items-center gap-2 text-ymad-blue-600 hover:underline"><FileText className="w-4 h-4" /> Attestation</a>}</div></div>
-              <div className="flex gap-3 pt-4 border-t">
-                <button onClick={() => updateStatus(selectedApp.id, 'accepted')} className="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700">✅ Accepter</button>
-                <button onClick={() => updateStatus(selectedApp.id, 'rejected')} className="flex-1 bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700">❌ Refuser</button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Modal */}
+      {showDetailModal && selectedApp && (
+        <ApplicationDetailModal
+          application={selectedApp}
+          onClose={() => setShowDetailModal(false)}
+          onUpdateStatus={updateStatus}
+          onDelete={deleteApplication}
+          formatDate={formatDate}
+        />
       )}
     </div>
   );

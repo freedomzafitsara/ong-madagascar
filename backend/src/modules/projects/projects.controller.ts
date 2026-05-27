@@ -1,87 +1,102 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, Req } from '@nestjs/common';
+// backend/src/modules/projects/projects.controller.ts
+
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { ProjectsService } from './projects.service';
-import { CreateProjectDto } from './dto/create-project.dto';
-import { UpdateProjectDto } from './dto/update-project.dto';
+import { CreateProjectDto, UpdateProjectDto } from './dto/create-project.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { UserRole } from '../../entities/user.entity';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-
-interface RequestWithUser extends Request {
-  user: {
-    sub: string;
-    email: string;
-    role: string;
-    firstName: string;
-    lastName: string;
-  };
-}
+import { ProjectStatus } from '../../entities/project.entity';
 
 @Controller('projects')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   @Post()
-  async create(@Body() createProjectDto: CreateProjectDto, @Req() req: RequestWithUser) {
-    return this.projectsService.create(createProjectDto, req.user.sub);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  async create(@Body() createDto: CreateProjectDto, @Request() req: any) {
+    return this.projectsService.create(createDto, req.user.id);
   }
 
-  @Public()
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   async findAll(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
-    @Query('status') status?: string,
+    @Query('status') status?: ProjectStatus,
     @Query('region') region?: string,
+    @Query('category') category?: string,
     @Query('search') search?: string,
   ) {
-    return this.projectsService.findAll(parseInt(page), parseInt(limit), status, region, search);
+    return this.projectsService.findAll(parseInt(page), parseInt(limit), {
+      status,
+      region,
+      category,
+      search,
+    });
   }
 
-  @Public()
   @Get('featured')
-  async getFeatured() {
-    return this.projectsService.getFeatured();
+  @Public()
+  async findFeatured() {
+    return this.projectsService.findFeatured();
   }
 
-  @Public()
   @Get('stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   async getStats() {
     return this.projectsService.getStats();
   }
 
-  @Public()
   @Get(':id')
+  @Public()
   async findOne(@Param('id') id: string) {
     return this.projectsService.findOne(id);
   }
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   async update(
     @Param('id') id: string,
-    @Body() updateProjectDto: UpdateProjectDto,
-    @Req() req: RequestWithUser,
+    @Body() updateDto: UpdateProjectDto,
+    @Request() req: any,
   ) {
-    return this.projectsService.update(id, updateProjectDto, req.user.role, req.user.sub);
+    return this.projectsService.update(id, updateDto, req.user.id, req.user.role);
   }
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   @Patch(':id/progress')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   async updateProgress(
     @Param('id') id: string,
     @Body('progress') progress: number,
-    @Req() req: RequestWithUser,
+    @Request() req: any,
   ) {
-    return this.projectsService.updateProgress(id, progress, req.user.role, req.user.sub);
+    return this.projectsService.updateProgress(id, progress, req.user.id, req.user.role);
   }
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Delete(':id')
-  async delete(@Param('id') id: string, @Req() req: RequestWithUser) {
-    return this.projectsService.delete(id, req.user.role);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  async remove(@Param('id') id: string, @Request() req: any) {
+    await this.projectsService.remove(id, req.user.id, req.user.role);
+    return { success: true, message: 'Projet supprimé avec succès' };
   }
 }

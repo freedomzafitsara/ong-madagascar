@@ -1,88 +1,52 @@
 // backend/src/modules/beneficiaries/beneficiaries.service.ts
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Beneficiary } from '../../entities/beneficiary.entity';
+import { CreateBeneficiaryDto, UpdateBeneficiaryDto } from './dto/create-beneficiary.dto';
 
 @Injectable()
 export class BeneficiariesService {
+  private readonly logger = new Logger(BeneficiariesService.name);
+
   constructor(
     @InjectRepository(Beneficiary)
     private beneficiaryRepository: Repository<Beneficiary>,
   ) {}
 
-  // Récupérer tous les bénéficiaires
+  async create(createDto: CreateBeneficiaryDto): Promise<Beneficiary> {
+    const beneficiary = this.beneficiaryRepository.create(createDto);
+    const saved = await this.beneficiaryRepository.save(beneficiary);
+    this.logger.log(`Bénéficiaire créé: ${saved.id} - ${saved.first_name} ${saved.last_name}`);
+    return saved;
+  }
+
   async findAll(): Promise<Beneficiary[]> {
     return this.beneficiaryRepository.find({
-      relations: ['user', 'projects'],
+      order: { created_at: 'DESC' },
     });
   }
 
-  // Récupérer un bénéficiaire par son ID
   async findOne(id: string): Promise<Beneficiary> {
-    const beneficiary = await this.beneficiaryRepository.findOne({
-      where: { id },
-      relations: ['user', 'projects'],
-    });
+    const beneficiary = await this.beneficiaryRepository.findOne({ where: { id } });
     if (!beneficiary) {
       throw new NotFoundException(`Bénéficiaire avec l'id ${id} non trouvé`);
     }
     return beneficiary;
   }
 
-  // Créer un bénéficiaire
-  async create(data: Partial<Beneficiary>): Promise<Beneficiary> {
-    const beneficiary = this.beneficiaryRepository.create(data);
-    return this.beneficiaryRepository.save(beneficiary);
+  async update(id: string, updateDto: UpdateBeneficiaryDto): Promise<Beneficiary> {
+    const beneficiary = await this.findOne(id);
+    Object.assign(beneficiary, updateDto);
+    const updated = await this.beneficiaryRepository.save(beneficiary);
+    this.logger.log(`Bénéficiaire modifié: ${id}`);
+    return updated;
   }
 
-  // Mettre à jour un bénéficiaire
-  async update(id: string, data: Partial<Beneficiary>): Promise<Beneficiary> {
-    await this.findOne(id); // Vérifie que le bénéficiaire existe
-    await this.beneficiaryRepository.update(id, data);
-    return this.findOne(id);
-  }
-
-  // Supprimer un bénéficiaire
-  async delete(id: string): Promise<void> {
+  async remove(id: string): Promise<void> {
     const beneficiary = await this.findOne(id);
     await this.beneficiaryRepository.remove(beneficiary);
-  }
-
-  // ⭐ Statistiques d'impact (pour briller en soutenance !)
-  async getImpactStats() {
-    const beneficiaries = await this.beneficiaryRepository.find();
-    
-    const total = beneficiaries.length;
-    const withBeforeAfter = beneficiaries.filter(b => b.beforeYmAd && b.afterYmAd).length;
-    
-    // Compte ceux qui ont amélioré leur situation
-    const improved = beneficiaries.filter(b => {
-      if (!b.beforeYmAd || !b.afterYmAd) return false;
-      // Exemple simple : si after contient "employé" et before contient "chômeur" ou "sans emploi"
-      const hadJobBefore = b.beforeYmAd.toLowerCase().includes('emploi') || 
-                           b.beforeYmAd.toLowerCase().includes('travail');
-      const hasJobAfter = b.afterYmAd.toLowerCase().includes('emploi') || 
-                          b.afterYmAd.toLowerCase().includes('travail');
-      return !hadJobBefore && hasJobAfter;
-    }).length;
-
-    return {
-      total,
-      withBeforeAfter,
-      improved,
-      impactRate: total > 0 ? Math.round((improved / total) * 100) : 0,
-    };
-  }
-
-  // Statistiques par région
-  async getStatsByRegion() {
-    return this.beneficiaryRepository
-      .createQueryBuilder('b')
-      .select('b.region', 'region')
-      .addSelect('COUNT(b.id)', 'count')
-      .groupBy('b.region')
-      .getRawMany();
+    this.logger.log(`Bénéficiaire supprimé: ${id}`);
   }
 }

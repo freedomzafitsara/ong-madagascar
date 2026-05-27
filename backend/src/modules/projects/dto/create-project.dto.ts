@@ -1,87 +1,87 @@
-﻿import { IsString, IsOptional, IsNumber, IsEnum, IsDateString, Min, Max, IsBoolean } from 'class-validator';
+﻿// backend/src/modules/projects/dto/create-project.dto.ts
+
+import { IsString, IsOptional, IsNumber, IsEnum, IsBoolean, IsArray, Min, Max } from 'class-validator';
 import { ProjectStatus } from '../../../entities/project.entity';
 
 export class CreateProjectDto {
   @IsString()
   title: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   title_mg?: string;
 
   @IsString()
   description: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   description_mg?: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   location?: string;
 
-  @IsOptional()
   @IsString()
-  category?: string;
+  category: string;
 
-  @IsOptional()
   @IsString()
-  region?: string;
+  region: string;
 
-  @IsOptional()
   @IsEnum(ProjectStatus)
+  @IsOptional()
   status?: ProjectStatus;
 
-  @IsOptional()
   @IsNumber()
+  @IsOptional()
   @Min(0)
   budget?: number;
 
-  @IsOptional()
   @IsNumber()
+  @IsOptional()
   @Min(0)
   spent?: number;
 
-  @IsOptional()
   @IsNumber()
+  @IsOptional()
   @Min(0)
   beneficiaries_count?: number;
 
-  @IsOptional()
   @IsNumber()
+  @IsOptional()
   @Min(0)
   youth_impact?: number;
 
-  @IsOptional()
   @IsNumber()
+  @IsOptional()
   @Min(0)
   jobs_created?: number;
 
-  @IsOptional()
   @IsNumber()
+  @IsOptional()
   @Min(0)
   @Max(100)
   progress?: number;
 
+  @IsString()
   @IsOptional()
-  @IsDateString()
   start_date?: string;
 
+  @IsString()
   @IsOptional()
-  @IsDateString()
   end_date?: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   image_url?: string;
 
+  @IsArray()
   @IsOptional()
   gallery_images?: string[];
 
-  @IsOptional()
   @IsBoolean()
-  is_featured?: boolean;
-
   @IsOptional()
-  managerId?: string;
+  is_featured?: boolean;
 }
+
+export class UpdateProjectDto extends CreateProjectDto {}

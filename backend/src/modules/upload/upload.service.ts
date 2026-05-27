@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, InternalServerErrorException }
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../entities/user.entity';
+import { Volunteer } from '../../entities/volunteer.entity';
 import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import * as fs from 'fs';
@@ -26,6 +27,8 @@ export class UploadService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Volunteer)
+    private volunteerRepository: Repository<Volunteer>,
     private configService: ConfigService,
   ) {
     this.configureCloudinary();
@@ -380,5 +383,14 @@ export class UploadService {
   async updateUserPhoto(userId: string, photoUrl: string): Promise<User> {
     await this.userRepository.update(userId, { avatar_url: photoUrl });
     return this.userRepository.findOne({ where: { id: userId } });
+  }
+
+  // ============================================================
+  // SECTION 15 : MISE A JOUR PHOTO BENEVOLE
+  // ============================================================
+
+  async updateVolunteerPhoto(volunteerId: string, photoUrl: string): Promise<void> {
+    await this.volunteerRepository.update(volunteerId, { photo_url: photoUrl });
+    this.logger.log(`Photo du benevole ${volunteerId} mise a jour avec succes: ${photoUrl}`);
   }
 }

@@ -1,4 +1,6 @@
-﻿'use client';
+﻿// src/app/blog/page.tsx
+
+'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
@@ -6,58 +8,60 @@ import {
   Calendar, User, Search, Tag, Sparkles, X, ChevronLeft, ChevronRight, 
   Eye, BookOpen, Newspaper, FolderOpen, GraduationCap, Leaf, 
   Calendar as CalendarIcon, Briefcase, Stethoscope, Handshake, 
-  Loader2, AlertCircle, Heart
+  Loader2, AlertCircle, Heart, Clock, Share2, Facebook, Twitter, 
+  Linkedin, Link as LinkIcon, Check, ArrowLeft
 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { pageService, PageBackground } from '@/services/pageService';
-import { blogApi } from '@/lib/api';
-import toast from 'react-hot-toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
 interface BlogPost {
   id: string;
   title: string;
-  titleMg?: string;
+  title_mg?: string | null;
   slug: string;
-  excerpt: string;
-  excerptMg?: string;
-  date: string;
+  summary: string;
+  summary_mg?: string | null;
+  content: string;
+  content_mg?: string | null;
+  type: string;
+  image_url: string | null;
+  status: string;
   author: string;
-  category: string;
   tags: string[];
-  coverImage?: string;
-  viewsCount: number;
+  views: number;
+  published_at: string | null;
+  created_at: string;
 }
 
-// Categories disponibles
-const categoriesFr = ["Tous", "Actualites", "Environnement", "Evenements", "Agriculture", "Education", "Sante", "Social"];
+// Catégories disponibles
+const categoriesFr = ["Tous", "Actualités", "Environnement", "Événements", "Agriculture", "Éducation", "Santé", "Social"];
 const categoriesMg = ["Rehetra", "Vaovao", "Tontolo iainana", "Hetsika", "Fambolena", "Fampianarana", "Fahasalamana", "Sosialy"];
 
-// Mapping des icones par categorie
-const getCategoryIcon = (category: string) => {
-  const icons: Record<string, any> = {
-    'Actualites': Newspaper,
-    'Environnement': Leaf,
-    'Evenements': CalendarIcon,
-    'Agriculture': Briefcase,
-    'Education': GraduationCap,
-    'Sante': Stethoscope,
-    'Social': Handshake,
-  };
-  const Icon = icons[category];
-  return Icon ? <Icon className="w-3 h-3" /> : null;
+// Mapping des types d'articles vers catégories
+const typeToCategory: Record<string, string> = {
+  'news': 'Actualités',
+  'testimonial': 'Social',
+  'report': 'Actualités',
+  'success_story': 'Social',
+  'event_recap': 'Événements'
 };
 
-// Donnees par defaut
-const defaultPosts: BlogPost[] = [
-  { id: '1', title: "Lancement du projet Education pour tous", slug: "lancement-education-pour-tous", excerpt: "Nous avons officiellement lance notre nouveau programme educatif dans la region d'Analamanga...", date: "15 Avril 2025", author: "Marie Rakoto", category: "Actualites", tags: ["Education", "Enfants"], viewsCount: 245 },
-  { id: '2', title: "1000 arbres plantes en un mois", slug: "1000-arbres-plantes", excerpt: "Grace a nos benevoles, nous avons atteint un nouveau record de plantation...", date: "10 Avril 2025", author: "Jean Randria", category: "Environnement", tags: ["Reforestation", "Benevoles"], viewsCount: 189 },
-  { id: '3', title: "Retour sur notre campagne de collecte", slug: "campagne-collecte", excerpt: "La campagne de collecte de fonds a ete un franc succes...", date: "5 Avril 2025", author: "Sarah Andria", category: "Evenements", tags: ["Collecte", "Dons"], viewsCount: 312 },
-  { id: '4', title: "Formation des agriculteurs a Toamasina", slug: "formation-agriculteurs-toamasina", excerpt: "Un atelier de formation sur les techniques agricoles durables...", date: "28 Mars 2025", author: "Paul Rasoa", category: "Agriculture", tags: ["Agriculture", "Formation"], viewsCount: 156 },
-  { id: '5', title: "Nouveau partenariat avec l'Ambassade de France", slug: "partenariat-ambassade-france", excerpt: "Un accord de partenariat pour soutenir l'entrepreneuriat jeune...", date: "20 Mars 2025", author: "Marie Rakoto", category: "Actualites", tags: ["Partenariat", "Entrepreneuriat"], viewsCount: 98 },
-  { id: '6', title: "Mission sante a Mahajanga", slug: "mission-sante-mahajanga", excerpt: "Une caravane medicale pour offrir des soins gratuits...", date: "15 Mars 2025", author: "Dr. Rabe", category: "Sante", tags: ["Sante", "Medical"], viewsCount: 234 },
-];
+// Mapping des icônes par catégorie
+const getCategoryIcon = (category: string) => {
+  const icons: Record<string, any> = {
+    'Actualités': Newspaper,
+    'Environnement': Leaf,
+    'Événements': CalendarIcon,
+    'Agriculture': Briefcase,
+    'Éducation': GraduationCap,
+    'Santé': Stethoscope,
+    'Social': Heart,
+  };
+  const Icon = icons[category];
+  return Icon ? <Icon className="w-3 h-3" /> : <FolderOpen className="w-3 h-3" />;
+};
 
 export default function BlogPage() {
   const { t, language } = useTranslation();
@@ -68,17 +72,25 @@ export default function BlogPage() {
   const [selectedCategory, setSelectedCategory] = useState(language === 'fr' ? "Tous" : "Rehetra");
   const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [copied, setCopied] = useState(false);
   const itemsPerPage = 6;
 
   const categories = language === 'fr' ? categoriesFr : categoriesMg;
 
   const getCategoryFr = (categoryMg: string): string => {
     const mapping: Record<string, string> = {
-      'Rehetra': 'Tous', 'Vaovao': 'Actualites', 'Tontolo iainana': 'Environnement',
-      'Hetsika': 'Evenements', 'Fambolena': 'Agriculture', 'Fampianarana': 'Education',
-      'Fahasalamana': 'Sante', 'Sosialy': 'Social'
+      'Rehetra': 'Tous', 'Vaovao': 'Actualités', 'Tontolo iainana': 'Environnement',
+      'Hetsika': 'Événements', 'Fambolena': 'Agriculture', 'Fampianarana': 'Éducation',
+      'Fahasalamana': 'Santé', 'Sosialy': 'Social'
     };
     return mapping[categoryMg] || categoryMg;
+  };
+
+  const openPostDetails = (post: BlogPost) => {
+    setSelectedPost(post);
+    setShowModal(true);
   };
 
   const loadPageBackground = useCallback(async () => {
@@ -88,53 +100,54 @@ export default function BlogPage() {
         setPageBackground(background);
       }
     } catch (error) {
-      console.error('Erreur chargement fond d ecran:', error);
+      console.error('Erreur chargement fond d\'écran:', error);
     }
   }, []);
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
     try {
-      // Tentative de chargement depuis l'API backend
-      const response = await blogApi.getAll(1, 100);
-      if (response && response.data && response.data.length > 0) {
-        const formatted = response.data.map((p: any) => ({
-          id: p.id,
-          title: p.title,
-          titleMg: p.title_mg,
-          slug: p.slug || p.id,
-          excerpt: p.summary || p.description.substring(0, 150),
-          excerptMg: p.summary_mg,
-          date: new Date(p.published_at || p.created_at).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', { day: 'numeric', month: 'long', year: 'numeric' }),
-          author: p.author || p.author_name || 'Y-Mad',
-          category: p.type || 'Actualites',
-          tags: p.tags || [],
-          coverImage: p.image_url,
-          viewsCount: p.views || 0
-        }));
-        setPosts(formatted);
-        setFilteredPosts(formatted);
-      } else {
-        // Fallback sur localStorage ou donnees par defaut
-        const stored = localStorage.getItem('ymad_blog_posts');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          setPosts(parsed);
-          setFilteredPosts(parsed);
+      const response = await fetch(`${API_URL}/blog/public?page=1&limit=100`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data && data.data.length > 0) {
+          const formatted = data.data.map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            title_mg: p.title_mg,
+            slug: p.slug,
+            summary: p.summary,
+            summary_mg: p.summary_mg,
+            content: p.content,
+            content_mg: p.content_mg,
+            type: p.type,
+            image_url: p.image_url,
+            status: p.status,
+            author: p.author || (p.user ? `${p.user.firstName} ${p.user.lastName}` : 'Y-Mad'),
+            tags: p.tags || [],
+            views: p.views || 0,
+            published_at: p.published_at,
+            created_at: p.created_at
+          }));
+          setPosts(formatted);
+          setFilteredPosts(formatted);
         } else {
-          setPosts(defaultPosts);
-          setFilteredPosts(defaultPosts);
+          setPosts([]);
+          setFilteredPosts([]);
         }
+      } else {
+        console.error('Erreur chargement API');
+        setPosts([]);
+        setFilteredPosts([]);
       }
     } catch (error) {
       console.error('Erreur chargement articles:', error);
-      // Fallback sur donnees par defaut
-      setPosts(defaultPosts);
-      setFilteredPosts(defaultPosts);
+      setPosts([]);
+      setFilteredPosts([]);
     } finally {
       setLoading(false);
     }
-  }, [language]);
+  }, []);
 
   useEffect(() => {
     loadPageBackground();
@@ -147,51 +160,97 @@ export default function BlogPage() {
 
   useEffect(() => {
     let filtered = [...posts];
+    
     if (searchTerm) {
       filtered = filtered.filter(p => 
-        p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (language === 'fr' ? p.title : (p.title_mg || p.title)).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (language === 'fr' ? p.summary : (p.summary_mg || p.summary)).toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
+    
     if (selectedCategory !== (language === 'fr' ? "Tous" : "Rehetra")) {
       const categoryToFilter = language === 'fr' ? selectedCategory : getCategoryFr(selectedCategory);
-      filtered = filtered.filter(p => p.category === categoryToFilter);
+      filtered = filtered.filter(p => {
+        const postCategory = typeToCategory[p.type] || 'Actualités';
+        return postCategory === categoryToFilter;
+      });
     }
+    
     setFilteredPosts(filtered);
     setCurrentPage(1);
   }, [searchTerm, selectedCategory, posts, language]);
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return language === 'fr' ? 'Date non disponible' : 'Tsy misy daty';
+    return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const formatReadingTime = (content: string) => {
+    const wordsPerMinute = 200;
+    const wordCount = content.split(/\s/g).length;
+    const minutes = Math.ceil(wordCount / wordsPerMinute);
+    return language === 'fr' 
+      ? `${minutes} min de lecture` 
+      : `${minutes} min famakiana`;
+  };
+
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const shareTitle = selectedPost ? (language === 'fr' ? selectedPost.title : (selectedPost.title_mg || selectedPost.title)) : '';
+
+  const handleShare = async (platform: string) => {
+    let url = '';
+    switch (platform) {
+      case 'facebook':
+        url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+        break;
+      case 'twitter':
+        url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareTitle)}&url=${encodeURIComponent(shareUrl)}`;
+        break;
+      case 'linkedin':
+        url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+        break;
+      case 'copy':
+        await navigator.clipboard.writeText(shareUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        return;
+    }
+    if (url) window.open(url, '_blank', 'width=600,height=400');
+  };
 
   const totalPages = Math.ceil(filteredPosts.length / itemsPerPage);
   const paginatedPosts = filteredPosts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const stats = useMemo(() => ({
     total: posts.length,
-    categories: new Set(posts.map(p => p.category)).size,
-    totalViews: posts.reduce((sum, p) => sum + p.viewsCount, 0)
+    categories: new Set(posts.map(p => typeToCategory[p.type] || 'Actualités')).size,
+    totalViews: posts.reduce((sum, p) => sum + (p.views || 0), 0)
   }), [posts]);
 
-  // Style du fond d'ecran plein ecran avec overlay
   const overlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 30) / 100})`,
   } : {};
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">{language === 'fr' ? 'Chargement...' : 'Miandry...'}</p>
+          <p className="text-gray-500 font-medium">{language === 'fr' ? 'Chargement...' : 'Miandry...'}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      {/* ==================== HERO SECTION PLEIN ECRAN ==================== */}
-      <section className="relative min-h-screen w-full overflow-hidden">
-        {/* Fond d'ecran uploade via super-admin */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      {/* Hero Section Plein Écran */}
+      <section className="relative min-h-[50vh] md:min-h-[60vh] w-full overflow-hidden">
         <div className="absolute inset-0">
           {pageBackground?.image_url && pageBackground.is_active ? (
             <>
@@ -202,78 +261,76 @@ export default function BlogPage() {
               <div className="absolute inset-0" style={overlayStyle} />
             </>
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-800 to-blue-900">
-              <div className="absolute inset-0 bg-black/20"></div>
-            </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900" />
           )}
         </div>
 
-        {/* Contenu centre avec TEXTE BLANC */}
-        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-20">
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8">
-            <Heart className="w-4 h-4 text-white" />
+        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-16 md:py-20">
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-6 md:mb-8 border border-white/20">
+            <Heart className="w-4 h-4 text-blue-300" />
             <span className="text-sm font-medium text-white">Y-Mad Madagascar</span>
           </div>
           
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 leading-tight drop-shadow-2xl animate-fade-in-up">
-            {language === 'fr' ? 'Actualites et Blog' : 'Vaovao sy Bitsika'}
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-4 md:mb-6 leading-tight drop-shadow-lg">
+            {language === 'fr' ? 'Actualités et Blog' : 'Vaovao sy Bitsika'}
           </h1>
           
-          <p className="text-lg md:text-xl lg:text-2xl text-white max-w-2xl mx-auto">
+          <p className="text-base md:text-lg lg:text-xl text-white max-w-2xl mx-auto px-4 drop-shadow-md">
             {language === 'fr' 
-              ? 'Suivez nos actions et decouvrez nos dernieres actualites'
+              ? 'Suivez nos actions et découvrez nos dernières actualités'
               : 'Araho ny asantsika ary jereo ny vaovao farany'}
           </p>
           
-          <div className="mt-8 flex flex-wrap gap-4 justify-center">
-            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
-              <p className="text-white font-semibold text-sm">{stats.total} Articles</p>
+          <div className="mt-6 md:mt-8 flex flex-wrap gap-3 justify-center">
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-4 md:px-6 py-1.5 md:py-2 border border-white/20">
+              <p className="text-white font-semibold text-sm">{stats.total} {language === 'fr' ? 'Articles' : 'Lahatsoratra'}</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
-              <p className="text-white font-semibold text-sm">{stats.categories} Categories</p>
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-4 md:px-6 py-1.5 md:py-2 border border-white/20">
+              <p className="text-white font-semibold text-sm">{stats.categories} {language === 'fr' ? 'Catégories' : 'Sokajy'}</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
-              <p className="text-white font-semibold text-sm">{stats.totalViews} Vues</p>
+            <div className="bg-white/10 backdrop-blur-sm rounded-full px-4 md:px-6 py-1.5 md:py-2 border border-white/20">
+              <p className="text-white font-semibold text-sm">{stats.totalViews} {language === 'fr' ? 'Vues' : 'Fijeriana'}</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ==================== SECTION PRINCIPALE ==================== */}
-      <div className="relative z-10 bg-white rounded-t-3xl shadow-2xl -mt-10">
+      {/* Section Principale */}
+      <div className="relative z-10 bg-white rounded-t-3xl shadow-2xl -mt-6 md:-mt-10">
+        
         {/* Statistiques */}
-        <div className="border-b border-gray-100 py-10">
+        <div className="border-b border-gray-100 py-8 md:py-10">
           <div className="max-w-7xl mx-auto px-4">
-            <div className="flex flex-wrap justify-center items-center gap-12 md:gap-20">
+            <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16">
               <div className="text-center">
-                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <BookOpen className="w-7 h-7 text-blue-600" />
+                <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2 md:mb-3">
+                  <BookOpen className="w-6 h-6 md:w-7 md:h-7 text-blue-600" />
                 </div>
-                <p className="text-3xl font-bold text-blue-700">{stats.total}</p>
-                <p className="text-sm text-gray-500 mt-1">{language === 'fr' ? 'Articles' : 'Lahatsoratra'}</p>
+                <p className="text-2xl md:text-3xl font-bold text-blue-700">{stats.total}</p>
+                <p className="text-xs md:text-sm text-gray-500 mt-1">{language === 'fr' ? 'Articles' : 'Lahatsoratra'}</p>
               </div>
               
               <div className="text-center">
-                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <FolderOpen className="w-7 h-7 text-blue-600" />
+                <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2 md:mb-3">
+                  <FolderOpen className="w-6 h-6 md:w-7 md:h-7 text-blue-600" />
                 </div>
-                <p className="text-3xl font-bold text-blue-700">{stats.categories}</p>
-                <p className="text-sm text-gray-500 mt-1">{language === 'fr' ? 'Categories' : 'Sokajy'}</p>
+                <p className="text-2xl md:text-3xl font-bold text-blue-700">{stats.categories}</p>
+                <p className="text-xs md:text-sm text-gray-500 mt-1">{language === 'fr' ? 'Catégories' : 'Sokajy'}</p>
               </div>
               
               <div className="text-center">
-                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Eye className="w-7 h-7 text-blue-600" />
+                <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2 md:mb-3">
+                  <Eye className="w-6 h-6 md:w-7 md:h-7 text-blue-600" />
                 </div>
-                <p className="text-3xl font-bold text-blue-700">{stats.totalViews}</p>
-                <p className="text-sm text-gray-500 mt-1">{language === 'fr' ? 'Vues totales' : 'Fijeriana rehetra'}</p>
+                <p className="text-2xl md:text-3xl font-bold text-blue-700">{stats.totalViews}</p>
+                <p className="text-xs md:text-sm text-gray-500 mt-1">{language === 'fr' ? 'Vues totales' : 'Fijeriana rehetra'}</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Filtres */}
-        <div className="sticky top-0 z-10 bg-white border-b shadow-sm py-4">
+        <div className="sticky top-0 z-10 bg-white border-b shadow-sm py-3 md:py-4">
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
               <div className="flex flex-wrap gap-2 justify-center">
@@ -284,7 +341,7 @@ export default function BlogPage() {
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer ${
+                      className={`inline-flex items-center gap-1.5 px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-medium transition-all duration-200 cursor-pointer ${
                         isActive 
                           ? 'bg-blue-600 text-white shadow-md' 
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -304,7 +361,7 @@ export default function BlogPage() {
                   placeholder={language === 'fr' ? 'Rechercher un article...' : 'Karohy lahatsoratra...'}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-full w-64 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  className="pl-9 pr-3 py-1.5 md:py-2 border border-gray-300 rounded-full w-56 md:w-64 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                 />
               </div>
             </div>
@@ -312,7 +369,7 @@ export default function BlogPage() {
             {(searchTerm || selectedCategory !== (language === 'fr' ? "Tous" : "Rehetra")) && (
               <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100 justify-center">
                 {searchTerm && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700">
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-xs text-gray-700">
                     <Search className="w-3 h-3" /> {searchTerm}
                     <button onClick={() => setSearchTerm('')} className="hover:text-red-500 transition">
                       <X className="w-3 h-3" />
@@ -320,7 +377,7 @@ export default function BlogPage() {
                   </span>
                 )}
                 {selectedCategory !== (language === 'fr' ? "Tous" : "Rehetra") && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700">
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-xs text-gray-700">
                     {selectedCategory}
                     <button onClick={() => setSelectedCategory(language === 'fr' ? "Tous" : "Rehetra")} className="hover:text-red-500 transition">
                       <X className="w-3 h-3" />
@@ -329,7 +386,7 @@ export default function BlogPage() {
                 )}
                 <button 
                   onClick={() => { setSearchTerm(''); setSelectedCategory(language === 'fr' ? "Tous" : "Rehetra"); }} 
-                  className="text-sm text-blue-600 hover:underline transition"
+                  className="text-xs text-blue-600 hover:underline transition"
                 >
                   {language === 'fr' ? 'Tout effacer' : 'Fafana daholo'}
                 </button>
@@ -338,156 +395,303 @@ export default function BlogPage() {
           </div>
         </div>
 
-        {/* Liste des articles */}
-        <div className="py-16">
-          <div className="max-w-4xl mx-auto px-4">
+        {/* Liste des articles avec images */}
+        <div className="py-12 md:py-16">
+          <div className="max-w-5xl mx-auto px-4">
             {paginatedPosts.length === 0 ? (
-              <div className="bg-white rounded-xl shadow-sm p-16 text-center border border-gray-100">
+              <div className="bg-white rounded-xl shadow-sm p-12 md:p-16 text-center border border-gray-100">
                 <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500 text-lg mb-2">
-                  {language === 'fr' ? 'Aucun article trouve' : 'Tsy misy lahatsoratra hita'}
+                  {language === 'fr' ? 'Aucun article trouvé' : 'Tsy misy lahatsoratra hita'}
                 </p>
-                <p className="text-gray-400">
-                  {language === 'fr' ? 'Essayez de modifier vos criteres de recherche' : 'Andramo hanova ny fikarohanao'}
+                <p className="text-gray-400 text-sm">
+                  {language === 'fr' ? 'Essayez de modifier vos critères de recherche' : 'Andramo hanova ny fikarohanao'}
                 </p>
               </div>
             ) : (
               <>
-                {paginatedPosts.map((post, index) => (
-                  <ArticleCard key={post.id} post={post} language={language} index={index} />
-                ))}
+                <div className="space-y-6">
+                  {paginatedPosts.map((post) => {
+                    const displayTitle = language === 'fr' ? post.title : (post.title_mg || post.title);
+                    const displaySummary = language === 'fr' ? post.summary : (post.summary_mg || post.summary);
+                    const postCategory = typeToCategory[post.type] || 'Actualités';
+                    const CategoryIcon = getCategoryIcon(postCategory);
+                    
+                    return (
+                      <div 
+                        key={post.id}
+                        className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden cursor-pointer group"
+                      >
+                        <div className="flex flex-col md:flex-row gap-5 p-5">
+                          {/* Image de couverture */}
+                          <div className="flex-shrink-0 md:w-48 h-32 md:h-auto rounded-lg overflow-hidden bg-gray-100">
+                            {post.image_url ? (
+                              <img 
+                                src={post.image_url} 
+                                alt={displayTitle}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200">
+                                <BookOpen className="w-8 h-8 text-blue-400" />
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Contenu */}
+                          <div className="flex-1">
+                            <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-2">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5" /> {formatDate(post.published_at)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <User className="w-3.5 h-3.5" /> {post.author}
+                              </span>
+                              <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                                {CategoryIcon} {postCategory}
+                              </span>
+                              <span className="flex items-center gap-1 text-gray-400">
+                                <Eye className="w-3 h-3" /> {post.views} {language === 'fr' ? 'vues' : 'fijeriana'}
+                              </span>
+                            </div>
+                            
+                            <h2 className="text-lg md:text-xl font-bold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors">
+                              {displayTitle}
+                            </h2>
+                            
+                            <p className="text-gray-600 text-sm mb-3 leading-relaxed line-clamp-3">
+                              {displaySummary}
+                            </p>
+                            
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {post.tags && post.tags.slice(0, 3).map(tag => (
+                                <span key={tag} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                  <Tag className="w-2.5 h-2.5" /> {tag}
+                                </span>
+                              ))}
+                              {post.tags && post.tags.length > 3 && (
+                                <span className="text-xs text-gray-400">+{post.tags.length - 3}</span>
+                              )}
+                            </div>
+                            
+                            <button 
+                              onClick={() => openPostDetails(post)}
+                              className="text-blue-600 font-medium text-sm hover:text-blue-700 inline-flex items-center gap-1 transition-all duration-200 hover:gap-2 group-hover:gap-2"
+                            >
+                              {language === 'fr' ? 'Lire la suite' : 'Hamaky bebe kokoa'} 
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
                 
+                {/* Pagination */}
                 {totalPages > 1 && (
-                  <Pagination 
-                    currentPage={currentPage} 
-                    totalPages={totalPages} 
-                    onPageChange={setCurrentPage}
-                    language={language}
-                  />
+                  <div className="flex justify-center gap-2 mt-10">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum: number;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-3 py-1 rounded-lg transition ${
+                            currentPage === pageNum
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                    
+                    {totalPages > 5 && currentPage < totalPages - 2 && (
+                      <>
+                        <span className="px-2 py-1 text-gray-400">...</span>
+                        <button
+                          onClick={() => setCurrentPage(totalPages)}
+                          className={`px-3 py-1 rounded-lg transition border border-gray-300 hover:bg-gray-50`}
+                        >
+                          {totalPages}
+                        </button>
+                      </>
+                    )}
+                    
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 )}
               </>
             )}
           </div>
         </div>
       </div>
-    </div>
-  );
-}
 
-// Composant Carte Article
-function ArticleCard({ post, language, index }: { post: BlogPost; language: 'fr' | 'mg'; index: number }) {
-  const CategoryIcon = getCategoryIcon(post.category);
-  const delay = `${index * 100}ms`;
+      {/* Modal Détails Article - Comme dans la page projets */}
+      {showModal && selectedPost && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            
+            {/* En-tête du modal */}
+            <div className="sticky top-0 bg-white p-5 border-b flex justify-between items-center rounded-t-2xl">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {language === 'fr' ? selectedPost.title : (selectedPost.title_mg || selectedPost.title)}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {formatDate(selectedPost.published_at)} • {selectedPost.author}
+                </p>
+              </div>
+              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
 
-  return (
-    <div 
-      className="bg-white rounded-xl shadow-sm p-6 mb-6 hover:shadow-md transition-all duration-300 border border-gray-100"
-      style={{ animation: 'fadeInUp 0.5s ease-out forwards', animationDelay: delay }}
-    >
-      <div className="flex flex-wrap gap-4 text-sm text-gray-500 mb-3">
-        <span className="inline-flex items-center gap-1">
-          <Calendar className="w-4 h-4" /> {post.date}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <User className="w-4 h-4" /> {post.author}
-        </span>
-        <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
-          {CategoryIcon} {post.category}
-        </span>
-        <span className="inline-flex items-center gap-1 text-xs text-gray-400">
-          <Eye className="w-3 h-3" /> {post.viewsCount} {language === 'fr' ? 'vues' : 'fijeriana'}
-        </span>
-      </div>
-      
-      <h2 className="text-xl font-bold text-gray-800 mb-2 hover:text-blue-600 transition-colors">
-        <Link href={`/blog/${post.slug || post.id}`}>
-          {post.title}
-        </Link>
-      </h2>
-      
-      <p className="text-gray-600 mb-4 leading-relaxed">{post.excerpt}</p>
-      
-      <div className="flex flex-wrap gap-2 mb-4">
-        {post.tags.map(tag => (
-          <span key={tag} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-            <Tag className="w-3 h-3" /> {tag}
-          </span>
-        ))}
-      </div>
-      
-      <Link 
-        href={`/blog/${post.slug || post.id}`} 
-        className="text-blue-600 font-semibold hover:text-blue-700 inline-flex items-center gap-1 transition-all duration-200 hover:gap-2"
-      >
-        {language === 'fr' ? 'Lire la suite' : 'Hamaky bebe kokoa'} <ChevronRight className="w-4 h-4" />
-      </Link>
-    </div>
-  );
-}
+            {/* Image de couverture */}
+            {selectedPost.image_url && (
+              <div className="p-6">
+                <img 
+                  src={selectedPost.image_url} 
+                  alt={language === 'fr' ? selectedPost.title : (selectedPost.title_mg || selectedPost.title)}
+                  className="w-full h-[400px] object-cover rounded-xl shadow-lg"
+                />
+              </div>
+            )}
 
-// Composant Pagination
-function Pagination({ currentPage, totalPages, onPageChange, language }: { currentPage: number; totalPages: number; onPageChange: (page: number) => void; language: 'fr' | 'mg' }) {
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxVisible = 5;
-    
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pages.push(i);
-        pages.push(-1);
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1);
-        pages.push(-1);
-        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-      } else {
-        pages.push(1);
-        pages.push(-1);
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-        pages.push(-1);
-        pages.push(totalPages);
-      }
-    }
-    return pages;
-  };
+            {/* Métadonnées détaillées */}
+            <div className="px-6 pb-4">
+              <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4" /> {formatDate(selectedPost.published_at)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <User className="w-4 h-4" /> {selectedPost.author}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" /> {formatReadingTime(selectedPost.content)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Eye className="w-4 h-4" /> {selectedPost.views} {language === 'fr' ? 'vues' : 'fijeriana'}
+                </span>
+              </div>
+              {selectedPost.tags && selectedPost.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {selectedPost.tags.map(tag => (
+                    <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                      <Tag className="w-3 h-3" /> {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
 
-  return (
-    <div className="flex justify-center gap-2 mt-10">
-      <button
-        onClick={() => onPageChange(currentPage - 1)}
-        disabled={currentPage === 1}
-        className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition"
-      >
-        <ChevronLeft className="w-4 h-4" />
-      </button>
-      
-      {getPageNumbers().map((page, idx) => (
-        page === -1 ? (
-          <span key={`sep-${idx}`} className="px-2 py-1 text-gray-400">...</span>
-        ) : (
-          <button
-            key={page}
-            onClick={() => onPageChange(page)}
-            className={`px-3 py-1 rounded-lg transition ${
-              currentPage === page
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'border border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            {page}
-          </button>
-        )
-      ))}
-      
-      <button
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={currentPage === totalPages}
-        className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition"
-      >
-        <ChevronRight className="w-4 h-4" />
-      </button>
+            {/* Contenu texte */}
+            <div className="p-6 border-t bg-gray-50">
+              <h3 className="font-semibold text-lg text-gray-800 mb-3">
+                {language === 'fr' ? 'Contenu de l\'article' : 'Votoatin\'ny lahatsoratra'}
+              </h3>
+              <div className="text-gray-700 leading-relaxed whitespace-pre-wrap prose prose-lg max-w-none">
+                {language === 'fr' ? selectedPost.content : (selectedPost.content_mg || selectedPost.content)}
+              </div>
+            </div>
+
+            {/* Section Partage */}
+            <div className="p-6 border-t">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                {language === 'fr' ? 'Partager cet article' : 'Zaraina ity lahatsoratra ity'}
+              </h3>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => handleShare('facebook')}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#1877f2] text-white rounded-full hover:bg-[#1877f2]/90 transition shadow-sm"
+                >
+                  <Facebook className="w-4 h-4" />
+                  <span className="text-sm">Facebook</span>
+                </button>
+                <button
+                  onClick={() => handleShare('twitter')}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#1da1f2] text-white rounded-full hover:bg-[#1da1f2]/90 transition shadow-sm"
+                >
+                  <Twitter className="w-4 h-4" />
+                  <span className="text-sm">Twitter</span>
+                </button>
+                <button
+                  onClick={() => handleShare('linkedin')}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#0077b5] text-white rounded-full hover:bg-[#0077b5]/90 transition shadow-sm"
+                >
+                  <Linkedin className="w-4 h-4" />
+                  <span className="text-sm">LinkedIn</span>
+                </button>
+                <button
+                  onClick={() => handleShare('copy')}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition shadow-sm"
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <LinkIcon className="w-4 h-4" />}
+                  <span className="text-sm">{copied ? 'Copié !' : 'Copier le lien'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Call to Action */}
+            <div className="p-6 border-t bg-gradient-to-r from-blue-50 to-blue-100 rounded-b-2xl">
+              <div className="text-center">
+                <Heart className="w-10 h-10 text-blue-600 mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-gray-800 mb-2">
+                  {language === 'fr' ? 'Cet article vous a plu ?' : 'Nahafinaritra anao ve ity lahatsoratra ity?'}
+                </h3>
+                <p className="text-gray-600 text-sm mb-4">
+                  {language === 'fr' 
+                    ? 'Partagez-le autour de vous et rejoignez notre mission.'
+                    : 'Zarao amin\'ny manodidina anao ary miaraha amin\'ny asantsika.'}
+                </p>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <Link 
+                    href="/blog" 
+                    className="inline-flex items-center gap-2 px-5 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-50 transition shadow-sm"
+                    onClick={() => setShowModal(false)}
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    {language === 'fr' ? 'Voir tous les articles' : 'Jereo ny lahatsoratra rehetra'}
+                  </Link>
+                  <Link 
+                    href="/donate" 
+                    className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition shadow-sm"
+                    onClick={() => setShowModal(false)}
+                  >
+                    <Heart className="w-4 h-4" />
+                    {language === 'fr' ? 'Soutenir Y-Mad' : 'Hanohana ny Y-Mad'}
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

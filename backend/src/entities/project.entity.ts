@@ -1,98 +1,102 @@
-// ✅ VERSION CORRECTE DE project.entity.ts
+// backend/src/entities/project.entity.ts
 
 import { 
-  Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, 
-  UpdateDateColumn, ManyToOne, JoinColumn, Index, ManyToMany 
+  Entity, 
+  Column, 
+  PrimaryGeneratedColumn, 
+  CreateDateColumn, 
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index 
 } from 'typeorm';
 import { User } from './user.entity';
-import { Beneficiary } from './beneficiary.entity';  // ← Ajoute ceci si tu as la relation
 
-// Garde l'enum ici (ne l'importe pas)
 export enum ProjectStatus {
   ACTIVE = 'active',
   COMPLETED = 'completed',
-  PAUSED = 'paused',
-  CANCELLED = 'cancelled',
+  PLANNING = 'planning',
+  DRAFT = 'draft'
 }
 
 @Entity('projects')
-@Index(['status'])
-@Index(['region'])
+@Index(['status', 'region'])
 export class Project {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ length: 255 })
   title: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'title_mg', length: 255, nullable: true })
   title_mg: string;
 
-  @Column('text')
+  @Column({ type: 'text' })
   description: string;
 
-  @Column('text', { nullable: true })
+  @Column({ name: 'description_mg', type: 'text', nullable: true })
   description_mg: string;
 
-  @Column({ nullable: true })
+  @Column({ length: 255, nullable: true })
   location: string;
 
-  @Column({ nullable: true })
+  @Column({ length: 100 })
   category: string;
 
-  @Column({ nullable: true })
+  @Column({ length: 100 })
   region: string;
 
-  @Column({ type: 'varchar', default: ProjectStatus.ACTIVE })
-  status: string;
+  @Column({ 
+    type: 'enum', 
+    enum: ProjectStatus,
+    default: ProjectStatus.PLANNING
+  })
+  status: ProjectStatus;
 
   @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
   budget: number;
 
-  @Column({ name: 'spent', type: 'decimal', precision: 15, scale: 2, default: 0, nullable: true })
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
   spent: number;
 
-  @Column({ default: 0 })
+  @Column({ name: 'beneficiaries_count', default: 0 })
   beneficiaries_count: number;
 
-  @Column({ default: 0 })
+  @Column({ name: 'youth_impact', default: 0 })
   youth_impact: number;
 
-  @Column({ default: 0 })
+  @Column({ name: 'jobs_created', default: 0 })
   jobs_created: number;
 
-  @Column({ default: 0 })
+  @Column({ type: 'int', default: 0 })
   progress: number;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ name: 'start_date', type: 'date', nullable: true })
   start_date: Date;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ name: 'end_date', type: 'date', nullable: true })
   end_date: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: 'image_url', type: 'text', nullable: true })
   image_url: string;
 
-  @Column('simple-array', { nullable: true })
+  @Column({ name: 'gallery_images', type: 'text', array: true, default: {} })
   gallery_images: string[];
 
-  @Column({ default: false })
+  @Column({ name: 'is_featured', default: false })
   is_featured: boolean;
 
-  @Column({ name: 'manager_id', type: 'uuid', nullable: true })
-  managerId: string;
-
-  @ManyToOne(() => User, { nullable: true })
-  @JoinColumn({ name: 'manager_id' })
-  manager: User;
-
-  // ✅ Relation avec Beneficiary (si tu l'as ajoutée)
-  @ManyToMany(() => Beneficiary, (beneficiary) => beneficiary.projects)
-  beneficiaries: Beneficiary[];
+  @Column({ name: 'manager_id', nullable: true })
+  manager_id: string;
 
   @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  updated_at: Date;
+
+  // Relations
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'manager_id' })
+  manager: User;
 }

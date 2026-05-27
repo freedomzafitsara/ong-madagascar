@@ -1,9 +1,23 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+// backend/src/modules/donations/donations.controller.ts
+
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { DonationsService } from './donations.service';
-import { CreateDonationDto, ConfirmDonationDto } from './dto/create-donation.dto';
+import { CreateDonationDto, UpdateDonationStatusDto } from './dto/create-donation.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { UserRole } from '../../entities/user.entity';
 
 @Controller('donations')
 export class DonationsController {
@@ -11,43 +25,49 @@ export class DonationsController {
 
   @Public()
   @Post()
-  async create(@Body() createDonationDto: CreateDonationDto) {
-    return this.donationsService.create(createDonationDto);
+  async create(@Body() createDto: CreateDonationDto) {
+    return this.donationsService.create(createDto);
   }
 
   @Post('auth')
   @UseGuards(JwtAuthGuard)
-  async createAuth(@Body() createDonationDto: CreateDonationDto, @CurrentUser() user: any) {
-    return this.donationsService.create(createDonationDto, user.id);
-  }
-
-  @Post('confirm')
-  @Public()
-  async confirm(@Body() confirmDto: ConfirmDonationDto) {
-    return this.donationsService.confirm(confirmDto);
+  async createAuth(@Body() createDto: CreateDonationDto, @Request() req: any) {
+    return this.donationsService.create(createDto, req.user.id);
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
-  async findAll(@Query('page') page: string = '1', @Query('limit') limit: string = '10') {
-    return this.donationsService.findAll(parseInt(page), parseInt(limit));
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  async findAll() {
+    return this.donationsService.findAll();
   }
 
-  @Get('stats/all')
-  @Public()
+  @Get('stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   async getStats() {
     return this.donationsService.getStats();
   }
 
-  @Get('my-donations')
-  @UseGuards(JwtAuthGuard)
-  async getMyDonations(@CurrentUser() user: any) {
-    return this.donationsService.getUserDonations(user.id);
-  }
-
   @Get(':id')
-  @Public()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
   async findOne(@Param('id') id: string) {
     return this.donationsService.findOne(id);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  async updateStatus(@Param('id') id: string, @Body() updateDto: UpdateDonationStatusDto) {
+    return this.donationsService.updateStatus(id, updateDto);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  async remove(@Param('id') id: string) {
+    await this.donationsService.remove(id);
+    return { success: true, message: 'Don supprimé avec succès' };
   }
 }

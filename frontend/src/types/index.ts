@@ -81,8 +81,8 @@ export interface Beneficiary {
   fokontany?: string;
   educationLevel?: 'primaire' | 'ceg' | 'lycee' | 'universite' | 'aucun';
   employmentStatus?: 'chomeur' | 'etudiant' | 'employe' | 'entrepreneur';
-  beforeYmAd?: string;
-  afterYmAd?: string;
+  beforeYmad?: string;
+  afterYmad?: string;
   userId?: string;
   user?: User;
   projects?: Project[];
@@ -128,26 +128,27 @@ export interface JobOffer {
 
 export interface JobApplication {
   id: string;
-  jobOfferId: string;
+  job_offer_id: string;
   jobOffer?: JobOffer;
-  userId?: string;
+  user_id?: string;
   user?: User;
-  fullName: string;
+  full_name: string;
   email: string;
   phone?: string;
   address?: string;
-  experienceYears?: number;
-  coverLetter?: string;
-  photoUrl?: string;
-  cvUrl: string;
-  diplomaUrl?: string;
-  attestationUrl?: string;
+  experience_years?: number;
+  cover_letter?: string;
+  photo_url?: string;
+  cv_url: string;
+  diploma_url?: string;
+  attestation_url?: string;
   status: 'submitted' | 'reviewing' | 'shortlisted' | 'interview' | 'accepted' | 'rejected';
   notes?: string;
-  reviewedBy?: User;
-  reviewedAt?: string;
-  createdAt: string;
-  updatedAt: string;
+  reviewed_by?: string;
+  reviewer?: User;
+  reviewed_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface JobStats {
@@ -166,28 +167,28 @@ export interface JobStats {
 export interface Project {
   id: string;
   title: string;
-  titleMg?: string;
+  title_mg?: string;
   description: string;
-  descriptionMg?: string;
+  description_mg?: string;
   budget?: number;
   spent?: number;
   region?: string;
   location?: string;
   category?: string;
   progress: number;
-  beneficiariesCount?: number;
+  beneficiaries_count?: number;
   status: 'planning' | 'active' | 'completed' | 'suspended' | 'draft' | 'cancelled';
-  startDate?: string;
-  endDate?: string;
-  imageUrl?: string;
-  galleryImages?: string[];
-  youthImpact: number;
-  jobsCreated: number;
-  isFeatured: boolean;
-  managerId?: string;
+  start_date?: string;
+  end_date?: string;
+  image_url?: string;
+  gallery_images?: string[];
+  youth_impact: number;
+  jobs_created: number;
+  is_featured: boolean;
+  manager_id?: string;
   manager?: User;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ProjectStats {
@@ -205,40 +206,43 @@ export interface ProjectStats {
 export interface Event {
   id: string;
   title: string;
-  titleMg?: string;
+  title_mg?: string;
   description: string;
-  descriptionMg?: string;
-  eventType: 'camp' | 'workshop' | 'hackathon' | 'conference' | 'formation';
+  description_mg?: string;
+  type: 'camp' | 'workshop' | 'hackathon' | 'conference' | 'formation';
   location?: string;
   region?: string;
-  startDatetime: string;
-  endDatetime?: string;
+  startDate: string;
+  endDate?: string;
   maxCapacity?: number;
   currentRegistrations: number;
   isFree: boolean;
-  priceMga?: number;
+  price?: number;
   imageUrl?: string;
+  image_url?: string;
   status: 'draft' | 'published' | 'cancelled' | 'completed';
-  createdBy?: User;
-  createdAt: string;
-  updatedAt: string;
+  createdBy?: string;
+  created_by?: string;
+  creator?: User;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface EventRegistration {
   id: string;
-  eventId: string;
+  event_id: string;
   event?: Event;
-  userId?: string;
+  user_id?: string;
   user?: User;
-  fullName: string;
+  full_name: string;
   email: string;
   phone?: string;
-  qrCode?: string;
+  qr_code?: string;
   status: 'pending' | 'confirmed' | 'cancelled' | 'waiting';
-  paymentStatus: 'pending' | 'completed' | 'failed';
-  checkedIn: boolean;
-  checkedInAt?: string;
-  createdAt: string;
+  payment_status: 'pending' | 'completed' | 'failed';
+  checked_in: boolean;
+  checked_in_at?: string;
+  created_at: string;
 }
 
 // ========================================
@@ -248,23 +252,23 @@ export interface EventRegistration {
 export interface BlogPost {
   id: string;
   title: string;
-  titleMg?: string;
+  title_mg?: string;
   slug: string;
   content: string;
-  contentMg?: string;
+  content_mg?: string;
   excerpt: string;
-  excerptMg?: string;
+  excerpt_mg?: string;
   category: string;
   tags: string[];
-  featuredImage?: string;
+  image_url?: string;
   views: number;
   status: 'draft' | 'published';
-  authorId?: string;
+  author_id?: string;
   author?: User;
-  beneficiaryId?: string;
-  publishedAt?: string;
-  createdAt: string;
-  updatedAt: string;
+  beneficiary_id?: string;
+  published_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface BlogStats {
@@ -280,19 +284,19 @@ export interface BlogStats {
 
 export interface Member {
   id: string;
-  userId: string;
+  user_id: string;
   user?: User;
-  memberNumber: string;
-  membershipType: 'standard' | 'premium' | 'honorary' | 'student';
+  member_number: string;
+  membership_type: 'standard' | 'premium' | 'honorary' | 'student';
   status: 'pending' | 'active' | 'expired' | 'suspended';
-  startDate: string;
-  endDate: string;
-  paymentMethod?: string;
-  paymentAmount?: number;
-  cardUrl?: string;
-  qrCode?: string;
-  createdAt: string;
-  updatedAt: string;
+  start_date: string;
+  end_date: string;
+  payment_method?: string;
+  amount_paid?: number;
+  card_url?: string;
+  qr_code?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MemberStats {
@@ -308,17 +312,57 @@ export interface MemberStats {
 
 export interface Volunteer {
   id: string;
-  userId?: string;
+  user_id?: string;
   user?: User;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
   skills: string[];
-  availability: 'weekday' | 'weekend' | 'flexible' | 'occasional';
-  experience?: string;
-  motivations?: string;
+  availability_type: 'weekend' | 'weekday' | 'both';
+  availability?: string;
+  region?: string;
   status: 'pending' | 'active' | 'inactive';
-  hoursWorked: number;
-  certificateUrl?: string;
-  createdAt: string;
-  updatedAt: string;
+  hours: number;
+  certificate_url?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VolunteerAssignment {
+  id: string;
+  volunteer_id: string;
+  volunteer_name: string;
+  project_id: string;
+  project_name: string;
+  role: string;
+  tasks: string[];
+  start_date: string;
+  end_date: string | null;
+  status: 'active' | 'completed' | 'cancelled';
+  hours_logged?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VolunteerHour {
+  id: string;
+  volunteer_id: string;
+  volunteer_name?: string;
+  assignment_id: string;
+  assignment_name?: string;
+  date: string;
+  hours: number;
+  description: string;
+  project_id: string;
+  project_name: string;
+  status: 'pending' | 'approved' | 'rejected';
+  approved_by?: string;
+  approved_by_name?: string;
+  approved_at?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface VolunteerStats {
@@ -335,18 +379,19 @@ export interface VolunteerStats {
 export interface Partner {
   id: string;
   name: string;
-  logoUrl?: string;
+  name_mg?: string;
+  logo_url?: string;
   website?: string;
   description: string;
-  descriptionMg?: string;
-  partnerType: 'entreprise' | 'ong' | 'ambassade' | 'institution';
-  isFeatured: boolean;
-  contractUrl?: string;
-  contributionAmount?: number;
-  contactEmail?: string;
-  contactPhone?: string;
-  createdAt: string;
-  updatedAt: string;
+  description_mg?: string;
+  type: 'entreprise' | 'ong' | 'ambassade' | 'institution';
+  is_featured: boolean;
+  contract_url?: string;
+  contribution_amount?: number;
+  contact_email?: string;
+  contact_phone?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // ========================================
@@ -355,24 +400,29 @@ export interface Partner {
 
 export interface Donation {
   id: string;
-  userId?: string;
+  user_id?: string;
   user?: User;
-  projectId?: string;
-  project?: Project;
-  eventId?: string;
-  event?: Event;
+  donor_name: string;
+  email: string;
   amount: number;
-  currency: 'MGA' | 'EUR' | 'USD';
-  paymentMethod: 'mvola' | 'orange_money' | 'airtel' | 'bank' | 'cash' | 'paypal';
-  phoneNumber?: string;
-  receiptNumber: string;
-  isRecurring: boolean;
-  recurringPeriod?: 'monthly' | 'yearly';
-  status: 'pending' | 'completed' | 'failed';
-  donorName?: string;
-  donorEmail?: string;
+  project_id?: string;
+  project?: Project;
+  project_name?: string;
+  event_id?: string;
+  event?: Event;
+  payment_method: 'mvola' | 'orange_money' | 'airtel' | 'bank' | 'cash' | 'paypal';
+  transaction_id?: string;
+  paypal_order_id?: string;
+  paypal_payer_id?: string;
+  receipt_number: string;
   message?: string;
-  createdAt: string;
+  notes?: string;
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  confirmed_by?: string;
+  confirmer?: User;
+  confirmed_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DonationStats {
@@ -380,6 +430,11 @@ export interface DonationStats {
   monthly: number;
   count: number;
   average: number;
+  completed: number;
+  pending: number;
+  failed: number;
+  totalAmount: number;
+  monthlyAmount: number;
 }
 
 // ========================================
@@ -389,39 +444,48 @@ export interface DonationStats {
 export interface FooterSection {
   id: string;
   title: string;
-  titleMg?: string;
-  order: number;
-  isActive: boolean;
+  title_mg?: string;
+  order_num: number;
+  is_active: boolean;
   links: FooterLink[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FooterLink {
   id: string;
   title: string;
-  titleMg?: string;
+  title_mg?: string;
   url: string;
   icon?: string;
-  order: number;
-  isActive: boolean;
+  order_num: number;
+  is_active: boolean;
+  section_id: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FooterContact {
   id: string;
   type: 'address' | 'phone' | 'email' | 'badge';
   value: string;
-  valueMg?: string;
+  value_mg?: string;
   icon?: string;
-  order: number;
-  isActive: boolean;
+  order_num: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FooterLegalLink {
   id: string;
   title: string;
-  titleMg?: string;
+  title_mg?: string;
   url: string;
-  order: number;
-  isActive: boolean;
+  order_num: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FooterData {
@@ -438,35 +502,48 @@ export interface FooterData {
 export interface PageContent {
   id: string;
   page: string;
-  content: string;
-  contentMg?: string;
-  updatedAt: string;
+  hero?: string;
+  sections?: any;
+  stats?: any;
+  cta?: any;
+  seo_title?: string;
+  seo_description?: string;
+  seo_keywords?: string;
+  is_published: boolean;
+  custom_fields?: any;
+  created_at: string;
+  updated_at: string;
 }
 
-// Version CORRIGÉE de PageBackground (compatible avec votre code)
 export interface PageBackground {
   id: string;
   page: string;
-  image_url: string;           // Note: snake_case pour correspondre à l'API
-  mobile_url?: string;         // Optionnel
-  thumbnail_url?: string;      // Optionnel
-  alt_text?: string;           // Optionnel
+  image_url: string;
+  mobile_url?: string;
+  thumbnail_url?: string;
+  alt_text?: string;
   is_active: boolean;
   overlay_opacity: number;
   position: string;
   size: string;
-  created_at: string;          // snake_case
-  updated_at: string;          // snake_case
+  created_at: string;
+  updated_at: string;
 }
 
-// Alias pour compatibilité avec les deux conventions (camelCase et snake_case)
-export type PageBackgroundCompat = PageBackground & {
-  imageUrl?: string;
-  isActive?: boolean;
-  overlayOpacity?: number;
-  updatedAt?: string;
-  createdAt?: string;
-};
+export interface Background {
+  id: string;
+  page: string;
+  image_url: string;
+  mobile_url?: string;
+  thumbnail_url?: string;
+  alt_text?: string;
+  is_active: boolean;
+  overlay_opacity: number;
+  position: string;
+  size: string;
+  created_at: string;
+  updated_at: string;
+}
 
 // ========================================
 // 14. TYPES D'AUDIT
@@ -474,16 +551,16 @@ export type PageBackgroundCompat = PageBackground & {
 
 export interface AuditLog {
   id: string;
-  userId?: string;
+  user_id?: string;
   user?: User;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'EXPORT';
-  entityType: string;
-  entityId?: string;
-  oldData?: any;
-  newData?: any;
-  ipAddress?: string;
-  userAgent?: string;
-  createdAt: string;
+  entity: string;
+  entity_id?: string;
+  old_data?: any;
+  new_data?: any;
+  ip?: string;
+  user_agent?: string;
+  created_at: string;
 }
 
 // ========================================
@@ -498,12 +575,31 @@ export interface ContactMessage {
   subject: string;
   message: string;
   status: 'new' | 'read' | 'replied' | 'archived';
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // ========================================
-// 16. TYPES UTILITAIRES
+// 16. TYPES DES CERTIFICATS
+// ========================================
+
+export interface Certificate {
+  id: string;
+  volunteer_id: string;
+  volunteer_name: string;
+  volunteer_email?: string;
+  total_hours: number;
+  period_start: string;
+  period_end: string;
+  issued_at: string;
+  certificate_number: string;
+  signed_by: string;
+  signature_url?: string;
+  projects?: string[];
+}
+
+// ========================================
+// 17. TYPES UTILITAIRES
 // ========================================
 
 export interface Stats {
@@ -563,7 +659,7 @@ export interface FilterParams {
 }
 
 // ========================================
-// 17. TYPES DES CHARGEMENTS (UPLOAD)
+// 18. TYPES DES CHARGEMENTS (UPLOAD)
 // ========================================
 
 export interface UploadResponse {
@@ -571,17 +667,19 @@ export interface UploadResponse {
   filename: string;
   size: number;
   mimeType: string;
+  secureUrl?: string;
+  publicId?: string;
 }
 
 // ========================================
-// 18. TYPES DES NEWSLETTER
+// 19. TYPES DES NEWSLETTER
 // ========================================
 
 export interface NewsletterSubscription {
   id: string;
   email: string;
-  isActive: boolean;
-  createdAt: string;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface NewsletterSendResult {
@@ -592,18 +690,54 @@ export interface NewsletterSendResult {
 }
 
 // ========================================
-// 19. TYPES DES RAPPORTS
+// 20. TYPES DES RAPPORTS
 // ========================================
 
 export interface Report {
   id: string;
   title: string;
   type: 'activity' | 'financial' | 'impact' | 'project' | 'event';
-  periodStart?: string;
-  periodEnd?: string;
-  projectId?: string;
-  fileUrl: string;
-  generatedBy?: User;
-  isPublic: boolean;
-  createdAt: string;
+  period_start?: string;
+  period_end?: string;
+  project_id?: string;
+  file_url: string;
+  generated_by?: string;
+  generator?: User;
+  is_public: boolean;
+  created_at: string;
+}
+
+// ========================================
+// 21. TYPES DES NOTIFICATIONS
+// ========================================
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  is_read: boolean;
+  link?: string;
+  created_at: string;
+}
+
+// ========================================
+// 22. TYPES PAGES (STATIQUES)
+// ========================================
+
+export interface Page {
+  id: string;
+  slug: string;
+  title: string;
+  title_mg?: string;
+  content: string;
+  content_mg?: string;
+  meta_description?: string;
+  meta_keywords?: string;
+  status: 'draft' | 'published';
+  author_id?: string;
+  author?: User;
+  created_at: string;
+  updated_at: string;
 }

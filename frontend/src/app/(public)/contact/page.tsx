@@ -172,7 +172,7 @@ export default function ContactPage() {
                         </label>
                         <input 
                           type="text" 
-                          placeholder={language === 'fr' ? 'Jean Rakoto' : 'Jean Rakoto'} 
+                          placeholder={language === 'fr' ? 'Nom et Prénom' : 'Nom et Prénom'} 
                           value={formData.name} 
                           onChange={(e) => setFormData({...formData, name: e.target.value})} 
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
@@ -183,7 +183,7 @@ export default function ContactPage() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
                         <input 
                           type="email" 
-                          placeholder="jean@email.com" 
+                          placeholder="prenom@gmail.com" 
                           value={formData.email} 
                           onChange={(e) => setFormData({...formData, email: e.target.value})} 
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
@@ -198,7 +198,7 @@ export default function ContactPage() {
                         </label>
                         <input 
                           type="tel" 
-                          placeholder="032 04 856 97" 
+                          placeholder="032 00 000 00" 
                           value={formData.phone} 
                           onChange={(e) => setFormData({...formData, phone: e.target.value})} 
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" 

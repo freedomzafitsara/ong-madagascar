@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, UseInterceptors, UploadedFiles } from '@nestjs/common';
+﻿import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, UseInterceptors, UploadedFiles, Res } from '@nestjs/common';
 import { JobsService } from './jobs.service';
 import { CreateJobOfferDto } from './dto/create-job-offer.dto';
 import { UpdateJobOfferDto } from './dto/update-job-offer.dto';
@@ -11,6 +11,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '../../entities/user.entity';
+import { Response } from 'express';
 
 @Controller('jobs')
 export class JobsController {
@@ -96,7 +97,7 @@ export class JobsController {
   }
 
   // ============================================================
-  // SECTION 3 : ROUTES POUR LES CANDIDATURES
+  // SECTION 3 : ROUTES PUBLIQUES POUR DEPOSER UNE CANDIDATURE
   // ============================================================
 
   @Public()
@@ -113,28 +114,54 @@ export class JobsController {
     return this.jobsService.apply(createDto, files, user.id);
   }
 
-  @Get('applications/my')
-  @UseGuards(JwtAuthGuard)
-  async getMyApplications(@CurrentUser() user: any, @Query('page') page: string = '1', @Query('limit') limit: string = '10') {
-    return this.jobsService.getUserApplications(user.id, parseInt(page), parseInt(limit));
-  }
-
   // ============================================================
-  // SECTION 4 : ROUTES ADMIN POUR LA GESTION DES CANDIDATURES
+  // SECTION 4 : ROUTES ADMIN POUR LES CANDIDATURES
+  // ⚠️ L'ORDRE EST IMPORTANT : LES ROUTES SPECIFIQUES AVANT :id
   // ============================================================
 
-  @Get('offers/:id/applications')
+  // 1. Route specifique "all" - DOIT ETRE AVANT :id
+  @Get('applications/all')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
-  async getApplicationsByJob(
-    @Param('id') id: string,
+  async getAllApplications(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
     @Query('status') status?: string,
   ) {
-    return this.jobsService.getApplicationsByJob(id, parseInt(page), parseInt(limit), status);
+    return this.jobsService.getAllApplications(parseInt(page), parseInt(limit), status);
   }
 
+  // 2. Route specifique "my" - DOIT ETRE AVANT :id
+  @Get('applications/my')
+  @UseGuards(JwtAuthGuard)
+  async getMyApplications(
+    @CurrentUser() user: any,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    return this.jobsService.getUserApplications(user.id, parseInt(page), parseInt(limit));
+  }
+
+  // 3. Route specifique "export" - DOIT ETRE AVANT :id
+  @Get('applications/export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  async exportApplications(@Res() res: Response) {
+    const csv = await this.jobsService.exportApplicationsToCSV();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=candidatures_${new Date().toISOString().split('T')[0]}.csv`);
+    res.send(csv);
+  }
+
+  // 4. Route specifique "stats" - DOIT ETRE AVANT :id
+  @Get('applications/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  async getApplicationStats() {
+    return this.jobsService.getApplicationStats();
+  }
+
+  // 5. Route generique :id - DOIT ETRE APRES les routes specifiques
   @Get('applications/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
@@ -142,6 +169,7 @@ export class JobsController {
     return this.jobsService.getApplication(id);
   }
 
+  // 6. Route pour modifier le statut
   @Patch('applications/:id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
@@ -153,10 +181,25 @@ export class JobsController {
     return this.jobsService.updateApplicationStatus(id, updateDto, user.id);
   }
 
-  @Get('applications/all')
+  // 7. Route pour supprimer une candidature
+  @Delete('applications/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  async deleteApplication(@Param('id') id: string) {
+    await this.jobsService.deleteApplication(id);
+    return { success: true, message: 'Candidature supprimee avec succes' };
+  }
+
+  // 8. Route pour lister les candidatures d'une offre
+  @Get('offers/:id/applications')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
-  async getAllApplications(@Query('page') page: string = '1', @Query('limit') limit: string = '10', @Query('status') status?: string) {
-    return this.jobsService.getAllApplications(parseInt(page), parseInt(limit), status);
+  async getApplicationsByJob(
+    @Param('id') id: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('status') status?: string,
+  ) {
+    return this.jobsService.getApplicationsByJob(id, parseInt(page), parseInt(limit), status);
   }
 }

@@ -366,22 +366,74 @@ export class JobsService {
     }
   }
 
-  async getAllApplications(page: number = 1, limit: number = 10, status?: string) {
-    try {
-      const skip = (page - 1) * limit;
-      const query = this.applicationRepository.createQueryBuilder('app')
-        .leftJoinAndSelect('app.jobOffer', 'jobOffer')
-        .orderBy('app.created_at', 'DESC');
+ async getAllApplications(page: number = 1, limit: number = 10, status?: string) {
+  const skip = (page - 1) * limit;
+  const query = this.applicationRepository.createQueryBuilder('app')
+    .leftJoinAndSelect('app.jobOffer', 'jobOffer')
+    .orderBy('app.created_at', 'DESC');
 
-      if (status && status !== 'all') {
-        query.andWhere('app.status = :status', { status });
-      }
-
-      const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
-      return { data, total, page, totalPages: Math.ceil(total / limit), limit };
-    } catch (error) {
-      this.logger.error(`Erreur lors de la récupération de toutes les candidatures: ${error.message}`);
-      return { data: [], total: 0, page: 1, totalPages: 0, limit };
-    }
+  if (status && status !== 'all') {
+    query.andWhere('app.status = :status', { status });
   }
+
+  const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
+  
+  return { 
+    data, 
+    total, 
+    page, 
+    totalPages: Math.ceil(total / limit), 
+    limit 
+  };
+ }// ============================================================
+// SECTION 3 : STATISTIQUES ET EXPORT DES CANDIDATURES
+// ============================================================
+
+async getApplicationStats(): Promise<{
+  total: number;
+  submitted: number;
+  reviewing: number;
+  shortlisted: number;
+  interview: number;
+  accepted: number;
+  rejected: number;
+}> {
+  const total = await this.applicationRepository.count();
+  const submitted = await this.applicationRepository.count({ where: { status: ApplicationStatus.SUBMITTED } });
+  const reviewing = await this.applicationRepository.count({ where: { status: ApplicationStatus.REVIEWING } });
+  const shortlisted = await this.applicationRepository.count({ where: { status: ApplicationStatus.SHORTLISTED } });
+  const interview = await this.applicationRepository.count({ where: { status: ApplicationStatus.INTERVIEW } });
+  const accepted = await this.applicationRepository.count({ where: { status: ApplicationStatus.ACCEPTED } });
+  const rejected = await this.applicationRepository.count({ where: { status: ApplicationStatus.REJECTED } });
+
+  return { total, submitted, reviewing, shortlisted, interview, accepted, rejected };
+}
+
+async exportApplicationsToCSV(): Promise<string> {
+  const applications = await this.applicationRepository.find({
+    relations: ['jobOffer'],
+    order: { created_at: 'DESC' },
+  });
+
+  const headers = ['ID', 'Candidat', 'Email', 'Telephone', 'Poste', 'Entreprise', 'Statut', 'Date candidature'];
+  const rows = applications.map(app => [
+    app.id,
+    app.full_name,
+    app.email,
+    app.phone || '',
+    app.jobOffer?.title || '',
+    app.jobOffer?.company_name || '',
+    app.status,
+    new Date(app.created_at).toLocaleDateString('fr-FR'),
+  ]);
+
+  const csvContent = [headers, ...rows].map(row => row.join(';')).join('\n');
+  return csvContent;
+}
+
+async deleteApplication(id: string): Promise<void> {
+  const application = await this.getApplication(id);
+  await this.applicationRepository.remove(application);
+  this.logger.log(`Candidature supprimee: ${id}`);
+}
 }
