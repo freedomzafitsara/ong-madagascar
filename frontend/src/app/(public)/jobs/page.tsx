@@ -3,81 +3,64 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
-  Briefcase, MapPin, Calendar, DollarSign, Search, 
-  ChevronRight, Building, Sparkles, X,
-  Clock, CheckCircle, Heart, Eye, TrendingUp,
-  Users, Award, Globe, Target, ArrowRight,
-  LayoutGrid, List, FileText, GraduationCap,
-  Star, Zap, Shield, RefreshCw, Image as ImageIcon,
-  BookOpen, Stethoscope, Leaf, Sprout, Handshake, Palette,
-  Loader2
+  Briefcase, MapPin, Calendar, Search, 
+  Building, Sparkles, X, Clock, Heart, ArrowRight,
+  Users, LayoutGrid, List, GraduationCap,
+  Star, Loader2
 } from 'lucide-react';
-import { useTranslation } from '@/hooks/useTranslation';
-import { pageService, PageBackground } from '@/services/pageService';
-import { jobsApi } from '@/lib/api';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { pageService, PageBackground } from '@/services/page.service';
+import { jobService, JobOffer } from '@/services/job.service';
 import toast from 'react-hot-toast';
 
-interface Job {
-  id: string;
-  title: string;
-  title_mg?: string;
-  company_name: string;
-  location?: string;
-  region?: string;
-  job_type: string;
-  salary?: string;
-  description: string;
-  description_mg?: string;
-  deadline?: string;
-  status: string;
-  is_featured: boolean;
-  image_url?: string;
-  created_at: string;
-}
+// ============================================================
+// FONCTIONS UTILITAIRES
+// ============================================================
 
-// Fonction pour obtenir le texte selon la langue
 const getText = (language: 'fr' | 'mg', frText: string, mgText: string): string => {
   return language === 'fr' ? frText : mgText;
 };
 
-// Fonction pour obtenir l'icone du type de contrat
-const getContractIcon = (type: string) => {
-  switch (type) {
+const getContractIcon = (type?: string) => {
+  const typeLower = type?.toLowerCase() || '';
+  switch (typeLower) {
     case 'cdi': return Star;
     case 'cdd': return Calendar;
     case 'stage': return GraduationCap;
-    case 'freelance': return Briefcase;
-    case 'benevolat': return Heart;
     default: return Briefcase;
   }
 };
 
-const getContractLabel = (type: string, language: 'fr' | 'mg') => {
+const getContractLabel = (type?: string, language?: 'fr' | 'mg') => {
   const labels: Record<string, { fr: string; mg: string }> = {
     cdi: { fr: 'CDI', mg: 'CDI' },
     cdd: { fr: 'CDD', mg: 'CDD' },
     stage: { fr: 'Stage', mg: 'Fiofanana' },
     freelance: { fr: 'Freelance', mg: 'Freelance' },
-    benevolat: { fr: 'Bénévolat', mg: 'Asa an-tsitrapo' },
   };
-  return labels[type]?.[language] || type;
+  const key = type?.toLowerCase() || '';
+  return labels[key]?.[language === 'fr' ? 'fr' : 'mg'] || type || '';
 };
 
-const getContractColor = (type: string) => {
+const getContractColor = (type?: string) => {
+  const typeLower = type?.toLowerCase() || '';
   const colors: Record<string, string> = {
     cdi: 'bg-blue-100 text-blue-700',
     cdd: 'bg-blue-100 text-blue-700',
     stage: 'bg-green-100 text-green-700',
     freelance: 'bg-purple-100 text-purple-700',
-    benevolat: 'bg-pink-100 text-pink-700',
   };
-  return colors[type] || 'bg-gray-100 text-gray-700';
+  return colors[typeLower] || 'bg-gray-100 text-gray-700';
 };
 
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
+
 export default function JobsPage() {
-  const { t, language } = useTranslation();
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
+  const { language } = useLanguage();
+  const [jobs, setJobs] = useState<JobOffer[]>([]);
+  const [filteredJobs, setFilteredJobs] = useState<JobOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('');
@@ -90,10 +73,10 @@ export default function JobsPage() {
     fetchJobs();
   }, []);
 
+  // Chargement du fond d'écran depuis l'admin
   const loadPageBackground = async () => {
     try {
-      // Utiliser 'emploi' comme page pour le fond d'écran
-      const background = await pageService.getBackground('emploi');
+      const background = await pageService.getPageBackground('jobs');
       if (background && background.is_active && background.image_url) {
         setPageBackground(background);
       }
@@ -105,13 +88,13 @@ export default function JobsPage() {
   const fetchJobs = async () => {
     setLoading(true);
     try {
-      const response = await jobsApi.getPublic(1, 50);
+      const response = await jobService.getPublishedOffers({ page: 1, limit: 50 });
       if (response && response.data) {
         setJobs(response.data);
         setFilteredJobs(response.data);
         
-        const uniqueTypes = new Set(response.data.map((j: Job) => j.job_type));
-        const uniqueLocations = new Set(response.data.map((j: Job) => j.region || j.location).filter(Boolean));
+        const uniqueTypes = new Set(response.data.map((j: JobOffer) => j.contract_type).filter(Boolean));
+        const uniqueLocations = new Set(response.data.map((j: JobOffer) => j.location).filter(Boolean));
         setStats({
           total: response.data.length,
           types: uniqueTypes.size,
@@ -130,34 +113,34 @@ export default function JobsPage() {
     let filtered = [...jobs];
     if (searchTerm) {
       filtered = filtered.filter(j => 
-        j.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        j.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        j.description.toLowerCase().includes(searchTerm.toLowerCase())
+        j.title_fr.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (j.company && j.company.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        j.description_fr.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     if (selectedType) {
-      filtered = filtered.filter(j => j.job_type === selectedType);
+      filtered = filtered.filter(j => j.contract_type === selectedType);
     }
     setFilteredJobs(filtered);
   }, [searchTerm, selectedType, jobs]);
 
   const contractTypes = [
-    { value: 'cdi', labelFr: 'CDI', labelMg: 'CDI' },
-    { value: 'cdd', labelFr: 'CDD', labelMg: 'CDD' },
-    { value: 'stage', labelFr: 'Stage', labelMg: 'Fiofanana' },
-    { value: 'freelance', labelFr: 'Freelance', labelMg: 'Freelance' },
-    { value: 'benevolat', labelFr: 'Bénévolat', labelMg: 'Asa an-tsitrapo' },
+    { value: 'CDI', labelFr: 'CDI', labelMg: 'CDI' },
+    { value: 'CDD', labelFr: 'CDD', labelMg: 'CDD' },
+    { value: 'STAGE', labelFr: 'Stage', labelMg: 'Fiofanana' },
+    { value: 'FREELANCE', labelFr: 'Freelance', labelMg: 'Freelance' },
   ];
 
-  // Style du fond d'écran PLEIN ECRAN avec overlay optimisé
-  const backgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
+  // Style fond d'écran PLEIN ÉCRAN
+  const heroBackgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundImage: `url(${pageBackground.image_url})`,
     backgroundPosition: pageBackground.position || 'center',
-    backgroundSize: pageBackground.size || 'cover',
+    backgroundSize: 'cover',
     backgroundAttachment: 'fixed',
+    backgroundRepeat: 'no-repeat',
   } : {};
 
-  const overlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
+  const heroOverlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 45) / 100})`,
   } : {};
 
@@ -174,123 +157,96 @@ export default function JobsPage() {
 
   return (
     <div className="min-h-screen">
-      {/* ==================== HERO SECTION PLEIN ECRAN ==================== */}
-      <div className="relative min-h-screen w-full overflow-hidden">
-        {/* Fond d'écran dynamique uploadé via super-admin */}
+      {/* ==================== HERO SECTION - PLEIN ÉCRAN ==================== */}
+      <div className="relative w-full min-h-screen flex items-center justify-center overflow-hidden">
+        {/* Image de fond dynamique (uploadée via admin) - PLEIN ÉCRAN */}
         <div className="absolute inset-0">
-          {backgroundStyle.backgroundImage ? (
+          {heroBackgroundStyle.backgroundImage ? (
             <>
-              <div className="absolute inset-0" style={backgroundStyle} />
-              <div className="absolute inset-0" style={overlayStyle} />
+              <div className="absolute inset-0 bg-cover bg-center bg-no-repeat bg-fixed" style={heroBackgroundStyle} />
+              <div className="absolute inset-0" style={heroOverlayStyle} />
             </>
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-blue-900" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-800 via-blue-900 to-gray-900" />
           )}
         </div>
         
-        {/* Contenu centré */}
-        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-16 md:py-20">
-          {/* Badge d'accueil */}
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-1.5 md:px-5 md:py-2 mb-6 md:mb-8 animate-fade-in-up">
+        {/* Contenu centré verticalement et horizontalement */}
+        <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8">
             <Sparkles className="w-4 h-4 text-blue-200" />
             <span className="text-sm font-medium tracking-wide text-white">
-              {getText(language, 'Rejoignez l\'équipe Y-Mad', 'Miaraha amin\'ny ekipa Y-Mad')}
+              {getText(language, 'Rejoignez l\'équipe Y-MaD', 'Miaraha amin\'ny ekipa Y-MaD')}
             </span>
           </div>
           
-          {/* Titre principal */}
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-4 md:mb-6 drop-shadow-2xl animate-fade-in-up">
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 drop-shadow-2xl">
             {getText(language, 'Offres d\'emploi', 'Asa')}
-            <span className="block text-xl md:text-2xl lg:text-3xl text-blue-200 mt-3 font-light tracking-wide">
-              {getText(language, 'Construisons ensemble l\'avenir', 'Miaraka manorina ny hoavy')}
-            </span>
           </h1>
           
-          {/* Sous-titre */}
-          <p className="text-base md:text-lg lg:text-xl text-blue-100 max-w-2xl mx-auto leading-relaxed animate-fade-in-up animation-delay-200">
+          <p className="text-xl md:text-2xl lg:text-3xl text-blue-100 max-w-3xl mx-auto leading-relaxed">
             {getText(language, 
-              'Découvrez nos opportunités de carrière et rejoignez une équipe passionnée',
-              'Jereo ny fahafahana asa atolotray ary miaraha amin\'ny ekipa iray mazoto')}
+              'Trouvez votre prochaine opportunité professionnelle à Madagascar',
+              'Mitadiava asa vaovao eto Madagasikara')}
           </p>
           
-          {/* Indicateur de défilement */}
+          {/* Bouton de défilement */}
           <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
-            <div className="w-7 h-11 border-2 border-white/40 rounded-full flex justify-center">
-              <div className="w-1.5 h-2.5 bg-white rounded-full mt-2 animate-pulse"></div>
+            <div className="w-7 h-12 border-2 border-white/40 rounded-full flex justify-center">
+              <div className="w-1.5 h-3 bg-white rounded-full mt-3 animate-pulse"></div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Styles d'animation */}
-      <style jsx>{`
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fade-in-up {
-          animation: fadeInUp 0.6s ease-out forwards;
-        }
-        .animation-delay-200 {
-          animation-delay: 0.2s;
-          opacity: 0;
-        }
-      `}</style>
 
       {/* ==================== STATISTIQUES ==================== */}
-      <div className="relative z-10 bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-8 md:py-10">
+      <div className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-10">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
-            <div className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1">
-              <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-600 transition-colors">
-                <Briefcase className="w-6 h-6 md:w-7 md:h-7 text-blue-600 group-hover:text-white transition-colors" />
+            <div>
+              <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <Briefcase className="w-7 h-7 text-blue-600" />
               </div>
-              <p className="text-2xl md:text-3xl font-bold text-gray-800">{stats.total}</p>
-              <p className="text-xs md:text-sm text-gray-500">{getText(language, 'Offres disponibles', 'Asa misokatra')}</p>
+              <p className="text-3xl font-bold text-gray-800">{stats.total}</p>
+              <p className="text-sm text-gray-500">{getText(language, 'Offres disponibles', 'Asa misokatra')}</p>
             </div>
-            <div className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1">
-              <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-600 transition-colors">
-                <Users className="w-6 h-6 md:w-7 md:h-7 text-blue-600 group-hover:text-white transition-colors" />
+            <div>
+              <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <Users className="w-7 h-7 text-blue-600" />
               </div>
-              <p className="text-2xl md:text-3xl font-bold text-gray-800">{stats.types}</p>
-              <p className="text-xs md:text-sm text-gray-500">{getText(language, 'Types de contrat', 'Karazana fifanarahana')}</p>
+              <p className="text-3xl font-bold text-gray-800">{stats.types}</p>
+              <p className="text-sm text-gray-500">{getText(language, 'Types de contrat', 'Karazana fifanarahana')}</p>
             </div>
-            <div className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1">
-              <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-600 transition-colors">
-                <MapPin className="w-6 h-6 md:w-7 md:h-7 text-blue-600 group-hover:text-white transition-colors" />
+            <div>
+              <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <MapPin className="w-7 h-7 text-blue-600" />
               </div>
-              <p className="text-2xl md:text-3xl font-bold text-gray-800">{stats.locations}</p>
-              <p className="text-xs md:text-sm text-gray-500">{getText(language, 'Lieux de travail', 'Toeram-piasana')}</p>
+              <p className="text-3xl font-bold text-gray-800">{stats.locations}</p>
+              <p className="text-sm text-gray-500">{getText(language, 'Lieux de travail', 'Toeram-piasana')}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ==================== SECTION PRINCIPALE ==================== */}
-      <div className="relative z-10 bg-white">
-        <div className="max-w-7xl mx-auto px-4 py-10 md:py-16">
+      {/* ==================== SECTION LISTE DES OFFRES ==================== */}
+      <div className="bg-white py-12">
+        <div className="max-w-7xl mx-auto px-4">
           
           {/* En-tête */}
-          <div className="text-center mb-10 md:mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-gray-800 mb-2">
               {getText(language, 'Nos offres actuelles', 'Ny asa misokatra')}
             </h2>
-            <div className="w-16 h-1 bg-blue-600 mx-auto rounded-full"></div>
-            <p className="text-gray-500 mt-4 max-w-2xl mx-auto text-sm md:text-base">
+            <div className="w-20 h-1 bg-blue-600 mx-auto rounded-full"></div>
+            <p className="text-gray-500 mt-4 max-w-2xl mx-auto">
               {getText(language, 
-                'Rejoignez une équipe passionnée et contribuez au développement de Madagascar',
-                'Miaraha amin\'ny ekipa iray manana fo ary mandray anjara amin\'ny fivoaran\'i Madagasikara')}
+                'Découvrez les opportunités de carrière disponibles actuellement',
+                'Jereo ny fahafahana asa misokatra amin\'izao fotoana izao')}
             </p>
           </div>
 
           {/* Filtres */}
-          <div className="bg-white rounded-xl shadow-md p-5 mb-8 border border-gray-200">
+          <div className="bg-gray-50 rounded-xl p-5 mb-8">
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -299,14 +255,14 @@ export default function JobsPage() {
                   placeholder={getText(language, 'Rechercher une offre...', 'Karohy ny asa...')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm"
+                  className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
                 />
               </div>
               <div className="flex gap-3">
                 <select
                   value={selectedType}
                   onChange={(e) => setSelectedType(e.target.value)}
-                  className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer text-sm"
+                  className="px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer"
                 >
                   <option value="">{getText(language, 'Tous les types', 'Karazana rehetra')}</option>
                   {contractTypes.map(type => (
@@ -316,25 +272,17 @@ export default function JobsPage() {
                   ))}
                 </select>
                 
-                <div className="flex border border-gray-200 rounded-xl overflow-hidden bg-white">
+                <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white">
                   <button
                     onClick={() => setViewMode('grid')}
-                    className={`p-2.5 px-3 transition-all duration-300 ${
-                      viewMode === 'grid' 
-                        ? 'bg-blue-600 text-white' 
-                        : 'text-gray-500 hover:bg-gray-50'
-                    }`}
+                    className={`p-2.5 px-3 transition ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                     title={getText(language, 'Vue grille', 'Fijery grid')}
                   >
                     <LayoutGrid className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setViewMode('list')}
-                    className={`p-2.5 px-3 transition-all duration-300 ${
-                      viewMode === 'list' 
-                        ? 'bg-blue-600 text-white' 
-                        : 'text-gray-500 hover:bg-gray-50'
-                    }`}
+                    className={`p-2.5 px-3 transition ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                     title={getText(language, 'Vue liste', 'Fijery lisitra')}
                   >
                     <List className="w-4 h-4" />
@@ -344,30 +292,20 @@ export default function JobsPage() {
             </div>
             
             {(searchTerm || selectedType) && (
-              <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+              <div className="flex flex-wrap gap-2 mt-4">
                 {searchTerm && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-full text-xs text-gray-700">
-                    <Search className="w-3 h-3" />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 rounded-full text-xs">
                     {searchTerm}
-                    <button onClick={() => setSearchTerm('')} className="hover:text-red-500">
-                      <X className="w-3 h-3" />
-                    </button>
+                    <button onClick={() => setSearchTerm('')} className="hover:text-red-500">✕</button>
                   </span>
                 )}
                 {selectedType && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-full text-xs text-gray-700">
-                    {language === 'fr' 
-                      ? contractTypes.find(t => t.value === selectedType)?.labelFr 
-                      : contractTypes.find(t => t.value === selectedType)?.labelMg}
-                    <button onClick={() => setSelectedType('')} className="hover:text-red-500">
-                      <X className="w-3 h-3" />
-                    </button>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 rounded-full text-xs">
+                    {language === 'fr' ? contractTypes.find(t => t.value === selectedType)?.labelFr : contractTypes.find(t => t.value === selectedType)?.labelMg}
+                    <button onClick={() => setSelectedType('')} className="hover:text-red-500">✕</button>
                   </span>
                 )}
-                <button 
-                  onClick={() => { setSearchTerm(''); setSelectedType(''); }} 
-                  className="text-xs text-blue-600 hover:underline"
-                >
+                <button onClick={() => { setSearchTerm(''); setSelectedType(''); }} className="text-xs text-blue-600 hover:underline">
                   {getText(language, 'Tout effacer', 'Fafana daholo')}
                 </button>
               </div>
@@ -375,18 +313,17 @@ export default function JobsPage() {
           </div>
 
           {/* Résultats */}
-          <div className="mb-5">
+          <div className="mb-4">
             <p className="text-sm text-gray-600">
-              <span className="font-semibold text-blue-700 text-base">{filteredJobs.length}</span> 
-              {getText(language, ' offre(s) trouvée(s)', ' asa hita')}
+              <span className="font-semibold text-blue-700 text-base">{filteredJobs.length}</span> {getText(language, ' offre(s) trouvée(s)', ' asa hita')}
             </p>
           </div>
 
           {filteredJobs.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-md py-16 text-center border border-gray-200">
-              <Search className="w-14 h-14 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg mb-2">{getText(language, 'Aucune offre trouvée', 'Tsy misy asa hita')}</p>
-              <p className="text-gray-400 text-sm">{getText(language, 'Essayez de modifier vos critères de recherche', 'Andramo hanova ny fikarohanao')}</p>
+            <div className="bg-gray-50 rounded-xl py-16 text-center">
+              <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">{getText(language, 'Aucune offre trouvée', 'Tsy misy asa hita')}</p>
+              <p className="text-gray-400 text-sm mt-2">{getText(language, 'Essayez de modifier vos critères de recherche', 'Andramo hanova ny fikarohanao')}</p>
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -405,28 +342,23 @@ export default function JobsPage() {
       </div>
 
       {/* ==================== CTA SECTION ==================== */}
-      <div className="relative z-10 bg-gray-800 py-16">
+      <div className="bg-gray-800 py-16">
         <div className="max-w-4xl mx-auto text-center px-4">
-          <div className="inline-flex items-center gap-2 bg-gray-700 rounded-full px-4 py-1.5 mb-6">
-            <Heart className="w-4 h-4 text-blue-400" />
-            <span className="text-xs text-gray-300">
-              {getText(language, 'Vous ne trouvez pas votre bonheur ?', 'Tsy mahita ny tianao ve ianao?')}
-            </span>
-          </div>
+          <Heart className="w-14 h-14 text-blue-400 mx-auto mb-4" />
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
             {getText(language, 'Candidature spontanée', 'Fangatahana asa tsy misy toerana')}
           </h2>
-          <p className="text-sm md:text-base text-gray-300 mb-6 max-w-2xl mx-auto">
+          <p className="text-gray-300 mb-6 max-w-lg mx-auto">
             {getText(language, 
-              'Envoyez-nous votre CV et votre lettre de motivation, nous étudierons votre profil',
-              'Alefaso aminay ny CV sy ny taratasy fanoloranao, hodinihinay ny momba anao')}
+              'Vous ne trouvez pas votre bonheur ? Envoyez-nous votre CV',
+              'Tsy mahita ny tianao ve ianao? Alefaso ny CV anao')}
           </p>
           <Link 
             href="/contact" 
-            className="group inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-full font-semibold hover:bg-blue-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm"
+            className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
           >
             {getText(language, 'Envoyer ma candidature', 'Alefaso ny fangatahana')} 
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>
@@ -434,179 +366,96 @@ export default function JobsPage() {
   );
 }
 
-// ==================== COMPOSANT CARTE (VUE GRILLE) ====================
-function JobCard({ job, language }: { job: Job; language: 'fr' | 'mg' }) {
+// ============================================================
+// COMPOSANT CARTE (VUE GRILLE)
+// ============================================================
+
+function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
   const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
-  const ContractIcon = getContractIcon(job.job_type);
-  const isFeatured = job.is_featured;
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '';
-    try {
-      return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch {
-      return '';
-    }
-  };
-
-  const getTitle = () => language === 'fr' ? job.title : (job.title_mg || job.title);
-  const getDescription = () => language === 'fr' ? job.description : (job.description_mg || job.description);
+  const ContractIcon = getContractIcon(job.contract_type);
+  const getTitle = () => language === 'fr' ? job.title_fr : (job.title_mg || job.title_fr);
+  const getDescription = () => language === 'fr' ? job.description_fr : (job.description_mg || job.description_fr);
 
   return (
-    <div className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-200">
-      {/* Image */}
-      <div className="relative h-40 overflow-hidden bg-gradient-to-r from-blue-600 to-blue-700">
-        {job.image_url ? (
-          <img src={job.image_url} alt={getTitle()} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Briefcase className="w-16 h-16 text-white/20" />
-          </div>
+    <div className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition border border-gray-200">
+      <div className="p-5">
+        <div className="flex items-start justify-between mb-2">
+          <h3 className="font-bold text-lg text-gray-800 group-hover:text-blue-600 line-clamp-1">
+            {getTitle()}
+          </h3>
+          <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${getContractColor(job.contract_type)}`}>
+            <ContractIcon className="w-3 h-3" /> {getContractLabel(job.contract_type, language)}
+          </span>
+        </div>
+        
+        {job.company && (
+          <p className="text-sm text-gray-600 mb-2 flex items-center gap-1">
+            <Building className="w-3.5 h-3.5" /> {job.company}
+          </p>
         )}
         
-        {/* Badges */}
-        <div className="absolute top-3 left-3 flex flex-wrap gap-2">
-          <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium shadow-sm ${getContractColor(job.job_type)}`}>
-            <ContractIcon className="w-3 h-3" /> {getContractLabel(job.job_type, language)}
-          </span>
-          {isFeatured && (
-            <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-medium shadow-sm">
-              <Star className="w-3 h-3 fill-yellow-500" /> {language === 'fr' ? 'À la une' : 'Manokana'}
+        {job.location && (
+          <p className="text-sm text-gray-500 mb-3 flex items-center gap-1">
+            <MapPin className="w-3.5 h-3.5" /> {job.location}
+          </p>
+        )}
+        
+        <p className="text-gray-600 text-sm line-clamp-2 mb-4">{getDescription()}</p>
+        
+        <div className="flex justify-between items-center">
+          {job.deadline && !isExpired && (
+            <span className="text-xs text-gray-400 flex items-center gap-1">
+              <Calendar className="w-3 h-3" /> {new Date(job.deadline).toLocaleDateString()}
             </span>
           )}
-        </div>
-        
-        {isExpired && (
-          <div className="absolute top-3 right-3">
-            <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-gray-700 text-white font-medium">
-              <Clock className="w-3 h-3" /> {language === 'fr' ? 'Expirée' : 'Lany daty'}
-            </span>
-          </div>
-        )}
-        
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-5">
-          <Link 
-            href={`/emploi/${job.id}`}
-            className="bg-white text-gray-800 px-5 py-1.5 rounded-full text-sm font-semibold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition duration-300 shadow-md"
-          >
-            {language === 'fr' ? 'Voir détails' : 'Jereo'} <ArrowRight className="w-4 h-4" />
+          <Link href={`/jobs/${job.id}`} className="text-blue-600 font-medium text-sm hover:underline">
+            {language === 'fr' ? 'Voir détails' : 'Jereo'} →
           </Link>
         </div>
-      </div>
-      
-      {/* Contenu */}
-      <div className="p-4">
-        <h3 className="font-bold text-gray-800 mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors text-base">
-          {getTitle()}
-        </h3>
-        
-        <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
-          <Building className="w-3.5 h-3.5" />
-          <span>{job.company_name}</span>
-        </div>
-        
-        {job.region && (
-          <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
-            <MapPin className="w-3.5 h-3.5" />
-            <span>{job.region}</span>
-          </div>
-        )}
-        
-        <p className="text-gray-600 line-clamp-2 mb-3 text-xs leading-relaxed">
-          {getDescription()}
-        </p>
-        
-        {job.salary && (
-          <div className="flex items-center gap-1 text-xs text-blue-600 font-medium mb-2">
-            <DollarSign className="w-3.5 h-3.5" />
-            <span>{job.salary}</span>
-          </div>
-        )}
-        
-        {job.deadline && !isExpired && (
-          <div className="flex items-center gap-1 text-xs text-gray-400">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>{language === 'fr' ? 'Jusqu\'au' : 'Hatramin\'ny'} {formatDate(job.deadline)}</span>
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
-// ==================== COMPOSANT LIGNE (VUE LISTE) ====================
-function JobListItem({ job, language }: { job: Job; language: 'fr' | 'mg' }) {
+// ============================================================
+// COMPOSANT LIGNE (VUE LISTE)
+// ============================================================
+
+function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
   const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
-  const ContractIcon = getContractIcon(job.job_type);
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '';
-    try {
-      return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch {
-      return '';
-    }
-  };
-
-  const getTitle = () => language === 'fr' ? job.title : (job.title_mg || job.title);
-  const getDescription = () => language === 'fr' ? job.description : (job.description_mg || job.description);
+  const ContractIcon = getContractIcon(job.contract_type);
+  const getTitle = () => language === 'fr' ? job.title_fr : (job.title_mg || job.title_fr);
+  const getDescription = () => language === 'fr' ? job.description_fr : (job.description_mg || job.description_fr);
 
   return (
-    <div className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all duration-300 border border-gray-200">
-      <div className="p-4">
+    <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
+      <div className="p-5">
         <div className="flex flex-col md:flex-row justify-between gap-4">
           <div className="flex-1">
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <h3 className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors text-base">
-                {getTitle()}
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <h3 className="font-bold text-lg text-gray-800 hover:text-blue-600">
+                <Link href={`/jobs/${job.id}`}>{getTitle()}</Link>
               </h3>
-              <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${getContractColor(job.job_type)}`}>
-                <ContractIcon className="w-3 h-3" /> {getContractLabel(job.job_type, language)}
+              <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${getContractColor(job.contract_type)}`}>
+                <ContractIcon className="w-3 h-3" /> {getContractLabel(job.contract_type, language)}
               </span>
-              {job.is_featured && (
-                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
-                  <Star className="w-3 h-3 fill-yellow-500" /> {language === 'fr' ? 'À la une' : 'Manokana'}
-                </span>
-              )}
-              {isExpired && (
-                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-700 text-white">
-                  <Clock className="w-3 h-3" /> {language === 'fr' ? 'Expirée' : 'Lany daty'}
-                </span>
+            </div>
+            
+            <div className="flex flex-wrap gap-3 text-sm text-gray-500 mb-2">
+              {job.company && <span className="flex items-center gap-1"><Building className="w-3.5 h-3.5" /> {job.company}</span>}
+              {job.location && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {job.location}</span>}
+              {job.deadline && !isExpired && (
+                <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {new Date(job.deadline).toLocaleDateString()}</span>
               )}
             </div>
             
-            <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-2">
-              <span className="flex items-center gap-1"><Building className="w-3.5 h-3.5" /> {job.company_name}</span>
-              {job.region && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {job.region}</span>}
-              {job.salary && <span className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" /> {job.salary}</span>}
-              {job.deadline && (
-                <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> 
-                  {language === 'fr' ? 'Limite' : 'Farany'}: {formatDate(job.deadline)}
-                </span>
-              )}
-            </div>
-            
-            <p className="text-gray-600 line-clamp-2 text-xs leading-relaxed">{getDescription()}</p>
+            <p className="text-gray-600 text-sm line-clamp-2">{getDescription()}</p>
           </div>
           
           <div className="flex items-center">
-            {!isExpired && (
-              <Link 
-                href={`/emploi/${job.id}`}
-                className="bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold text-sm text-center hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-              >
-                {language === 'fr' ? 'Postuler' : 'Mangataka'} <ArrowRight className="w-4 h-4" />
-              </Link>
-            )}
+            <Link href={`/jobs/${job.id}`} className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 whitespace-nowrap">
+              {language === 'fr' ? 'Postuler' : 'Mangataka'}
+            </Link>
           </div>
         </div>
       </div>

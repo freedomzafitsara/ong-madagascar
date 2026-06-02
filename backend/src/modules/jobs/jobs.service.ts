@@ -1,10 +1,12 @@
-﻿import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+﻿// backend/src/modules/jobs/jobs.service.ts
+
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, MoreThan } from 'typeorm';
-import { JobOffer, JobStatus, JobType } from '../../entities/job-offer.entity';
+import { Repository, LessThan, FindOptionsWhere } from 'typeorm';
+import { JobOffer } from '../../entities/job-offer.entity';
 import { JobApplication, ApplicationStatus } from '../../entities/job-application.entity';
-import { CreateJobOfferDto, UpdateJobOfferDto } from './dto/create-job-offer.dto';
-import { CreateJobApplicationDto, UpdateApplicationStatusDto } from './dto/create-job-application.dto';
+import { CreateJobOfferDto, UpdateJobOfferDto, JobOfferQueryDto } from './dto/create-job-offer.dto';
+import { CreateJobApplicationDto, UpdateApplicationStatusDto, JobApplicationQueryDto } from './dto/create-job-application.dto';
 
 @Injectable()
 export class JobsService {
@@ -23,114 +25,110 @@ export class JobsService {
 
   async create(createDto: CreateJobOfferDto, userId: string): Promise<JobOffer> {
     try {
-      const job = new JobOffer();
-      job.title = createDto.title;
-      job.title_mg = createDto.title_mg;
-      job.description = createDto.description;
-      job.description_mg = createDto.description_mg;
-      job.company_name = createDto.company_name;
-      job.image_url = createDto.image_url;
-      job.location = createDto.location;
-      job.region = createDto.region;
-      job.job_type = createDto.job_type;
-      job.sector = createDto.sector;
-      job.salary = createDto.salary;
-      job.requirements = createDto.requirements;
-      job.requirements_mg = createDto.requirements_mg;
-      job.benefits = createDto.benefits;
-      job.deadline = createDto.deadline;
-      job.is_featured = createDto.is_featured || false;
-      job.contact_email = createDto.contact_email;
-      job.contact_phone = createDto.contact_phone;
-      job.status = createDto.status || JobStatus.DRAFT;
-      job.created_by = userId;
-      job.applications_count = 0;
+      const job = this.jobRepository.create({
+        title_fr: createDto.title_fr,
+        title_mg: createDto.title_mg,
+        description_fr: createDto.description_fr,
+        description_mg: createDto.description_mg,
+        company: createDto.company,
+        location: createDto.location,
+        contract_type: createDto.contract_type || 'CDI',
+        deadline: createDto.deadline,
+        is_published: createDto.is_published || false,
+        image_url: createDto.image_url,
+        status: createDto.is_published ? 'published' : 'draft',
+      });
       
       const savedJob = await this.jobRepository.save(job);
-      this.logger.log(`Offre d emploi créée: ${savedJob.title} par ${userId}`);
+      this.logger.log(`Offre d'emploi créée: ${savedJob.title_fr} par ${userId}`);
       return savedJob;
     } catch (error) {
-      this.logger.error(`Erreur lors de la création de l offre: ${error.message}`);
+      this.logger.error(`Erreur lors de la création de l'offre: ${error.message}`);
       throw new BadRequestException(`Erreur lors de la création: ${error.message}`);
     }
   }
 
-  async findAll(page: number = 1, limit: number = 10, status?: string, jobType?: string, search?: string, region?: string) {
+  async findAll(queryDto: JobOfferQueryDto): Promise<{
+    data: JobOffer[];
+    total: number;
+    page: number;
+    totalPages: number;
+    limit: number;
+  }> {
     try {
+      const page = queryDto.page || 1;
+      const limit = queryDto.limit || 10;
       const skip = (page - 1) * limit;
-      const query = this.jobRepository.createQueryBuilder('job');
 
-      if (status && status !== 'all') {
-        query.andWhere('job.status = :status', { status });
-      }
+      const where: FindOptionsWhere<JobOffer> = {};
 
-      if (jobType && jobType !== 'all') {
-        query.andWhere('job.job_type = :jobType', { jobType });
-      }
+      if (queryDto.status) where.status = queryDto.status;
+      if (queryDto.is_published !== undefined) where.is_published = queryDto.is_published;
+      if (queryDto.contract_type) where.contract_type = queryDto.contract_type;
 
-      if (region && region !== 'all') {
-        query.andWhere('job.region = :region', { region });
-      }
-
-      if (search) {
-        query.andWhere('(job.title ILIKE :search OR job.company_name ILIKE :search OR job.description ILIKE :search)', {
-          search: `%${search}%`,
-        });
-      }
-
-      const [data, total] = await query
-        .orderBy('job.created_at', 'DESC')
-        .addOrderBy('job.is_featured', 'DESC')
-        .skip(skip)
-        .take(limit)
-        .getManyAndCount();
+      const [data, total] = await this.jobRepository.findAndCount({
+        where,
+        order: { created_at: 'DESC' },
+        skip,
+        take: limit,
+      });
 
       return { data, total, page, totalPages: Math.ceil(total / limit), limit };
     } catch (error) {
       this.logger.error(`Erreur lors de la récupération des offres: ${error.message}`);
-      return { data: [], total: 0, page: 1, totalPages: 0, limit };
+      return { data: [], total: 0, page: 1, totalPages: 0, limit: 10 };
     }
   }
 
-  async findPublished(page: number = 1, limit: number = 9, jobType?: string, region?: string) {
+  async findPublished(queryDto: JobOfferQueryDto): Promise<{
+    data: JobOffer[];
+    total: number;
+    page: number;
+    totalPages: number;
+    limit: number;
+  }> {
     try {
+      const page = queryDto.page || 1;
+      const limit = queryDto.limit || 9;
       const skip = (page - 1) * limit;
       const now = new Date();
 
-      const query = this.jobRepository.createQueryBuilder('job')
-        .where('job.status = :status', { status: JobStatus.PUBLISHED })
-        .andWhere('(job.deadline IS NULL OR job.deadline > :now)', { now });
+      const where: FindOptionsWhere<JobOffer> = {
+        is_published: true,
+        status: 'published',
+      };
 
-      if (jobType && jobType !== 'all') {
-        query.andWhere('job.job_type = :jobType', { jobType });
-      }
+      if (queryDto.contract_type) where.contract_type = queryDto.contract_type;
 
-      if (region && region !== 'all') {
-        query.andWhere('job.region = :region', { region });
-      }
+      const [data, total] = await this.jobRepository.findAndCount({
+        where,
+        order: { created_at: 'DESC' },
+        skip,
+        take: limit,
+      });
 
-      const [data, total] = await query
-        .orderBy('job.is_featured', 'DESC')
-        .addOrderBy('job.created_at', 'DESC')
-        .skip(skip)
-        .take(limit)
-        .getManyAndCount();
+      // Filtrer les offres expirées
+      const activeData = data.filter(job => !job.deadline || new Date(job.deadline) > now);
 
-      return { data, total, page, totalPages: Math.ceil(total / limit), limit };
+      return { 
+        data: activeData, 
+        total: activeData.length, 
+        page, 
+        totalPages: Math.ceil(activeData.length / limit), 
+        limit 
+      };
     } catch (error) {
       this.logger.error(`Erreur lors de la récupération des offres publiées: ${error.message}`);
-      return { data: [], total: 0, page: 1, totalPages: 0, limit };
+      return { data: [], total: 0, page: 1, totalPages: 0, limit: 9 };
     }
   }
 
   async findFeatured(): Promise<JobOffer[]> {
     try {
-      const now = new Date();
       return await this.jobRepository.find({
         where: {
-          status: JobStatus.PUBLISHED,
-          is_featured: true,
-          deadline: MoreThan(now),
+          is_published: true,
+          status: 'published',
         },
         order: { created_at: 'DESC' },
         take: 6,
@@ -144,7 +142,7 @@ export class JobsService {
   async findOne(id: string): Promise<JobOffer> {
     const job = await this.jobRepository.findOne({ where: { id } });
     if (!job) {
-      throw new NotFoundException(`Offre d emploi avec l identifiant ${id} non trouvée`);
+      throw new NotFoundException(`Offre d'emploi avec l'identifiant ${id} non trouvée`);
     }
     return job;
   }
@@ -153,41 +151,36 @@ export class JobsService {
     try {
       const job = await this.findOne(id);
       
-      if (updateDto.title !== undefined) job.title = updateDto.title;
+      if (updateDto.title_fr !== undefined) job.title_fr = updateDto.title_fr;
       if (updateDto.title_mg !== undefined) job.title_mg = updateDto.title_mg;
-      if (updateDto.description !== undefined) job.description = updateDto.description;
+      if (updateDto.description_fr !== undefined) job.description_fr = updateDto.description_fr;
       if (updateDto.description_mg !== undefined) job.description_mg = updateDto.description_mg;
-      if (updateDto.company_name !== undefined) job.company_name = updateDto.company_name;
-      if (updateDto.image_url !== undefined) job.image_url = updateDto.image_url;
+      if (updateDto.company !== undefined) job.company = updateDto.company;
       if (updateDto.location !== undefined) job.location = updateDto.location;
-      if (updateDto.region !== undefined) job.region = updateDto.region;
-      if (updateDto.job_type !== undefined) job.job_type = updateDto.job_type;
-      if (updateDto.sector !== undefined) job.sector = updateDto.sector;
-      if (updateDto.salary !== undefined) job.salary = updateDto.salary;
-      if (updateDto.requirements !== undefined) job.requirements = updateDto.requirements;
-      if (updateDto.requirements_mg !== undefined) job.requirements_mg = updateDto.requirements_mg;
-      if (updateDto.benefits !== undefined) job.benefits = updateDto.benefits;
+      if (updateDto.contract_type !== undefined) job.contract_type = updateDto.contract_type;
       if (updateDto.deadline !== undefined) job.deadline = updateDto.deadline;
-      if (updateDto.is_featured !== undefined) job.is_featured = updateDto.is_featured;
-      if (updateDto.contact_email !== undefined) job.contact_email = updateDto.contact_email;
-      if (updateDto.contact_phone !== undefined) job.contact_phone = updateDto.contact_phone;
-      if (updateDto.status !== undefined) job.status = updateDto.status;
+      if (updateDto.is_published !== undefined) {
+        job.is_published = updateDto.is_published;
+        job.status = updateDto.is_published ? 'published' : 'draft';
+      }
+      if (updateDto.image_url !== undefined) job.image_url = updateDto.image_url;
       
       const updatedJob = await this.jobRepository.save(job);
-      this.logger.log(`Offre d emploi mise à jour: ${updatedJob.id}`);
+      this.logger.log(`Offre d'emploi mise à jour: ${updatedJob.id}`);
       return updatedJob;
     } catch (error) {
-      this.logger.error(`Erreur lors de la mise à jour de l offre: ${error.message}`);
+      this.logger.error(`Erreur lors de la mise à jour de l'offre: ${error.message}`);
       throw new BadRequestException(`Erreur lors de la mise à jour: ${error.message}`);
     }
   }
 
-  async updateStatus(id: string, status: JobStatus): Promise<JobOffer> {
+  async updateStatus(id: string, status: string): Promise<JobOffer> {
     try {
       const job = await this.findOne(id);
       job.status = status;
+      job.is_published = status === 'published';
       const updatedJob = await this.jobRepository.save(job);
-      this.logger.log(`Statut de l offre mis à jour: ${id} -> ${status}`);
+      this.logger.log(`Statut de l'offre mis à jour: ${id} -> ${status}`);
       return updatedJob;
     } catch (error) {
       this.logger.error(`Erreur lors du changement de statut: ${error.message}`);
@@ -195,26 +188,25 @@ export class JobsService {
     }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<{ success: boolean; message: string }> {
     const job = await this.findOne(id);
     await this.jobRepository.remove(job);
-    this.logger.log(`Offre d emploi supprimée: ${id}`);
+    this.logger.log(`Offre d'emploi supprimée: ${id}`);
+    return { success: true, message: 'Offre supprimée avec succès' };
   }
 
   async getStats() {
     try {
       const now = new Date();
       const total = await this.jobRepository.count();
-      const published = await this.jobRepository.count({ where: { status: JobStatus.PUBLISHED } });
-      const draft = await this.jobRepository.count({ where: { status: JobStatus.DRAFT } });
-      const closed = await this.jobRepository.count({ where: { status: JobStatus.CLOSED } });
+      const published = await this.jobRepository.count({ where: { is_published: true, status: 'published' } });
+      const draft = await this.jobRepository.count({ where: { is_published: false, status: 'draft' } });
       const expired = await this.jobRepository.count({ 
         where: { 
-          status: JobStatus.PUBLISHED,
+          is_published: true,
           deadline: LessThan(now),
         } 
       });
-      const featured = await this.jobRepository.count({ where: { is_featured: true } });
 
       const totalApplications = await this.applicationRepository.count();
       const pendingApplications = await this.applicationRepository.count({ 
@@ -225,9 +217,7 @@ export class JobsService {
         total, 
         published, 
         draft, 
-        closed, 
         expired, 
-        featured, 
         totalApplications, 
         pendingApplications 
       };
@@ -237,9 +227,7 @@ export class JobsService {
         total: 0, 
         published: 0, 
         draft: 0, 
-        closed: 0, 
         expired: 0, 
-        featured: 0, 
         totalApplications: 0, 
         pendingApplications: 0 
       };
@@ -254,7 +242,7 @@ export class JobsService {
     try {
       const job = await this.findOne(createDto.job_offer_id);
 
-      if (job.status !== JobStatus.PUBLISHED) {
+      if (!job.is_published) {
         throw new BadRequestException("Cette offre n'est plus disponible");
       }
 
@@ -273,27 +261,25 @@ export class JobsService {
         throw new BadRequestException("Vous avez déjà postulé à cette offre");
       }
 
-      const application = new JobApplication();
-      application.job_offer_id = createDto.job_offer_id;
-      application.user_id = userId;
-      application.full_name = createDto.full_name;
-      application.email = createDto.email;
-      application.phone = createDto.phone;
-      application.address = createDto.address;
-      application.experience_years = createDto.experience_years;
-      application.cover_letter = createDto.cover_letter || createDto.message;
-      application.cv_url = files?.cv?.[0]?.path || files?.cv_url;
-      application.photo_url = files?.photo?.[0]?.path;
-      application.diploma_url = files?.diploma?.[0]?.path;
-      application.attestation_url = files?.attestation?.[0]?.path;
-      application.status = ApplicationStatus.SUBMITTED;
+      const application = this.applicationRepository.create({
+        job_offer_id: createDto.job_offer_id,
+        user_id: userId,
+        full_name: createDto.full_name,
+        email: createDto.email,
+        phone: createDto.phone,
+        address: createDto.address,
+        experience: createDto.experience,
+        experience_years: createDto.experience_years,
+        cover_letter: createDto.cover_letter,
+        cv_url: files?.cv?.[0]?.path || createDto.cv_url,
+        diploma_url: files?.diploma?.[0]?.path || createDto.diploma_url,
+        photo_url: files?.photo?.[0]?.path || createDto.photo_url,
+        attestation_url: files?.attestation?.[0]?.path || createDto.attestation_url,
+        status: ApplicationStatus.SUBMITTED,
+      });
 
       const savedApplication = await this.applicationRepository.save(application);
-
-      job.applications_count += 1;
-      await this.jobRepository.save(job);
-
-      this.logger.log(`Nouvelle candidature pour l offre ${createDto.job_offer_id} par ${createDto.email}`);
+      this.logger.log(`Nouvelle candidature pour l'offre ${createDto.job_offer_id} par ${createDto.email}`);
       return savedApplication;
     } catch (error) {
       this.logger.error(`Erreur lors de la candidature: ${error.message}`);
@@ -301,23 +287,33 @@ export class JobsService {
     }
   }
 
-  async getApplicationsByJob(jobId: string, page: number = 1, limit: number = 10, status?: string) {
+  async getApplicationsByJob(jobId: string, queryDto: JobApplicationQueryDto): Promise<{
+    data: JobApplication[];
+    total: number;
+    page: number;
+    totalPages: number;
+    limit: number;
+  }> {
     try {
+      const page = queryDto.page || 1;
+      const limit = queryDto.limit || 10;
       const skip = (page - 1) * limit;
-      const query = this.applicationRepository.createQueryBuilder('app')
-        .where('app.job_offer_id = :jobId', { jobId })
-        .leftJoinAndSelect('app.jobOffer', 'jobOffer')
-        .orderBy('app.created_at', 'DESC');
 
-      if (status && status !== 'all') {
-        query.andWhere('app.status = :status', { status });
-      }
+      const where: FindOptionsWhere<JobApplication> = { job_offer_id: jobId };
+      if (queryDto.status) where.status = queryDto.status;
 
-      const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
+      const [data, total] = await this.applicationRepository.findAndCount({
+        where,
+        relations: ['jobOffer'],
+        order: { created_at: 'DESC' },
+        skip,
+        take: limit,
+      });
+
       return { data, total, page, totalPages: Math.ceil(total / limit), limit };
     } catch (error) {
-      this.logger.error(`Erreur lors de la récupération des candidatures pour l offre: ${error.message}`);
-      return { data: [], total: 0, page: 1, totalPages: 0, limit };
+      this.logger.error(`Erreur lors de la récupération des candidatures: ${error.message}`);
+      return { data: [], total: 0, page: 1, totalPages: 0, limit: 10 };
     }
   }
 
@@ -349,9 +345,18 @@ export class JobsService {
     }
   }
 
-  async getUserApplications(userId: string, page: number = 1, limit: number = 10) {
+  async getUserApplications(userId: string, queryDto: JobApplicationQueryDto): Promise<{
+    data: JobApplication[];
+    total: number;
+    page: number;
+    totalPages: number;
+    limit: number;
+  }> {
     try {
+      const page = queryDto.page || 1;
+      const limit = queryDto.limit || 10;
       const skip = (page - 1) * limit;
+
       const [data, total] = await this.applicationRepository.findAndCount({
         where: { user_id: userId },
         relations: ['jobOffer'],
@@ -361,79 +366,97 @@ export class JobsService {
       });
       return { data, total, page, totalPages: Math.ceil(total / limit), limit };
     } catch (error) {
-      this.logger.error(`Erreur lors de la récupération des candidatures de l utilisateur: ${error.message}`);
-      return { data: [], total: 0, page: 1, totalPages: 0, limit };
+      this.logger.error(`Erreur lors de la récupération des candidatures: ${error.message}`);
+      return { data: [], total: 0, page: 1, totalPages: 0, limit: 10 };
     }
   }
 
- async getAllApplications(page: number = 1, limit: number = 10, status?: string) {
-  const skip = (page - 1) * limit;
-  const query = this.applicationRepository.createQueryBuilder('app')
-    .leftJoinAndSelect('app.jobOffer', 'jobOffer')
-    .orderBy('app.created_at', 'DESC');
+  async getAllApplications(queryDto: JobApplicationQueryDto): Promise<{
+    data: JobApplication[];
+    total: number;
+    page: number;
+    totalPages: number;
+    limit: number;
+  }> {
+    try {
+      const page = queryDto.page || 1;
+      const limit = queryDto.limit || 10;
+      const skip = (page - 1) * limit;
 
-  if (status && status !== 'all') {
-    query.andWhere('app.status = :status', { status });
+      const where: FindOptionsWhere<JobApplication> = {};
+      if (queryDto.status) where.status = queryDto.status;
+      if (queryDto.job_offer_id) where.job_offer_id = queryDto.job_offer_id;
+      if (queryDto.user_id) where.user_id = queryDto.user_id;
+
+      const [data, total] = await this.applicationRepository.findAndCount({
+        where,
+        relations: ['jobOffer', 'user'],
+        order: { created_at: 'DESC' },
+        skip,
+        take: limit,
+      });
+      
+      return { data, total, page, totalPages: Math.ceil(total / limit), limit };
+    } catch (error) {
+      this.logger.error(`Erreur lors de la récupération des candidatures: ${error.message}`);
+      return { data: [], total: 0, page: 1, totalPages: 0, limit: 10 };
+    }
   }
 
-  const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
-  
-  return { 
-    data, 
-    total, 
-    page, 
-    totalPages: Math.ceil(total / limit), 
-    limit 
-  };
- }// ============================================================
-// SECTION 3 : STATISTIQUES ET EXPORT DES CANDIDATURES
-// ============================================================
+  // ============================================================
+  // SECTION 3 : STATISTIQUES ET EXPORT DES CANDIDATURES
+  // ============================================================
 
-async getApplicationStats(): Promise<{
-  total: number;
-  submitted: number;
-  reviewing: number;
-  shortlisted: number;
-  interview: number;
-  accepted: number;
-  rejected: number;
-}> {
-  const total = await this.applicationRepository.count();
-  const submitted = await this.applicationRepository.count({ where: { status: ApplicationStatus.SUBMITTED } });
-  const reviewing = await this.applicationRepository.count({ where: { status: ApplicationStatus.REVIEWING } });
-  const shortlisted = await this.applicationRepository.count({ where: { status: ApplicationStatus.SHORTLISTED } });
-  const interview = await this.applicationRepository.count({ where: { status: ApplicationStatus.INTERVIEW } });
-  const accepted = await this.applicationRepository.count({ where: { status: ApplicationStatus.ACCEPTED } });
-  const rejected = await this.applicationRepository.count({ where: { status: ApplicationStatus.REJECTED } });
+  async getApplicationStats(): Promise<{
+    total: number;
+    submitted: number;
+    reviewing: number;
+    shortlisted: number;
+    interview: number;
+    accepted: number;
+    rejected: number;
+  }> {
+    const total = await this.applicationRepository.count();
+    const submitted = await this.applicationRepository.count({ where: { status: ApplicationStatus.SUBMITTED } });
+    const reviewing = await this.applicationRepository.count({ where: { status: ApplicationStatus.REVIEWING } });
+    const shortlisted = await this.applicationRepository.count({ where: { status: ApplicationStatus.SHORTLISTED } });
+    const interview = await this.applicationRepository.count({ where: { status: ApplicationStatus.INTERVIEW } });
+    const accepted = await this.applicationRepository.count({ where: { status: ApplicationStatus.ACCEPTED } });
+    const rejected = await this.applicationRepository.count({ where: { status: ApplicationStatus.REJECTED } });
 
-  return { total, submitted, reviewing, shortlisted, interview, accepted, rejected };
-}
+    return { total, submitted, reviewing, shortlisted, interview, accepted, rejected };
+  }
 
-async exportApplicationsToCSV(): Promise<string> {
-  const applications = await this.applicationRepository.find({
-    relations: ['jobOffer'],
-    order: { created_at: 'DESC' },
-  });
+  async exportApplicationsToCSV(jobId?: string): Promise<string> {
+    const where: FindOptionsWhere<JobApplication> = {};
+    if (jobId) where.job_offer_id = jobId;
 
-  const headers = ['ID', 'Candidat', 'Email', 'Telephone', 'Poste', 'Entreprise', 'Statut', 'Date candidature'];
-  const rows = applications.map(app => [
-    app.id,
-    app.full_name,
-    app.email,
-    app.phone || '',
-    app.jobOffer?.title || '',
-    app.jobOffer?.company_name || '',
-    app.status,
-    new Date(app.created_at).toLocaleDateString('fr-FR'),
-  ]);
+    const applications = await this.applicationRepository.find({
+      where,
+      relations: ['jobOffer'],
+      order: { created_at: 'DESC' },
+    });
 
-  const csvContent = [headers, ...rows].map(row => row.join(';')).join('\n');
-  return csvContent;
-}
+    const headers = ['ID', 'Candidat', 'Email', 'Telephone', 'Poste', 'Entreprise', 'Statut', 'Date candidature'];
+    const rows = applications.map(app => [
+      app.id,
+      app.full_name,
+      app.email,
+      app.phone || '',
+      app.jobOffer?.title_fr || '',
+      app.jobOffer?.company || '',
+      app.status,
+      new Date(app.created_at).toLocaleDateString('fr-FR'),
+    ]);
 
-async deleteApplication(id: string): Promise<void> {
-  const application = await this.getApplication(id);
-  await this.applicationRepository.remove(application);
-  this.logger.log(`Candidature supprimee: ${id}`);
-}
+    const csvContent = [headers, ...rows].map(row => row.join(';')).join('\n');
+    return csvContent;
+  }
+
+  async deleteApplication(id: string): Promise<{ success: boolean; message: string }> {
+    const application = await this.getApplication(id);
+    await this.applicationRepository.remove(application);
+    this.logger.log(`Candidature supprimée: ${id}`);
+    return { success: true, message: 'Candidature supprimée avec succès' };
+  }
 }

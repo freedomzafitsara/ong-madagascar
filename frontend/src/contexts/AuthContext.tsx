@@ -4,30 +4,25 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { useRouter } from 'next/navigation';
 
 // ============================================================
-// 1. ENUM DES RÔLES
+// 1. ENUM DES RÔLES (simplifié pour le thème)
 // ============================================================
 
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
   ADMIN = 'admin',
-  STAFF = 'staff',
-  MEMBER = 'member',
-  VOLUNTEER = 'volunteer',
-  PARTNER = 'partner',
-  VISITOR = 'visitor',
 }
 
 // ============================================================
-// 2. INTERFACES ET TYPES
+// 2. INTERFACES ET TYPES (alignés avec le backend)
 // ============================================================
 
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  first_name: string;      // ✅ snake_case (backend)
+  last_name: string;       // ✅ snake_case (backend)
   role: UserRole;
-  isActive: boolean;
+  is_active: boolean;      // ✅ snake_case (backend)
   avatar_url?: string;
   phone?: string;
   region?: string;
@@ -35,12 +30,12 @@ export interface User {
   position?: string;
   department?: string;
   skills?: string;
-  socialLinkedin?: string;
-  socialTwitter?: string;
-  socialGithub?: string;
-  createdAt?: string;
-  lastLogin?: string;
-  updatedAt?: string;
+  social_linkedin?: string;
+  social_twitter?: string;
+  social_github?: string;
+  created_at?: string;
+  last_login?: string;
+  updated_at?: string;
   email_verified?: boolean;
   language?: string;
 }
@@ -191,20 +186,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.log('Connexion reussie, token obtenu');
 
+      // Enrichir les données utilisateur avec les champs attendus
       const enrichedUserData: User = {
         ...data.user,
         role: data.user.role as UserRole,
-        createdAt: data.user.createdAt || new Date().toISOString(),
-        lastLogin: data.user.lastLogin || new Date().toISOString(),
-        phone: data.user.phone || '',
-        region: data.user.region || 'Analamanga',
-        bio: data.user.bio || '',
-        position: data.user.position || 'Membre',
-        department: data.user.department || 'Programmes',
-        skills: data.user.skills || '',
-        socialLinkedin: data.user.socialLinkedin || '',
-        socialTwitter: data.user.socialTwitter || '',
-        socialGithub: data.user.socialGithub || '',
+        created_at: data.user.created_at || new Date().toISOString(),
+        last_login: data.user.last_login || new Date().toISOString(),
+        is_active: data.user.is_active !== undefined ? data.user.is_active : true,
       };
 
       localStorage.setItem('access_token', authToken);
@@ -269,7 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     register,
     hasRole,
-    isAuthenticated: !!token && !!user && user.isActive === true,
+    isAuthenticated: !!token && !!user && user.is_active === true,
     updateUser,
     refreshToken,
   };

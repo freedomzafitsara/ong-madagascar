@@ -1,13 +1,24 @@
 // backend/src/modules/blog/dto/create-blog-post.dto.ts
 
-import { IsString, IsOptional, IsEnum, IsArray, MaxLength } from 'class-validator';
-import { ArticleType, PostStatus } from '../../../entities/blog-post.entity';
+import { IsString, IsOptional, IsEnum, IsBoolean, MaxLength } from 'class-validator';
 
-export class UpdateBlogPostDto {
+// Types d'articles simplifiés pour le thème
+export enum ArticleType {
+  NEWS = 'news',
+  SUCCESS_STORY = 'success_story',
+  REPORT = 'report',
+}
+
+// Statuts simplifiés
+export enum PostStatus {
+  DRAFT = 'draft',
+  PUBLISHED = 'published',
+}
+
+export class CreateBlogPostDto {
   @IsString()
-  @IsOptional()
   @MaxLength(255)
-  title?: string;
+  title_fr: string;
 
   @IsString()
   @IsOptional()
@@ -15,22 +26,21 @@ export class UpdateBlogPostDto {
   title_mg?: string;
 
   @IsString()
-  @IsOptional()
-  summary?: string;
-
-  @IsString()
-  @IsOptional()
-  summary_mg?: string;
-
-  @IsString()
-  @IsOptional()
-  content?: string;
+  content_fr: string;
 
   @IsString()
   @IsOptional()
   content_mg?: string;
 
-  @IsEnum(['news', 'testimonial', 'report', 'success_story', 'event_recap'])
+  @IsString()
+  @IsOptional()
+  summary_fr?: string;
+
+  @IsString()
+  @IsOptional()
+  summary_mg?: string;
+
+  @IsEnum(ArticleType)
   @IsOptional()
   type?: ArticleType;
 
@@ -38,19 +48,19 @@ export class UpdateBlogPostDto {
   @IsOptional()
   image_url?: string;
 
-  @IsEnum(['draft', 'published', 'archived'])
+  @IsBoolean()
   @IsOptional()
-  status?: PostStatus;
+  is_published?: boolean;
 
-  @IsArray()
-  @IsOptional()
-  tags?: string[];
+  @IsString()
+  author_id: string;
 }
 
-export class CreateBlogPostDto {
+export class UpdateBlogPostDto {
   @IsString()
+  @IsOptional()
   @MaxLength(255)
-  title: string;
+  title_fr?: string;
 
   @IsString()
   @IsOptional()
@@ -58,35 +68,30 @@ export class CreateBlogPostDto {
   title_mg?: string;
 
   @IsString()
-  summary: string;
-
-  @IsString()
   @IsOptional()
-  summary_mg?: string;
-
-  @IsString()
-  @IsOptional()
-  content?: string;
+  content_fr?: string;
 
   @IsString()
   @IsOptional()
   content_mg?: string;
 
-  @IsEnum(['news', 'testimonial', 'report', 'success_story', 'event_recap'])
-  type: ArticleType;
+  @IsString()
+  @IsOptional()
+  summary_fr?: string;
+
+  @IsString()
+  @IsOptional()
+  summary_mg?: string;
+
+  @IsEnum(ArticleType)
+  @IsOptional()
+  type?: ArticleType;
 
   @IsString()
   @IsOptional()
   image_url?: string;
 
-  @IsEnum(['draft', 'published', 'archived'])
+  @IsBoolean()
   @IsOptional()
-  status?: PostStatus;
-
-  @IsArray()
-  @IsOptional()
-  tags?: string[];
-
-  @IsString()
-  author: string;
+  is_published?: boolean;
 }

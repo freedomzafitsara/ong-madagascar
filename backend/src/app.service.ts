@@ -1,3 +1,5 @@
+// backend/src/app.service.ts
+
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
@@ -5,39 +7,40 @@ export class AppService {
 
   getHello() {
     return {
-      message: 'Bienvenue sur l API Y-Mad',
+      message: 'Bienvenue sur l API Y-MaD',
       version: '1.0.0',
       status: 'online',
       documentation: 'http://localhost:4001/api/docs',
       endpoints: {
         auth: {
-          login: 'POST /auth/login',
-          register: 'POST /auth/register',
+          login: 'POST /api/auth/login',
+          register: 'POST /api/auth/register',
+          profile: 'GET /api/auth/profile',
         },
         projects: {
-          list: 'GET /projects',
-          detail: 'GET /projects/:id',
-        },
-        jobs: {
-          list: 'GET /jobs/offers',
-          detail: 'GET /jobs/offers/:id',
-          apply: 'POST /jobs/apply',
-          applications: 'GET /jobs/offers/:id/applications',
-        },
-        events: {
-          list: 'GET /events',
-          register: 'POST /events/register',
-        },
-        donations: {
-          create: 'POST /donations',
-          myDonations: 'GET /donations/my-donations',
-        },
-        members: {
-          list: 'GET /members',
-          card: 'GET /members/card/:memberNumber',
+          list: 'GET /api/projects',
+          detail: 'GET /api/projects/:id',
+          create: 'POST /api/projects',
+          update: 'PATCH /api/projects/:id',
+          delete: 'DELETE /api/projects/:id',
         },
         blog: {
-          list: 'GET /blog',
+          list: 'GET /api/blog',
+          detail: 'GET /api/blog/:id',
+          create: 'POST /api/blog',
+          update: 'PATCH /api/blog/:id',
+          delete: 'DELETE /api/blog/:id',
+        },
+        jobs: {
+          offers: 'GET /api/jobs/offers',
+          offerDetail: 'GET /api/jobs/offers/:id',
+          apply: 'POST /api/jobs/apply',
+          applications: 'GET /api/jobs/applications',
+          myApplications: 'GET /api/jobs/applications/my',
+        },
+        pages: {
+          public: 'GET /api/pages/public/:page',
+          backgrounds: 'GET /api/pages/backgrounds/:page',
         },
       },
     };
@@ -58,7 +61,7 @@ export class AppService {
     
     return {
       status: 'ok',
-      service: 'Y-Mad API',
+      service: 'Y-MaD API - Gestion des offres d emploi',
       timestamp: new Date().toISOString(),
       uptime: {
         seconds: uptimeSeconds,
@@ -74,20 +77,20 @@ export class AppService {
 
   getInfo() {
     return {
-      name: 'Y-Mad API',
+      name: 'Y-MaD API',
       version: '1.0.0',
-      author: 'Y-Mad Association',
-      description: 'API REST pour l association Y-Mad',
+      author: 'Y-MaD Association',
+      description: 'API REST pour la plateforme de gestion des offres d emploi',
       documentation: '/api/docs',
       features: [
         'Authentification JWT',
-        'Gestion des membres',
-        'Module emploi',
-        'Gestion des evenements',
-        'Dons Mobile Money',
-        'Blog bilingue',
-        'Dashboard administrateur',
-        'Generation de rapports PDF',
+        'Gestion des projets',
+        'Gestion du blog',
+        'Gestion des offres d emploi',
+        'Gestion des candidatures',
+        'Contenu des pages dynamiques',
+        'Fonds d ecran par page',
+        'Multilingue FR/MG',
       ],
     };
   }
@@ -95,37 +98,28 @@ export class AppService {
   getApiInfo() {
     return {
       association: {
-        name: 'Y-Mad',
-        fullName: 'Youthful Madagascar',
-        slogan: 'Ensemble, construisons le Madagascar de demain',
-        description: "Association de jeunesse et developpement basee a Madagascar",
-        founded: '2020',
-        status: 'Association Enregistree MG',
-        address: 'Carion, Antananarivo, Madagascar',
-        phone: '+261 32 04 856 97',
-        email: 'ymad.mg@gmail.com',
-        website: 'https://y-mad.mg',
-        socialMedia: {
-          facebook: 'https://facebook.com/ymad.mg',
-          instagram: 'https://instagram.com/ymad.mg',
-          linkedin: 'https://linkedin.com/company/ymad-mg',
-        },
+        name: 'Y-MaD',
+        fullName: 'Young for Madagascar Development',
+        slogan: 'Jeunesse pour le developpement de Madagascar',
+        description: 'Association de jeunesse et developpement basee a Madagascar',
+        status: 'Association Enregistree',
+        address: 'Antananarivo, Madagascar',
+        email: 'contact@y-mad.mg',
       },
       api: {
-        name: 'Y-Mad API',
+        name: 'Y-MaD API',
         version: '1.0.0',
-        description: 'API RESTful pour le site web de l association Y-Mad',
+        description: 'API RESTful pour la plateforme de gestion des offres d emploi',
         documentation: '/api/docs',
       },
       features: [
-        'Authentification multi-roles avec JWT',
-        'Gestion des membres avec cartes QR code',
-        'Module emploi complet',
-        'Gestion d evenements',
-        'Dons Mobile Money',
-        'Blog bilingue',
-        'Projets avec indicateurs d impact',
-        'Generation de rapports PDF',
+        'Authentification admin avec JWT',
+        'CRUD complet des projets',
+        'CRUD complet du blog',
+        'CRUD complet des offres d emploi',
+        'Gestion des candidatures',
+        'Contenu multilingue (FR/MG)',
+        'Images de fond personnalisables par page',
       ],
     };
   }
@@ -141,67 +135,63 @@ export class AppService {
         docs: baseUrl + '/api/docs',
       },
       auth: {
-        register: 'POST /api/auth/register',
         login: 'POST /api/auth/login',
+        register: 'POST /api/auth/register',
         profile: 'GET /api/auth/profile',
-        forgotPassword: 'POST /api/auth/forgot-password',
-        resetPassword: 'POST /api/auth/reset-password',
       },
       projects: {
         list: 'GET /api/projects',
+        public: 'GET /api/projects/public',
+        featured: 'GET /api/projects/featured',
         detail: 'GET /api/projects/:id',
         create: 'POST /api/projects',
-      },
-      jobs: {
-        list: 'GET /api/jobs/offers',
-        detail: 'GET /api/jobs/offers/:id',
-        apply: 'POST /api/jobs/apply',
-        myApplications: 'GET /api/jobs/applications/my',
-      },
-      events: {
-        list: 'GET /api/events',
-        detail: 'GET /api/events/:id',
-        register: 'POST /api/events/:id/register',
-      },
-      donations: {
-        create: 'POST /api/donations',
-        myDonations: 'GET /api/donations/my-donations',
-      },
-      members: {
-        create: 'POST /api/members',
-        myMember: 'GET /api/members/me',
-        card: 'GET /api/members/card/:memberNumber',
+        update: 'PATCH /api/projects/:id',
+        delete: 'DELETE /api/projects/:id',
+        stats: 'GET /api/projects/stats',
       },
       blog: {
         list: 'GET /api/blog',
+        public: 'GET /api/blog/public',
         detail: 'GET /api/blog/:id',
+        create: 'POST /api/blog',
+        update: 'PATCH /api/blog/:id',
+        delete: 'DELETE /api/blog/:id',
+        stats: 'GET /api/blog/stats',
+      },
+      jobs: {
+        offers: 'GET /api/jobs/offers',
+        offersPublic: 'GET /api/jobs/offers/public',
+        offerDetail: 'GET /api/jobs/offers/:id',
+        createOffer: 'POST /api/jobs/offers',
+        updateOffer: 'PATCH /api/jobs/offers/:id',
+        deleteOffer: 'DELETE /api/jobs/offers/:id',
+        apply: 'POST /api/jobs/apply',
+        applications: 'GET /api/jobs/applications',
+        myApplications: 'GET /api/jobs/applications/my',
+        updateApplicationStatus: 'PATCH /api/jobs/applications/:id/status',
+        stats: 'GET /api/jobs/offers/stats',
+      },
+      pages: {
+        public: 'GET /api/pages/public/:page',
+        admin: 'GET /api/pages/:page',
+        update: 'PUT /api/pages/:page',
+        backgrounds: 'GET /api/pages/backgrounds/:page',
+        updateBackground: 'PUT /api/pages/backgrounds/:page',
       },
     };
   }
 
   getContactInfo() {
     return {
-      association: 'Y-Mad',
-      slogan: 'Ensemble, construisons le Madagascar de demain',
+      association: 'Y-MaD',
+      slogan: 'Jeunesse pour le developpement de Madagascar',
       address: {
-        street: 'Carion',
         city: 'Antananarivo',
         country: 'Madagascar',
-        full: 'Carion, Antananarivo, Madagascar',
-      },
-      phone: {
-        primary: '+261 32 04 856 97',
-        secondary: '+261 34 00 000 00',
       },
       email: {
-        general: 'ymad.mg@gmail.com',
-        support: 'contact@y-mad.mg',
-      },
-      website: 'https://y-mad.mg',
-      socialMedia: {
-        facebook: 'https://facebook.com/ymad.mg',
-        instagram: 'https://instagram.com/ymad.mg',
-        linkedin: 'https://linkedin.com/company/ymad-mg',
+        general: 'contact@y-mad.mg',
+        support: 'support@y-mad.mg',
       },
     };
   }

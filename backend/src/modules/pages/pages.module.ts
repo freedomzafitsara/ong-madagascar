@@ -1,3 +1,5 @@
+// backend/src/modules/pages/pages.module.ts
+
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PagesService } from './pages.service';

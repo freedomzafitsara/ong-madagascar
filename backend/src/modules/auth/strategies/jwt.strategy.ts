@@ -1,50 +1,29 @@
-﻿import { Injectable, UnauthorizedException } from '@nestjs/common';
+﻿// backend/src/modules/auth/strategies/jwt.strategy.ts
+
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '../../../entities/user.entity';
-
-interface JwtPayload {
-  sub: string;
-  email: string;
-  role: string;
-  firstName: string;
-  lastName: string;
-}
+import { AuthService } from '../auth.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
+    private authService: AuthService,
   ) {
-    const jwtSecret = configService.get<string>('JWT_SECRET', 'y-mad-secret-key-2025');
-    
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: jwtSecret,
+      secretOrKey: configService.get<string>('JWT_SECRET') || 'secretKey',
     });
   }
 
-  async validate(payload: JwtPayload) {
-    const user = await this.userRepository.findOne({
-      where: { id: payload.sub, isActive: true },
-    });
-
+  async validate(payload: any) {
+    const user = await this.authService.validateUser(payload.sub);
     if (!user) {
-      throw new UnauthorizedException('Utilisateur non trouvé ou inactif');
+      throw new UnauthorizedException('Utilisateur non trouvé ou compte désactivé');
     }
-
-    return {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role,
-      firstName: payload.firstName,
-      lastName: payload.lastName,
-    };
+    return { id: payload.sub, email: payload.email, role: payload.role };
   }
 }

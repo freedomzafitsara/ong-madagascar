@@ -5,82 +5,119 @@ import {
   Column, 
   PrimaryGeneratedColumn, 
   CreateDateColumn, 
-  UpdateDateColumn,
-  ManyToOne,
+  UpdateDateColumn, 
+  ManyToOne, 
   JoinColumn,
   Index 
 } from 'typeorm';
 import { User } from './user.entity';
 
-export type ArticleType = 'news' | 'testimonial' | 'report' | 'success_story' | 'event_recap';
-export type PostStatus = 'draft' | 'published' | 'archived';
+export enum ArticleType {
+  NEWS = 'news',
+  SUCCESS_STORY = 'success_story',
+  REPORT = 'report',
+}
 
 @Entity('blog_posts')
-@Index(['status', 'published_at'])
-@Index(['slug'])
+@Index(['status'])
+@Index(['created_at'])
 export class BlogPost {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ length: 255 })
-  title: string;
+  // ============================================================
+  // TITRES ET CONTENUS (FR/MG)
+  // ============================================================
+  @Column({ name: 'title_fr', length: 255 })
+  title_fr: string;
 
   @Column({ name: 'title_mg', length: 255, nullable: true })
   title_mg: string;
 
-  @Column({ unique: true })
-  slug: string;
-
-  @Column({ type: 'text', name: 'summary' })
-  summary: string;
-
-  @Column({ name: 'summary_mg', type: 'text', nullable: true })
-  summary_mg: string;
-
-  @Column({ type: 'text' })
-  content: string;
+  @Column({ name: 'content_fr', type: 'text' })
+  content_fr: string;
 
   @Column({ name: 'content_mg', type: 'text', nullable: true })
   content_mg: string;
 
-  @Column({ 
-    name: 'type',
-    length: 50,
-    default: 'news'
-  })
-  type: ArticleType;
+  @Column({ name: 'summary_fr', type: 'text', nullable: true })
+  summary_fr: string;
 
-  @Column({ name: 'image_url', type: 'text', nullable: true })
+  @Column({ name: 'summary_mg', type: 'text', nullable: true })
+  summary_mg: string;
+
+  // ============================================================
+  // MÉTADONNÉES
+  // ============================================================
+  @Column({ type: 'varchar', default: 'news' })
+  type: string;
+
+  @Column({ name: 'image_url', nullable: true })
   image_url: string;
 
-  @Column({ 
-    length: 20,
-    default: 'draft'
-  })
-  status: PostStatus;
+  @Column({ name: 'is_published', default: false })
+  is_published: boolean;
 
-  @Column({ length: 255, nullable: true })
-  author: string;
+  @Column({ type: 'varchar', default: 'draft' })
+  status: string;
 
-  @Column({ name: 'author_id', nullable: true })
+  // ============================================================
+  // AUTEUR
+  // ============================================================
+  @Column({ name: 'author_id' })
   author_id: string;
 
-  @Column({ type: 'text', array: true, default: {} })
-  tags: string[];
+  // ============================================================
+  // ANCIENNES COLONNES (compatibilité)
+  // ============================================================
+  @Column({ length: 255, nullable: true })
+  title: string;
 
-  @Column({ default: 0 })
-  views: number;
+  @Column({ type: 'text', nullable: true })
+  content: string;
 
-  @Column({ name: 'published_at', type: 'timestamp', nullable: true })
-  published_at: Date;
-
+  // ============================================================
+  // DATES
+  // ============================================================
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
   updated_at: Date;
 
+  @Column({ name: 'published_at', nullable: true })
+  published_at: Date;
+
+  // ============================================================
+  // RELATIONS
+  // ============================================================
   @ManyToOne(() => User)
   @JoinColumn({ name: 'author_id' })
-  user: User;
+  author: User;
+
+  // ============================================================
+  // MÉTHODES UTILITAIRES
+  // ============================================================
+  getTitle(): string {
+    return this.title_fr || this.title || 'Sans titre';
+  }
+
+  getContent(): string {
+    return this.content_fr || this.content || '';
+  }
+
+  isPublished(): boolean {
+    return this.is_published === true;
+  }
+
+  publish(): void {
+    this.is_published = true;
+    this.status = 'published';
+    this.published_at = new Date();
+  }
+
+  unpublish(): void {
+    this.is_published = false;
+    this.status = 'draft';
+  }
 }

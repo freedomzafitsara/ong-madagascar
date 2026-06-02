@@ -1,23 +1,31 @@
+// backend/src/modules/jobs/dto/job-offer.dto.ts
+
 import { 
   IsString, 
   IsOptional, 
-  IsEnum, 
   IsBoolean, 
   IsDate, 
-  IsEmail, 
-  Length, 
+  IsUUID,
   MaxLength, 
+  MinLength,
   IsNotEmpty,
-  IsIn
+  IsNumber,
+  Min,
+  Max
 } from 'class-validator';
-import { Type } from 'class-transformer';
-import { JobType, JobStatus } from '../../../entities/job-offer.entity';
+import { PartialType } from '@nestjs/mapped-types';
+import { Transform } from 'class-transformer';
+
+// ============================================================
+// CREATE JOB OFFER DTO
+// ============================================================
 
 export class CreateJobOfferDto {
   @IsString()
   @IsNotEmpty()
-  @Length(5, 255)
-  title: string;
+  @MinLength(5)
+  @MaxLength(255)
+  title_fr: string;
 
   @IsOptional()
   @IsString()
@@ -26,87 +34,9 @@ export class CreateJobOfferDto {
 
   @IsString()
   @IsNotEmpty()
-  @Length(20, 5000)
-  description: string;
-
-  @IsOptional()
-  @IsString()
+  @MinLength(20)
   @MaxLength(5000)
-  description_mg?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @Length(2, 255)
-  company_name: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  location?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  region?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @IsIn(['cdi', 'cdd', 'stage', 'freelance', 'benevolat'])
-  job_type: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  salary?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  sector?: string;
-
-  @IsOptional()
-  @IsString()
-  requirements?: string;
-
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  deadline?: Date;
-
-  @IsOptional()
-  @IsEnum(JobStatus)
-  status?: JobStatus;
-
-  @IsOptional()
-  @IsBoolean()
-  is_featured?: boolean;
-
-  @IsOptional()
-  @IsEmail()
-  @MaxLength(255)
-  contact_email?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  contact_phone?: string;
-}
-
-export class UpdateJobOfferDto {
-  @IsOptional()
-  @IsString()
-  @Length(5, 255)
-  title?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  title_mg?: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(20, 5000)
-  description?: string;
+  description_fr: string;
 
   @IsOptional()
   @IsString()
@@ -115,8 +45,8 @@ export class UpdateJobOfferDto {
 
   @IsOptional()
   @IsString()
-  @Length(2, 255)
-  company_name?: string;
+  @MaxLength(255)
+  company?: string;
 
   @IsOptional()
   @IsString()
@@ -125,54 +55,92 @@ export class UpdateJobOfferDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
-  region?: string;
+  @MaxLength(50)
+  contract_type?: string;
 
   @IsOptional()
-  @IsString()
-  @IsIn(['cdi', 'cdd', 'stage', 'freelance', 'benevolat'])
-  job_type?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  salary?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  sector?: string;
-
-  @IsOptional()
-  @IsString()
-  requirements?: string;
-
-  @IsOptional()
-  @Type(() => Date)
+  @Transform(({ value }) => value ? new Date(value) : null)
   @IsDate()
   deadline?: Date;
 
   @IsOptional()
-  @IsEnum(JobStatus)
-  status?: JobStatus;
-
-  @IsOptional()
   @IsBoolean()
-  is_featured?: boolean;
-
-  @IsOptional()
-  @IsEmail()
-  @MaxLength(255)
-  contact_email?: string;
+  is_published?: boolean;
 
   @IsOptional()
   @IsString()
-  @MaxLength(50)
-  contact_phone?: string;
+  @MaxLength(500)
+  image_url?: string;
 }
+
+// ============================================================
+// UPDATE JOB OFFER DTO
+// ============================================================
+
+export class UpdateJobOfferDto extends PartialType(CreateJobOfferDto) {}
+
+// ============================================================
+// UPDATE JOB STATUS DTO
+// ============================================================
 
 export class UpdateJobStatusDto {
-  @IsEnum(JobStatus)
+  @IsBoolean()
   @IsNotEmpty()
-  status: JobStatus;
+  is_published: boolean;
+}
+
+// ============================================================
+// JOB OFFER QUERY DTO
+// ============================================================
+
+export class JobOfferQueryDto {
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  is_published?: boolean;
+
+  @IsOptional()
+  @IsString()
+  contract_type?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  limit?: number = 10;
+}
+
+// ============================================================
+// JOB OFFER RESPONSE DTO
+// ============================================================
+
+export class JobOfferResponseDto {
+  id: string;
+  title_fr: string;
+  title_mg?: string;
+  description_fr: string;
+  description_mg?: string;
+  company?: string;
+  location?: string;
+  contract_type?: string;
+  deadline?: Date;
+  is_published: boolean;
+  image_url?: string;
+  status: string;
+  views_count: number;
+  applications_count: number;
+  created_at: Date;
+  updated_at: Date;
 }

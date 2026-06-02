@@ -1,3 +1,5 @@
+// backend/src/modules/pages/pages.controller.ts
+
 import { 
   Controller, 
   Get, 
@@ -9,14 +11,13 @@ import {
   UseGuards, 
   Req, 
   Put,
-  NotFoundException   // ← AJOUT OBLIGATOIRE (c'était l'erreur)
+  NotFoundException
 } from '@nestjs/common';
 import { PagesService } from './pages.service';
-import { CreatePageContentDto, UpdatePageContentDto } from './dto/create-page-content.dto';
-import { CreatePageBackgroundDto, UpdatePageBackgroundDto } from './dto/create-page-background.dto';
+import { UpdatePageContentDto } from './dto/create-page-content.dto';
+import { UpdatePageBackgroundDto } from './dto/create-page-background.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
-import { UserRole } from '../../entities/user.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 
@@ -33,9 +34,11 @@ interface RequestWithUser extends Request {
 export class PagesController {
   constructor(private readonly pagesService: PagesService) {}
 
-  // ========== CONTENUS DES PAGES ==========
+  // ============================================================
+  // CONTENUS DES PAGES
+  // ============================================================
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles('super_admin', 'admin')
   @Get()
   async getAllPages(@Req() req: RequestWithUser) {
     return this.pagesService.getAllPages(req.user.role);
@@ -47,13 +50,13 @@ export class PagesController {
     return this.pagesService.getPageBySlug(page);
   }
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles('super_admin', 'admin')
   @Get(':page')
   async getPageForAdmin(@Param('page') page: string, @Req() req: RequestWithUser) {
     return this.pagesService.getPageForAdmin(page, req.user.role);
   }
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles('super_admin', 'admin')
   @Put(':page')
   async updatePageContent(
     @Param('page') page: string,
@@ -63,9 +66,11 @@ export class PagesController {
     return this.pagesService.createOrUpdatePageContent(page, updateDto, req.user.role);
   }
 
-  // ========== FONDS D'ÉCRAN ==========
+  // ============================================================
+  // FONDS D'ÉCRAN
+  // ============================================================
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles('super_admin', 'admin')
   @Get('backgrounds/all')
   async getAllBackgrounds(@Req() req: RequestWithUser) {
     return this.pagesService.getAllBackgrounds(req.user.role);
@@ -77,7 +82,7 @@ export class PagesController {
     return this.pagesService.getBackgroundByPage(page);
   }
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles('super_admin', 'admin')
   @Put('backgrounds/:page')
   async updateBackground(
     @Param('page') page: string,
@@ -87,33 +92,35 @@ export class PagesController {
     return this.pagesService.createOrUpdateBackground(page, updateDto, req.user.role);
   }
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles('super_admin', 'admin')
   @Delete('backgrounds/:id')
   async deleteBackground(@Param('id') id: string, @Req() req: RequestWithUser) {
     return this.pagesService.deleteBackground(id, req.user.role);
   }
 
-  // ✅ ROUTES COMPATIBLES AVEC L'ANCIEN FORMAT /backgrounds
+  // ============================================================
+  // ROUTES COMPATIBLES AVEC L'ANCIEN FORMAT
+  // ============================================================
+
   @Public()
   @Get('backgrounds/page/:page')
   async getBackgroundByPageLegacy(@Param('page') page: string) {
     return this.pagesService.getBackgroundByPage(page);
   }
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles('super_admin', 'admin')
   @Post('backgrounds')
-  async createBackgroundLegacy(@Body() createDto: CreatePageBackgroundDto, @Req() req: RequestWithUser) {
+  async createBackgroundLegacy(@Body() createDto: UpdatePageBackgroundDto, @Req() req: RequestWithUser) {
     return this.pagesService.createOrUpdateBackground(createDto.page, createDto, req.user.role);
   }
 
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles('super_admin', 'admin')
   @Patch('backgrounds/:id')
   async updateBackgroundLegacy(
     @Param('id') id: string, 
     @Body() updateDto: UpdatePageBackgroundDto, 
     @Req() req: RequestWithUser
   ) {
-    // Récupérer d'abord le fond d'écran pour connaître sa page
     const backgrounds = await this.pagesService.getAllBackgrounds(req.user.role);
     const bg = backgrounds.find(b => b.id === id);
     if (bg) {
@@ -122,7 +129,11 @@ export class PagesController {
     throw new NotFoundException('Fond d\'écran non trouvé');
   }
 
-  @Roles(UserRole.SUPER_ADMIN)
+  // ============================================================
+  // INITIALISATION (Super Admin uniquement)
+  // ============================================================
+
+  @Roles('super_admin')
   @Post('initialize')
   async initializePages() {
     return this.pagesService.initializeDefaultPages();

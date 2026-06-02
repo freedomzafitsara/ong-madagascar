@@ -1,18 +1,17 @@
 ﻿'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, Phone, MapPin, Clock, Send, CheckCircle, Sparkles, AlertCircle, Heart } from 'lucide-react';
+import { Mail, Phone, MapPin, Clock, Send, Heart, Loader2, CheckCircle } from 'lucide-react';
 import { FaFacebook, FaTwitter, FaInstagram, FaLinkedin } from 'react-icons/fa';
-import { useTranslation } from '@/hooks/useTranslation';
-import { pageService, PageBackground } from '@/services/pageService';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { pageService, PageBackground } from '@/services/page.service';
 import toast from 'react-hot-toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
 export default function ContactPage() {
-  const { t, language } = useTranslation();
+  const { language } = useLanguage();
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   const [formData, setFormData] = useState({
@@ -23,11 +22,12 @@ export default function ContactPage() {
     message: ""
   });
 
-  // Chargement du fond d'ecran depuis l'espace super-admin
+  const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+
   useEffect(() => {
     const loadPageBackground = async () => {
       try {
-        const background = await pageService.getBackground('contact');
+        const background = await pageService.getPageBackground('contact');
         if (background && background.is_active && background.image_url) {
           setPageBackground(background);
         }
@@ -42,21 +42,16 @@ export default function ContactPage() {
     e.preventDefault();
     
     if (!formData.name || !formData.email || !formData.message) {
-      setError(true);
-      toast.error(language === 'fr' ? 'Veuillez remplir tous les champs obligatoires' : 'Fenoy ny sehatra takiana');
-      setTimeout(() => setError(false), 3000);
+      toast.error(getText('Veuillez remplir tous les champs obligatoires', 'Fenoy ny sehatra takiana'));
       return;
     }
 
     setLoading(true);
     
     try {
-      // Envoi vers l'API backend
       const response = await fetch(`${API_URL}/contact`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
@@ -68,17 +63,14 @@ export default function ContactPage() {
 
       if (response.ok) {
         setSubmitted(true);
-        toast.success(language === 'fr' ? 'Message envoyé avec succès !' : 'Voaefa tsara ny hafatra !');
+        toast.success(getText('Message envoye avec succes !', 'Voaefa tsara ny hafatra !'));
         setFormData({ name: "", email: "", phone: "", subject: "", message: "" });
         setTimeout(() => setSubmitted(false), 5000);
       } else {
-        throw new Error('Erreur lors de l\'envoi');
+        throw new Error('Erreur');
       }
     } catch (err) {
-      console.error('Erreur:', err);
-      setError(true);
-      toast.error(language === 'fr' ? 'Erreur lors de l\'envoi du message' : 'Nisy hadisoana tamin\'ny fandefasana');
-      setTimeout(() => setError(false), 3000);
+      toast.error(getText('Erreur lors de l envoi du message', 'Nisy hadisoana tamin\'ny fandefasana'));
     } finally {
       setLoading(false);
     }
@@ -91,63 +83,61 @@ export default function ContactPage() {
     { name: 'LinkedIn', url: 'https://linkedin.com/company/ymad-mg', icon: FaLinkedin, bg: '#0A66C2' },
   ];
 
-  // Style du fond d'ecran plein ecran avec overlay
-  const overlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
-    backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 40) / 100})`,
+  // Style fond d'ecran PLEIN ECRAN
+  const heroBackgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
+    backgroundImage: `url(${pageBackground.image_url})`,
+    backgroundPosition: pageBackground.position || 'center',
+    backgroundSize: 'cover',
+    backgroundAttachment: 'fixed',
+    backgroundRepeat: 'no-repeat',
+  } : {};
+
+  const heroOverlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
+    backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 35) / 100})`,
   } : {};
 
   return (
-    <div className="min-h-screen">
-      {/* ==================== HERO SECTION PLEIN ECRAN ==================== */}
-      <section className="relative min-h-screen w-full overflow-hidden">
-        {/* Fond d'ecran uploade via super-admin */}
+    <div className="min-h-screen bg-gray-50">
+      {/* ==================== HERO SECTION - PLEIN ECRAN ==================== */}
+      <section className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
           {pageBackground?.image_url && pageBackground.is_active ? (
             <>
-              <div 
-                className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-                style={{ backgroundImage: `url(${pageBackground.image_url})` }}
-              />
-              <div className="absolute inset-0" style={overlayStyle} />
+              <div className="absolute inset-0 bg-cover bg-center bg-no-repeat bg-fixed" style={heroBackgroundStyle} />
+              <div className="absolute inset-0" style={heroOverlayStyle} />
             </>
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-800 to-blue-900">
-              <div className="absolute inset-0 bg-black/20"></div>
-            </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-800 via-blue-900 to-gray-900" />
           )}
         </div>
 
-        {/* Contenu centre avec TEXTE BLANC */}
-        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-20">
-          {/* Badge d'association */}
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-8 animate-fade-in-up">
+        <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-6">
             <Heart className="w-4 h-4 text-white" />
-            <span className="text-sm font-medium text-white">Y-Mad Madagascar</span>
+            <span className="text-sm font-medium text-white">Y-MaD Madagascar</span>
           </div>
           
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 leading-tight drop-shadow-2xl animate-fade-in-up">
-            {language === 'fr' ? 'Contactez-nous' : 'Mifandraisa aminay'}
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 drop-shadow-2xl">
+            {getText('Contactez-nous', 'Mifandraisa aminay')}
           </h1>
           
-          <p className="text-lg md:text-xl lg:text-2xl text-white max-w-2xl mx-auto">
-            {language === 'fr' 
-              ? 'Une question ? N\'hésitez pas à nous contacter'
-              : 'Manana fanontaniana? Aza misalasala mifandraisa aminay'}
+          <p className="text-lg md:text-xl lg:text-2xl text-blue-100 max-w-2xl mx-auto">
+            {getText(
+              'Une question ? N hesitez pas a nous contacter',
+              'Manana fanontaniana? Aza misalasala mifandraisa aminay'
+            )}
           </p>
           
-          <div className="mt-8 flex flex-wrap gap-4 justify-center">
-            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
-              <p className="text-white font-semibold text-sm">Réponse sous 48h</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-full px-6 py-2">
-              <p className="text-white font-semibold text-sm">Support gratuit</p>
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
+            <div className="w-7 h-11 border-2 border-white/40 rounded-full flex justify-center">
+              <div className="w-1.5 h-2.5 bg-white rounded-full mt-2 animate-pulse"></div>
             </div>
           </div>
         </div>
       </section>
 
       {/* ==================== SECTION PRINCIPALE ==================== */}
-      <div className="relative z-10 bg-white rounded-t-3xl shadow-2xl -mt-10">
+      <div className="bg-white rounded-t-3xl shadow-2xl -mt-10">
         <div className="py-16">
           <div className="max-w-7xl mx-auto px-4">
             
@@ -156,26 +146,39 @@ export default function ContactPage() {
               <div className="lg:col-span-2">
                 <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
                   <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                    {language === 'fr' ? 'Envoyez-nous un message' : 'Alefaso aminay ny hafatra'}
+                    {getText('Envoyez-nous un message', 'Alefaso aminay ny hafatra')}
                   </h2>
                   <p className="text-gray-500 mb-6">
-                    {language === 'fr' 
-                      ? 'Nous vous répondrons dans les plus brefs délais'
-                      : 'Hamaly anao haingana izahay'}
+                    {getText(
+                      'Nous vous repondrons dans les plus brefs delais',
+                      'Hamaly anao haingana izahay'
+                    )}
                   </p>
+                  
+                  {submitted && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <div>
+                          <p className="font-medium text-green-800">{getText('Message envoye !', 'Voaefa ny hafatra !')}</p>
+                          <p className="text-sm text-green-600">{getText('Nous vous repondrons rapidement.', 'Hamaly anao haingana izahay.')}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   
                   <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr' ? 'Nom complet' : 'Anarana feno'} *
+                          {getText('Nom complet', 'Anarana feno')} *
                         </label>
                         <input 
                           type="text" 
-                          placeholder={language === 'fr' ? 'Nom et Prénom' : 'Nom et Prénom'} 
+                          placeholder={getText('Nom et Prenom', 'Nom et Prenom')} 
                           value={formData.name} 
                           onChange={(e) => setFormData({...formData, name: e.target.value})} 
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                           required 
                         />
                       </div>
@@ -186,7 +189,7 @@ export default function ContactPage() {
                           placeholder="prenom@gmail.com" 
                           value={formData.email} 
                           onChange={(e) => setFormData({...formData, email: e.target.value})} 
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                           required 
                         />
                       </div>
@@ -194,40 +197,40 @@ export default function ContactPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr' ? 'Téléphone' : 'Telefaonina'}
+                          {getText('Telephone', 'Telefaonina')}
                         </label>
                         <input 
                           type="tel" 
                           placeholder="032 00 000 00" 
                           value={formData.phone} 
                           onChange={(e) => setFormData({...formData, phone: e.target.value})} 
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" 
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {language === 'fr' ? 'Sujet' : 'Lohahevitra'} *
+                          {getText('Sujet', 'Lohahevitra')} *
                         </label>
                         <input 
                           type="text" 
-                          placeholder={language === 'fr' ? 'Question sur...' : 'Fanontaniana...'} 
+                          placeholder={getText('Question sur...', 'Fanontaniana...')} 
                           value={formData.subject} 
                           onChange={(e) => setFormData({...formData, subject: e.target.value})} 
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                           required 
                         />
                       </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {language === 'fr' ? 'Message' : 'Hafatra'} *
+                        {getText('Message', 'Hafatra')} *
                       </label>
                       <textarea 
-                        placeholder={language === 'fr' ? 'Votre message...' : 'Ny hafatrao...'} 
+                        placeholder={getText('Votre message...', 'Ny hafatrao...')} 
                         rows={5} 
                         value={formData.message} 
                         onChange={(e) => setFormData({...formData, message: e.target.value})} 
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-y"
                         required
                       />
                     </div>
@@ -238,13 +241,13 @@ export default function ContactPage() {
                     >
                       {loading ? (
                         <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          {language === 'fr' ? 'Envoi en cours...' : 'Fandefasana...'}
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          {getText('Envoi en cours...', 'Fandefasana...')}
                         </>
                       ) : (
                         <>
                           <Send size={18} />
-                          {language === 'fr' ? 'Envoyer le message' : 'Alefaso ny hafatra'}
+                          {getText('Envoyer le message', 'Alefaso ny hafatra')}
                         </>
                       )}
                     </button>
@@ -256,31 +259,29 @@ export default function ContactPage() {
               <div>
                 <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-100">
                   <h3 className="text-xl font-bold text-gray-800 mb-4">
-                    {language === 'fr' ? 'Informations' : 'Fampahalalana'}
+                    {getText('Informations', 'Fampahalalana')}
                   </h3>
                   <div className="space-y-4">
                     <div className="flex gap-3 items-start">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
                         <MapPin className="text-blue-600" size={18} />
                       </div>
                       <div>
-                        <p className="font-medium text-gray-800">Adresse</p>
-                        <span className="text-gray-600 text-sm">
-                          Carion, Antananarivo, Madagascar
-                        </span>
+                        <p className="font-medium text-gray-800">{getText('Adresse', 'Adiresy')}</p>
+                        <span className="text-gray-600 text-sm">Carion, Antananarivo, Madagascar</span>
                       </div>
                     </div>
                     <div className="flex gap-3 items-start">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
                         <Phone className="text-blue-600" size={18} />
                       </div>
                       <div>
-                        <p className="font-medium text-gray-800">Téléphone</p>
+                        <p className="font-medium text-gray-800">{getText('Telephone', 'Telefaonina')}</p>
                         <span className="text-gray-600 text-sm">+261 32 04 856 97</span>
                       </div>
                     </div>
                     <div className="flex gap-3 items-start">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
                         <Mail className="text-blue-600" size={18} />
                       </div>
                       <div>
@@ -289,13 +290,13 @@ export default function ContactPage() {
                       </div>
                     </div>
                     <div className="flex gap-3 items-start">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
                         <Clock className="text-blue-600" size={18} />
                       </div>
                       <div>
-                        <p className="font-medium text-gray-800">Horaires</p>
+                        <p className="font-medium text-gray-800">{getText('Horaires', 'Ora fisokafana')}</p>
                         <span className="text-gray-600 text-sm">
-                          Lundi - Vendredi: 8h - 17h
+                          {getText('Lundi - Vendredi: 8h - 17h', 'Alatsinainy - Zoma: 8h - 17h')}
                         </span>
                       </div>
                     </div>
@@ -303,9 +304,9 @@ export default function ContactPage() {
                 </div>
 
                 {/* Reseaux sociaux */}
-                <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-6 mb-6 border border-blue-200">
                   <h3 className="text-xl font-bold text-gray-800 mb-4">
-                    {language === 'fr' ? 'Suivez-nous' : 'Araho izahay'}
+                    {getText('Suivez-nous', 'Araho izahay')}
                   </h3>
                   <div className="flex gap-3 flex-wrap">
                     {socialLinks.map((social) => (
@@ -324,9 +325,9 @@ export default function ContactPage() {
                   </div>
                 </div>
 
-                {/* Carte de localisation */}
-                <div className="mt-6 bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
-                  <div className="h-56 bg-gray-200 relative">
+                {/* Google Map */}
+                <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+                  <div className="h-64 w-full bg-gray-200">
                     <iframe 
                       src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3831.0!2d47.5!3d-18.9!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTPCsDQ4JzU0LjAiUyA0N8KwMjUnMDAuMCJF!5e0!3m2!1sfr!2smg!4v1!5m2!1sfr!2smg" 
                       width="100%" 
@@ -334,12 +335,12 @@ export default function ContactPage() {
                       style={{ border: 0 }} 
                       allowFullScreen 
                       loading="lazy"
-                      title="Carte Y-Mad"
-                      className="grayscale hover:grayscale-0 transition duration-300"
+                      title="Carte Y-MaD"
+                      className="w-full h-full object-cover"
                     />
                   </div>
-                  <div className="p-4 text-center bg-gray-50">
-                    <p className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                  <div className="p-3 text-center bg-gray-50">
+                    <p className="text-xs text-gray-500 flex items-center justify-center gap-1">
                       <MapPin className="w-3 h-3 text-blue-600" /> 
                       Carion, Antananarivo, Madagascar
                     </p>

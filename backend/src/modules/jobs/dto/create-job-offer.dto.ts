@@ -1,196 +1,112 @@
-import { 
-  IsString, 
-  IsOptional, 
-  IsEnum, 
-  IsBoolean, 
-  IsDate, 
-  IsEmail, 
-  IsUrl, 
-  Length, 
-  MaxLength,
-  IsNotEmpty 
-} from 'class-validator';
-import { Type } from 'class-transformer';
-import { JobType, JobStatus } from '../../../entities/job-offer.entity';
+// backend/src/modules/jobs/dto/create-job-offer.dto.ts
+
+import { IsString, IsOptional, IsBoolean, IsDateString, MaxLength } from 'class-validator';
 
 export class CreateJobOfferDto {
   @IsString()
-  @IsNotEmpty()
-  @Length(5, 255)
-  title: string;
+  @MaxLength(255)
+  title_fr: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   @MaxLength(255)
   title_mg?: string;
 
   @IsString()
-  @IsNotEmpty()
-  @Length(20, 5000)
-  description: string;
+  description_fr: string;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(5000)
+  @IsOptional()
   description_mg?: string;
 
   @IsString()
-  @IsNotEmpty()
-  @Length(2, 255)
-  company_name: string;
-
   @IsOptional()
-  @IsUrl()
-  @MaxLength(500)
-  image_url?: string;
+  company?: string;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(255)
+  @IsOptional()
   location?: string;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(100)
-  region?: string;
-
-  @IsEnum(JobType)
-  @IsNotEmpty()
-  job_type: JobType;
-
   @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  sector?: string;
+  contract_type?: string;
 
+  @IsDateString()
   @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  salary?: string;
-
-  @IsOptional()
-  @IsString()
-  requirements?: string;
-
-  @IsOptional()
-  @IsString()
-  requirements_mg?: string;
-
-  @IsOptional()
-  @IsString()
-  benefits?: string;
-
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
   deadline?: Date;
 
-  @IsOptional()
   @IsBoolean()
-  is_featured?: boolean;
-
   @IsOptional()
-  @IsEmail()
-  @MaxLength(255)
-  contact_email?: string;
+  is_published?: boolean;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(50)
-  contact_phone?: string;
-
   @IsOptional()
-  @IsEnum(JobStatus)
-  status?: JobStatus;
+  image_url?: string;
 }
 
 export class UpdateJobOfferDto {
-  @IsOptional()
   @IsString()
-  @Length(5, 255)
-  title?: string;
+  @IsOptional()
+  title_fr?: string;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(255)
+  @IsOptional()
   title_mg?: string;
 
-  @IsOptional()
   @IsString()
-  @Length(20, 5000)
-  description?: string;
+  @IsOptional()
+  description_fr?: string;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(5000)
+  @IsOptional()
   description_mg?: string;
 
-  @IsOptional()
   @IsString()
-  @Length(2, 255)
-  company_name?: string;
-
   @IsOptional()
-  @IsUrl()
-  @MaxLength(500)
-  image_url?: string;
+  company?: string;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(255)
+  @IsOptional()
   location?: string;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(100)
-  region?: string;
-
   @IsOptional()
-  @IsEnum(JobType)
-  job_type?: JobType;
+  contract_type?: string;
 
+  @IsDateString()
   @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  sector?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  salary?: string;
-
-  @IsOptional()
-  @IsString()
-  requirements?: string;
-
-  @IsOptional()
-  @IsString()
-  requirements_mg?: string;
-
-  @IsOptional()
-  @IsString()
-  benefits?: string;
-
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
   deadline?: Date;
 
-  @IsOptional()
   @IsBoolean()
-  is_featured?: boolean;
-
   @IsOptional()
-  @IsEmail()
-  @MaxLength(255)
-  contact_email?: string;
+  is_published?: boolean;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(50)
-  contact_phone?: string;
+  @IsOptional()
+  image_url?: string;
+}
+
+export class UpdateJobStatusDto {
+  @IsBoolean()
+  is_published: boolean;
+}
+
+export class JobOfferQueryDto {
+  @IsOptional()
+  page?: number;
 
   @IsOptional()
-  @IsEnum(JobStatus)
-  status?: JobStatus;
+  limit?: number;
+
+  @IsOptional()
+  status?: string;
+
+  @IsOptional()
+  is_published?: boolean;
+
+  @IsOptional()
+  contract_type?: string;
+
+  @IsOptional()
+  search?: string;
 }

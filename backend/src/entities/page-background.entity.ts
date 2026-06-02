@@ -2,6 +2,7 @@ import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateCol
 
 @Entity('page_backgrounds')
 @Index(['page'])
+@Index(['is_active'])
 export class PageBackground {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -34,8 +35,8 @@ export class PageBackground {
   alt_text: string;
 
   @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  updated_at: Date;
 }

@@ -1,87 +1,97 @@
 ﻿// backend/src/modules/projects/dto/create-project.dto.ts
 
-import { IsString, IsOptional, IsNumber, IsEnum, IsBoolean, IsArray, Min, Max } from 'class-validator';
-import { ProjectStatus } from '../../../entities/project.entity';
+import { IsString, IsOptional, IsDateString, MaxLength, MinLength, IsNotEmpty } from 'class-validator';
 
 export class CreateProjectDto {
   @IsString()
-  title: string;
+  @IsNotEmpty()
+  @MinLength(5)
+  @MaxLength(255)
+  title_fr: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(255)
   title_mg?: string;
 
   @IsString()
-  description: string;
+  @IsNotEmpty()
+  @MinLength(20)
+  @MaxLength(5000)
+  description_fr: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(5000)
   description_mg?: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(255)
   location?: string;
 
-  @IsString()
-  category: string;
-
-  @IsString()
-  region: string;
-
-  @IsEnum(ProjectStatus)
-  @IsOptional()
-  status?: ProjectStatus;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  budget?: number;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  spent?: number;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  beneficiaries_count?: number;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  youth_impact?: number;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  jobs_created?: number;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  @Max(100)
-  progress?: number;
-
-  @IsString()
+  @IsDateString()
   @IsOptional()
   start_date?: string;
 
   @IsString()
   @IsOptional()
-  end_date?: string;
+  image_url?: string;
+
+  @IsString()
+  @IsOptional()
+  status?: string;
+}
+
+export class UpdateProjectDto {
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  title_fr?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  title_mg?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(5000)
+  description_fr?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(5000)
+  description_mg?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  location?: string;
+
+  @IsDateString()
+  @IsOptional()
+  start_date?: string;
 
   @IsString()
   @IsOptional()
   image_url?: string;
 
-  @IsArray()
+  @IsString()
   @IsOptional()
-  gallery_images?: string[];
-
-  @IsBoolean()
-  @IsOptional()
-  is_featured?: boolean;
+  status?: string;
 }
 
-export class UpdateProjectDto extends CreateProjectDto {}
+export class ProjectQueryDto {
+  @IsOptional()
+  page?: number = 1;
+
+  @IsOptional()
+  limit?: number = 10;
+
+  @IsOptional()
+  status?: string;
+
+  @IsOptional()
+  search?: string;
+}

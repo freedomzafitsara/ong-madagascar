@@ -7,25 +7,14 @@ import {
   ArrowLeft, Upload, FileText, User, Mail, Phone, 
   MapPin, Briefcase, Send, CheckCircle, AlertCircle, 
   Camera, X, Loader2, FileCheck, FileWarning, Building,
-  Calendar, DollarSign, Clock, Heart, Star, GraduationCap
+  Calendar, Clock, Heart, Star, GraduationCap
 } from 'lucide-react';
-import { useTranslation } from '@/hooks/useTranslation';
-import { pageService, PageBackground } from '@/services/pageService';
-
-interface JobOffer {
-  id: string;
-  title: string;
-  company_name: string;
-  location: string;
-  contract_type: string;
-  description: string;
-  requirements?: string[];
-  salary?: string;
-  deadline?: string;
-}
+import { useLanguage } from '@/contexts/LanguageContext';
+import { pageService, PageBackground } from '@/services/page.service';
+import { jobService, JobOffer } from '@/services/job.service';
 
 export default function ApplyPage() {
-  const { t, language } = useTranslation();
+  const { language } = useLanguage();
   const params = useParams();
   const router = useRouter();
   const jobId = params?.id as string;
@@ -39,40 +28,42 @@ export default function ApplyPage() {
   
   // Formulaire
   const [formData, setFormData] = useState({
-    fullName: '',
+    full_name: '',
     email: '',
     phone: '',
     address: '',
     experience: '',
-    notes: '',
+    cover_letter: '',
   });
   
   // Fichiers
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [diplomaFile, setDiplomaFile] = useState<File | null>(null);
-  const [certificateFile, setCertificateFile] = useState<File | null>(null);
+  const [attestationFile, setAttestationFile] = useState<File | null>(null);
   
   // Previews
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [cvPreview, setCvPreview] = useState<string | null>(null);
   const [diplomaPreview, setDiplomaPreview] = useState<string | null>(null);
-  const [certificatePreview, setCertificatePreview] = useState<string | null>(null);
+  const [attestationPreview, setAttestationPreview] = useState<string | null>(null);
+
+  const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
 
   useEffect(() => {
     if (jobId) {
       fetchJob();
       loadPageBackground();
     }
-    // Nettoyage des URLs
     return () => {
       if (photoPreview) URL.revokeObjectURL(photoPreview);
     };
   }, [jobId]);
 
+  // Chargement du fond d'écran depuis l'admin
   const loadPageBackground = async () => {
     try {
-      const background = await pageService.getBackground('apply');
+      const background = await pageService.getPageBackground('jobs');
       if (background && background.is_active && background.image_url) {
         setPageBackground(background);
       }
@@ -83,17 +74,11 @@ export default function ApplyPage() {
 
   const fetchJob = async () => {
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
-      const response = await fetch(`${API_URL}/jobs/offers/${jobId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setJob(data);
-      } else {
-        setError(language === 'fr' ? 'Offre d\'emploi non trouvee' : 'Tsy hita ny asa');
-      }
+      const data = await jobService.getOfferById(jobId);
+      setJob(data);
     } catch (error) {
       console.error('Erreur:', error);
-      setError(language === 'fr' ? 'Erreur de chargement' : 'Nisy hadisoana tamin\'ny fampidinana');
+      setError(getText('Offre d\'emploi non trouvée', 'Tsy hita ny asa'));
     } finally {
       setLoading(false);
     }
@@ -110,16 +95,14 @@ export default function ApplyPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    // Validation taille
     if (file.size > 5 * 1024 * 1024) {
-      setError(language === 'fr' ? 'Le fichier ne doit pas depasser 5 Mo' : 'Tsy tokony ho mihoatra ny 5 Mo ny rakitra');
+      setError(getText('Le fichier ne doit pas dépasser 5 Mo', 'Tsy tokony ho mihoatra ny 5 Mo ny rakitra'));
       e.target.value = '';
       return;
     }
     
-    // Validation type pour les images
     if (type === 'photo' && !file.type.startsWith('image/')) {
-      setError(language === 'fr' ? 'Le fichier doit etre une image (JPG, PNG)' : 'Ny rakitra dia tokony ho sary (JPG, PNG)');
+      setError(getText('Le fichier doit être une image (JPG, PNG)', 'Ny rakitra dia tokony ho sary (JPG, PNG)'));
       e.target.value = '';
       return;
     }
@@ -137,9 +120,9 @@ export default function ApplyPage() {
         setDiplomaFile(file);
         setDiplomaPreview(file.name);
         break;
-      case 'certificate':
-        setCertificateFile(file);
-        setCertificatePreview(file.name);
+      case 'attestation':
+        setAttestationFile(file);
+        setAttestationPreview(file.name);
         break;
     }
     setError('');
@@ -160,9 +143,9 @@ export default function ApplyPage() {
         setDiplomaFile(null);
         setDiplomaPreview(null);
         break;
-      case 'certificate':
-        setCertificateFile(null);
-        setCertificatePreview(null);
+      case 'attestation':
+        setAttestationFile(null);
+        setAttestationPreview(null);
         break;
     }
   };
@@ -172,78 +155,80 @@ export default function ApplyPage() {
     setError('');
     setSubmitting(true);
     
-    // Validations
-    if (!formData.fullName.trim()) {
-      setError(language === 'fr' ? 'Veuillez entrer votre nom complet' : 'Ampidiro ny anaranao feno');
+    if (!formData.full_name.trim()) {
+      setError(getText('Veuillez entrer votre nom complet', 'Ampidiro ny anaranao feno'));
       setSubmitting(false);
       return;
     }
     
     if (!formData.email.trim() || !formData.email.includes('@')) {
-      setError(language === 'fr' ? 'Veuillez entrer un email valide' : 'Ampidiro ny adiresy mailaka marina');
+      setError(getText('Veuillez entrer un email valide', 'Ampidiro ny adiresy mailaka marina'));
       setSubmitting(false);
       return;
     }
     
     if (!cvFile) {
-      setError(language === 'fr' ? 'Veuillez uploader votre CV' : 'Alefaso ny CV anao');
+      setError(getText('Veuillez uploader votre CV', 'Alefaso ny CV anao'));
       setSubmitting(false);
       return;
     }
     
-    const submitData = new FormData();
-    submitData.append('fullName', formData.fullName.trim());
-    submitData.append('email', formData.email.trim());
-    submitData.append('phone', formData.phone.trim());
-    submitData.append('address', formData.address.trim());
-    submitData.append('experience', formData.experience);
-    submitData.append('notes', formData.notes);
+    const formDataToSend = new FormData();
+    formDataToSend.append('job_offer_id', jobId);
+    formDataToSend.append('full_name', formData.full_name.trim());
+    formDataToSend.append('email', formData.email.trim());
+    formDataToSend.append('phone', formData.phone.trim());
+    formDataToSend.append('address', formData.address.trim());
+    formDataToSend.append('experience', formData.experience);
+    formDataToSend.append('cover_letter', formData.cover_letter);
     
-    if (photoFile) submitData.append('photo', photoFile);
-    submitData.append('cv', cvFile);
-    if (diplomaFile) submitData.append('diploma', diplomaFile);
-    if (certificateFile) submitData.append('certificate', certificateFile);
+    if (photoFile) formDataToSend.append('photo', photoFile);
+    if (cvFile) formDataToSend.append('cv', cvFile);
+    if (diplomaFile) formDataToSend.append('diploma', diplomaFile);
+    if (attestationFile) formDataToSend.append('attestation', attestationFile);
     
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
       const response = await fetch(`${API_URL}/jobs/apply`, {
         method: 'POST',
-        body: submitData,
+        body: formDataToSend,
       });
       
       const data = await response.json();
       
-      if (response.ok && data.success) {
+      if (response.ok) {
         setSuccess(true);
         setTimeout(() => router.push('/jobs'), 3000);
       } else {
-        setError(data.message || (language === 'fr' ? 'Erreur lors de l\'envoi de votre candidature' : 'Nisy hadisoana tamin\'ny fandefasana ny fangatahanao'));
+        setError(data.message || getText('Erreur lors de l\'envoi de votre candidature', 'Nisy hadisoana tamin\'ny fandefasana ny fangatahanao'));
       }
     } catch (err) {
       console.error('Erreur:', err);
-      setError(language === 'fr' ? 'Erreur de connexion. Veuillez reessayer.' : 'Nisy hadisoana tamin\'ny fifandraisana. Miezaka indray azafady.');
+      setError(getText('Erreur de connexion. Veuillez réessayer.', 'Nisy hadisoana tamin\'ny fifandraisana. Miezaka indray azafady.'));
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Style du fond d ecran dynamique
-  const backgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
+  // Style fond d'écran PLEIN ÉCRAN
+  const heroBackgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundImage: `url(${pageBackground.image_url})`,
     backgroundPosition: pageBackground.position || 'center',
-    backgroundSize: pageBackground.size || 'cover',
+    backgroundSize: 'cover',
+    backgroundAttachment: 'fixed',
+    backgroundRepeat: 'no-repeat',
   } : {};
 
-  const overlayStyle = pageBackground?.image_url ? {
-    backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 30) / 100})`,
+  const heroOverlayStyle = pageBackground?.image_url && pageBackground.is_active ? {
+    backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 35) / 100})`,
   } : {};
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
-          <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">{t('common.loading')}</p>
+          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">{getText('Chargement...', 'Miandry...')}</p>
         </div>
       </div>
     );
@@ -251,12 +236,12 @@ export default function ApplyPage() {
 
   if (error && !job) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <p className="text-gray-600">{error}</p>
           <Link href="/jobs" className="mt-4 inline-block text-blue-600 hover:underline">
-            <ArrowLeft className="w-4 h-4 inline mr-1" /> {language === 'fr' ? 'Retour aux offres' : 'Hiverina any amin\'ny asa'}
+            <ArrowLeft className="w-4 h-4 inline mr-1" /> {getText('Retour aux offres', 'Hiverina any amin\'ny asa')}
           </Link>
         </div>
       </div>
@@ -265,82 +250,80 @@ export default function ApplyPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-10 h-10 text-green-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {language === 'fr' ? 'Candidature envoyee' : 'Vita ny fandefasana ny fangatahana'}
+            {getText('Candidature envoyée', 'Vita ny fandefasana ny fangatahana')}
           </h2>
           <p className="text-gray-600 mb-4">
-            {language === 'fr' ? 'Votre candidature pour' : 'Ny fangatahanao ho an\'ny'} <strong>{job?.title}</strong> {language === 'fr' ? 'a bien ete enregistree.' : 'dia voarakitra tsara.'}
+            {getText('Votre candidature pour', 'Ny fangatahanao ho an\'ny')} <strong>{job?.title_fr}</strong> {getText('a bien été enregistrée.', 'dia voarakitra tsara.')}
           </p>
           <p className="text-sm text-gray-500 mb-6">
-            {language === 'fr' 
-              ? 'Vous recevrez une confirmation par email dans les prochains jours.'
-              : 'Hahazo fanamafisana amin\'ny mailaka ianao ao anatin\'ny andro vitsivitsy.'}
+            {getText(
+              'Vous recevrez une confirmation par email dans les prochains jours.',
+              'Hahazo fanamafisana amin\'ny mailaka ianao ao anatin\'ny andro vitsivitsy.'
+            )}
           </p>
-          <Link href="/jobs" className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
-            {language === 'fr' ? 'Retour aux offres' : 'Hiverina any amin\'ny asa'}
+          <Link href="/jobs" className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+            {getText('Retour aux offres', 'Hiverina any amin\'ny asa')}
           </Link>
         </div>
       </div>
     );
   }
 
-  // Obtenir l'icone du type de contrat
   const getContractIcon = () => {
     switch (job?.contract_type) {
       case 'CDI': return Star;
       case 'CDD': return Calendar;
-      case 'Stage': return GraduationCap;
-      case 'Volontariat': return Heart;
+      case 'STAGE': return GraduationCap;
       default: return Briefcase;
     }
   };
   const ContractIcon = getContractIcon();
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      {/* Fond d ecran dynamique pour l'en-tete */}
+    <div className="min-h-screen">
+      {/* ==================== FOND D'ÉCRAN PLEIN ÉCRAN (ADMIN) ==================== */}
       {pageBackground?.image_url && (
         <div className="fixed inset-0 -z-10">
-          <div className="absolute inset-0" style={backgroundStyle} />
-          <div className="absolute inset-0" style={overlayStyle} />
+          <div className="absolute inset-0 bg-cover bg-center bg-no-repeat bg-fixed" style={heroBackgroundStyle} />
+          <div className="absolute inset-0" style={heroOverlayStyle} />
         </div>
       )}
       
-      <div className="max-w-3xl mx-auto px-4">
+      <div className="max-w-3xl mx-auto px-4 py-12">
         {/* Lien retour */}
         <Link href="/jobs" className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-600 mb-6 transition">
           <ArrowLeft className="w-4 h-4" />
-          {language === 'fr' ? 'Retour aux offres' : 'Hiverina any amin\'ny asa'}
+          {getText('Retour aux offres', 'Hiverina any amin\'ny asa')}
         </Link>
 
-        {/* En-tete offre */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        {/* En-tête offre */}
+        <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-800">
-            {language === 'fr' ? 'Candidature' : 'Fangatahana'}
+            {getText('Candidature', 'Fangatahana')}
           </h1>
           <p className="text-gray-500 mt-1">
-            {language === 'fr' ? 'Offre :' : 'Asa :'} <span className="font-semibold text-blue-600">{job?.title}</span>
+            {getText('Offre', 'Asa')} : <span className="font-semibold text-blue-600">{job?.title_fr}</span>
           </p>
           <div className="flex flex-wrap gap-3 mt-3 text-sm text-gray-500">
-            <span className="flex items-center gap-1"><Building className="w-4 h-4" /> {job?.company_name || 'Y-Mad'}</span>
+            <span className="flex items-center gap-1"><Building className="w-4 h-4" /> {job?.company || 'Y-MaD'}</span>
             <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {job?.location || 'Madagascar'}</span>
             <span className="flex items-center gap-1"><ContractIcon className="w-4 h-4" /> {job?.contract_type}</span>
-            {job?.salary && <span className="flex items-center gap-1"><DollarSign className="w-4 h-4" /> {job.salary}</span>}
             {job?.deadline && (
               <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> 
-                {language === 'fr' ? 'Limite :' : 'Farany :'} {new Date(job.deadline).toLocaleDateString()}
+                {getText('Limite', 'Farany')} : {new Date(job.deadline).toLocaleDateString()}
               </span>
             )}
           </div>
         </div>
 
         {/* Formulaire */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm p-6">
+        <form onSubmit={handleSubmit} className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6">
           {error && (
             <div className="mb-6 p-3 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-center gap-2 text-red-700 text-sm">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -351,21 +334,13 @@ export default function ApplyPage() {
           {/* Photo de profil */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">
-              {language === 'fr' ? 'Photo de profil' : 'Sarim-panjakana'}
+              {getText('Photo de profil', 'Sarim-panjakana')}
             </h2>
             <div className="flex items-center gap-4 flex-wrap">
               {photoPreview ? (
                 <div className="relative">
-                  <img 
-                    src={photoPreview} 
-                    alt="Photo de profil" 
-                    className="w-24 h-24 rounded-full object-cover border-2 border-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeFile('photo')}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition"
-                  >
+                  <img src={photoPreview} alt="Photo" className="w-24 h-24 rounded-full object-cover border-2 border-blue-500" />
+                  <button type="button" onClick={() => removeFile('photo')} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -373,211 +348,99 @@ export default function ApplyPage() {
                 <label className="cursor-pointer">
                   <div className="w-24 h-24 bg-gray-100 rounded-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 hover:border-blue-400 transition">
                     <Camera className="w-6 h-6 text-gray-400" />
-                    <span className="text-xs text-gray-500 mt-1">{language === 'fr' ? 'Photo' : 'Sary'}</span>
+                    <span className="text-xs text-gray-500 mt-1">{getText('Photo', 'Sary')}</span>
                   </div>
-                  <input 
-                    type="file" 
-                    accept="image/jpeg,image/jpg,image/png,image/webp" 
-                    onChange={(e) => handleFileChange(e, 'photo')} 
-                    className="hidden" 
-                  />
+                  <input type="file" accept="image/jpeg,image/jpg,image/png" onChange={(e) => handleFileChange(e, 'photo')} className="hidden" />
                 </label>
               )}
-              <p className="text-xs text-gray-400">{language === 'fr' ? 'JPG, PNG, WebP - Max 5 Mo' : 'JPG, PNG, WebP - 5 Mo farafahakeliny'}</p>
             </div>
           </div>
 
           {/* Informations personnelles */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">
-              {language === 'fr' ? 'Informations personnelles' : 'Fampahalalana manokana'}
+              {getText('Informations personnelles', 'Fampahalalana manokana')}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {language === 'fr' ? 'Nom complet' : 'Anarana feno'} <span className="text-red-500">*</span>
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Nom complet', 'Anarana feno')} <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    placeholder={language === 'fr' ? 'Jean Rakoto' : 'Jean Rakoto'}
-                  />
+                  <input type="text" name="full_name" value={formData.full_name} onChange={handleInputChange} required className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email <span className="text-red-500">*</span>
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    placeholder="jean@email.com"
-                  />
+                  <input type="email" name="email" value={formData.email} onChange={handleInputChange} required className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {language === 'fr' ? 'Telephone' : 'Telefaonina'}
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Téléphone', 'Telefaonina')}</label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                    placeholder="034 00 000 00"
-                  />
+                  <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {language === 'fr' ? 'Adresse' : 'Adiresy'}
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Adresse', 'Adiresy')}</label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleInputChange}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                    placeholder={language === 'fr' ? 'Antananarivo, Madagascar' : 'Antananarivo, Madagasikara'}
-                  />
+                  <input type="text" name="address" value={formData.address} onChange={handleInputChange} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Experience */}
+          {/* Expérience */}
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">
-              {language === 'fr' ? 'Experience professionnelle' : 'Traza'}
-            </h2>
-            <textarea
-              name="experience"
-              value={formData.experience}
-              onChange={handleInputChange}
-              rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              placeholder={language === 'fr' 
-                ? 'Decrivez votre parcours professionnel, vos competences et vos realisations...'
-                : 'Lazao ny traza, fahaizana ary zava-bita...'}
-            />
+            <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">{getText('Expérience professionnelle', 'Traza')}</h2>
+            <textarea name="experience" value={formData.experience} onChange={handleInputChange} rows={4} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder={getText('Décrivez votre parcours professionnel...', 'Lazao ny traza...')} />
           </div>
 
           {/* Documents */}
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">
-              {language === 'fr' ? 'Documents' : 'Rakitra'}
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">{getText('Documents', 'Rakitra')}</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* CV */}
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition cursor-pointer">
-                <input 
-                  type="file" 
-                  id="cv" 
-                  accept=".pdf,.doc,.docx" 
-                  onChange={(e) => handleFileChange(e, 'cv')} 
-                  className="hidden" 
-                />
+                <input type="file" id="cv" accept=".pdf,.doc,.docx" onChange={(e) => handleFileChange(e, 'cv')} className="hidden" />
                 <label htmlFor="cv" className="cursor-pointer block">
                   <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                   <p className="text-sm font-medium text-gray-700">CV <span className="text-red-500">*</span></p>
-                  <p className="text-xs text-gray-400">{language === 'fr' ? 'PDF, DOC - 5 Mo' : 'PDF, DOC - 5 Mo'}</p>
-                  {cvPreview && <p className="text-xs text-green-600 mt-2 flex items-center justify-center gap-1"><FileCheck className="w-3 h-3" /> {cvPreview}</p>}
+                  {cvPreview && <p className="text-xs text-green-600 mt-2">{cvPreview}</p>}
                 </label>
               </div>
-              
-              {/* Diplome */}
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition cursor-pointer">
-                <input 
-                  type="file" 
-                  id="diploma" 
-                  accept=".pdf,.jpg,.png" 
-                  onChange={(e) => handleFileChange(e, 'diploma')} 
-                  className="hidden" 
-                />
+                <input type="file" id="diploma" accept=".pdf,.jpg,.png" onChange={(e) => handleFileChange(e, 'diploma')} className="hidden" />
                 <label htmlFor="diploma" className="cursor-pointer block">
                   <FileWarning className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-gray-700">
-                    {language === 'fr' ? 'Diplome / Certificat' : 'Diploma / Fanamarinana'}
-                  </p>
-                  <p className="text-xs text-gray-400">{language === 'fr' ? 'PDF, JPG, PNG - 5 Mo' : 'PDF, JPG, PNG - 5 Mo'}</p>
-                  {diplomaPreview && <p className="text-xs text-green-600 mt-2 flex items-center justify-center gap-1"><FileCheck className="w-3 h-3" /> {diplomaPreview}</p>}
+                  <p className="text-sm font-medium text-gray-700">{getText('Diplôme', 'Diploma')}</p>
+                  {diplomaPreview && <p className="text-xs text-green-600 mt-2">{diplomaPreview}</p>}
                 </label>
               </div>
-              
-              {/* Attestation */}
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition cursor-pointer">
-                <input 
-                  type="file" 
-                  id="certificate" 
-                  accept=".pdf,.jpg,.png" 
-                  onChange={(e) => handleFileChange(e, 'certificate')} 
-                  className="hidden" 
-                />
-                <label htmlFor="certificate" className="cursor-pointer block">
+                <input type="file" id="attestation" accept=".pdf,.jpg,.png" onChange={(e) => handleFileChange(e, 'attestation')} className="hidden" />
+                <label htmlFor="attestation" className="cursor-pointer block">
                   <FileCheck className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-gray-700">
-                    {language === 'fr' ? 'Attestation / Lettre' : 'Taraty / Fanamarinana'}
-                  </p>
-                  <p className="text-xs text-gray-400">{language === 'fr' ? 'PDF, JPG, PNG - 5 Mo' : 'PDF, JPG, PNG - 5 Mo'}</p>
-                  {certificatePreview && <p className="text-xs text-green-600 mt-2 flex items-center justify-center gap-1"><FileCheck className="w-3 h-3" /> {certificatePreview}</p>}
+                  <p className="text-sm font-medium text-gray-700">{getText('Attestation', 'Fanamarinana')}</p>
+                  {attestationPreview && <p className="text-xs text-green-600 mt-2">{attestationPreview}</p>}
                 </label>
               </div>
             </div>
           </div>
 
-          {/* Note supplementaire */}
+          {/* Lettre de motivation */}
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">
-              {language === 'fr' ? 'Note supplementaire' : 'Fanamarihana fanampiny'}
-            </h2>
-            <textarea
-              name="notes"
-              value={formData.notes}
-              onChange={handleInputChange}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              placeholder={language === 'fr' 
-                ? 'Informations complementaires que vous souhaitez ajouter...'
-                : 'Fampahalalana fanampiny tianao ampiana...'}
-            />
+            <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">{getText('Lettre de motivation', 'Taraty fanekena')}</h2>
+            <textarea name="cover_letter" value={formData.cover_letter} onChange={handleInputChange} rows={4} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder={getText('Pourquoi postulez-vous ?', 'Fa maninona no mangataka ?')} />
           </div>
 
-          {/* Bouton de soumission */}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-          >
+          <button type="submit" disabled={submitting} className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-md transition">
             {submitting ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                {language === 'fr' ? 'Envoi en cours...' : 'Fandefasana...'}
-              </>
+              <><Loader2 className="w-5 h-5 animate-spin" /> {getText('Envoi en cours...', 'Fandefasana...')}</>
             ) : (
-              <>
-                <Send className="w-5 h-5" />
-                {language === 'fr' ? 'Envoyer ma candidature' : 'Alefaso ny fangatahana'}
-              </>
+              <><Send className="w-5 h-5" /> {getText('Envoyer ma candidature', 'Alefaso ny fangatahana')}</>
             )}
           </button>
         </form>

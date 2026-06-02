@@ -1,3 +1,5 @@
+// backend/src/modules/pages/dto/create-page-background.dto.ts
+
 import { IsString, IsOptional, IsBoolean, IsNumber, Min, Max } from 'class-validator';
 import { PartialType } from '@nestjs/mapped-types';
 

@@ -1,174 +1,56 @@
-﻿import {
-  Controller,
-  Post,
-  Get,
-  Put,
-  Delete,
-  Body,
-  Param,
-  Request,
-  UseGuards,
-  HttpCode,
-  HttpStatus,
-  BadRequestException,
-} from '@nestjs/common';
+// backend/src/modules/auth/auth.controller.ts
+
+import { Controller, Post, Body, Get, UseGuards, Request, Delete, Param, Put } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import {
-  LoginDto,
-  RegisterDto,
-  UpdateRoleDto,
-  ChangePasswordDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
-  UpdateProfileDto,
-} from './dto';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { Public } from './decorators/public.decorator';
-import { UserRole } from '../../entities/user.entity';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // ============================================================
-  // ROUTES PUBLIQUES
-  // ============================================================
-
-  @Post('register')
   @Public()
-  @HttpCode(HttpStatus.CREATED)
-  async register(@Body() registerDto: RegisterDto, @Request() req) {
-    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
-    return this.authService.register(registerDto, ip);
-  }
-
   @Post('login')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  async login(@Body() loginDto: LoginDto, @Request() req) {
-    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
-    return this.authService.login(loginDto, ip);
+  async login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
   }
 
-  @Post('forgot-password')
   @Public()
-  @HttpCode(HttpStatus.OK)
-  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(forgotPasswordDto.email);
+  @Post('register')
+  async register(@Body() registerDto: RegisterDto) {
+    // ? Un seul argument
+    return this.authService.register(registerDto);
   }
 
-  @Post('reset-password')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-    return this.authService.resetPassword(resetPasswordDto.token, resetPasswordDto.newPassword);
-  }
-
-  @Get('verify-email/:token')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  async verifyEmail(@Param('token') token: string) {
-    return this.authService.verifyEmail(token);
-  }
-
-  // ============================================================
-  // ROUTES PROTEGEES
-  // ============================================================
-
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('super_admin', 'admin')
   @Get('profile')
-  @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req) {
-    const userId = this.extractUserId(req);
-    return this.authService.getProfile(userId);
+    return this.authService.getProfile(req.user.id);
   }
 
-  @Put('profile')
-  @UseGuards(JwtAuthGuard)
-  async updateProfile(@Request() req, @Body() updateProfileDto: UpdateProfileDto) {
-    const userId = this.extractUserId(req);
-    return this.authService.updateProfile(userId, updateProfileDto);
-  }
-
-  @Post('upload-photo')
-  @UseGuards(JwtAuthGuard)
-  async uploadPhoto(@Request() req, @Body('photoUrl') photoUrl: string) {
-    const userId = this.extractUserId(req);
-    if (!photoUrl) {
-      throw new BadRequestException('URL de photo requise');
-    }
-    return this.authService.updateUserPhoto(userId, photoUrl);
-  }
-
-  @Delete('photo')
-  @UseGuards(JwtAuthGuard)
-  async deletePhoto(@Request() req) {
-    const userId = this.extractUserId(req);
-    return this.authService.updateUserPhoto(userId, null);
-  }
-
-  @Put('change-password')
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  async changePassword(@Request() req, @Body() changePasswordDto: ChangePasswordDto) {
-    const userId = this.extractUserId(req);
-    return this.authService.changePassword(
-      userId,
-      changePasswordDto.currentPassword,
-      changePasswordDto.newPassword,
-    );
-  }
-
-  // ============================================================
-  // ROUTES ADMINISTRATION
-  // ============================================================
-
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('super_admin')
   @Get('users')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async getAllUsers() {
-    return this.authService.getAllUsers();
+  async findAll() {
+    return this.authService.findAll();
   }
 
-  @Get('users/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async getUserById(@Param('id') id: string) {
-    return this.authService.getUserById(id);
-  }
-
-  @Put('users/:id/role')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
-  async updateUserRole(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
-    return this.authService.updateUserRole(id, updateRoleDto.role);
-  }
-
-  @Put('users/:id/toggle-status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async toggleUserStatus(@Param('id') id: string) {
-    return this.authService.toggleUserStatus(id);
-  }
-
+  @Roles('super_admin')
   @Delete('users/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
-  @HttpCode(HttpStatus.OK)
-  async deleteUser(@Param('id') id: string) {
-    return this.authService.deleteUser(id);
+  async remove(@Param('id') id: string) {
+    return this.authService.remove(id);
   }
 
-  // ============================================================
-  // METHODE PRIVEE
-  // ============================================================
-
-  private extractUserId(req: any): string {
-    const userId = req.user?.id || req.user?.sub;
-    if (!userId) {
-      throw new BadRequestException('Utilisateur non identifie');
-    }
-    return userId;
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('super_admin')
+  @Put('users/:id/toggle-status')
+  async toggleStatus(@Param('id') id: string) {
+    return this.authService.toggleStatus(id);
   }
 }

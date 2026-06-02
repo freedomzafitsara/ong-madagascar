@@ -1,122 +1,48 @@
-// backend/src/app.module.ts
+﻿// backend/src/app.module.ts
 
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
-
-// Modules
 import { AuthModule } from './modules/auth/auth.module';
-import { ProjectsModule } from './modules/projects/projects.module';
-import { FooterModule } from './modules/footer/footer.module';
-import { MembersModule } from './modules/members/members.module';
-import { DonationsModule } from './modules/donations/donations.module';
-import { EventsModule } from './modules/events/events.module';
-import { JobsModule } from './modules/jobs/jobs.module';
 import { BlogModule } from './modules/blog/blog.module';
-import { UploadModule } from './modules/upload/upload.module';
+import { JobsModule } from './modules/jobs/jobs.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 import { PagesModule } from './modules/pages/pages.module';
-import { BeneficiariesModule } from './modules/beneficiaries/beneficiaries.module';
-import { BackgroundsModule } from './modules/backgrounds/backgrounds.module';
-import { PaymentsModule } from './modules/payments/payments.module';
-import { VolunteersModule } from './modules/volunteers/volunteers.module';
-import { PartnersModule } from './modules/partners/partners.module';
-import { ReportsModule } from './modules/reports/reports.module';
 
-// Guards
-import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from './modules/auth/guards/roles.guard';
-
-// Entities
+// Import des entites uniquement necessaires
 import { User } from './entities/user.entity';
 import { Project } from './entities/project.entity';
-import { Member } from './entities/member.entity';
-import { Donation } from './entities/donation.entity';
-import { Event } from './entities/event.entity';
-import { EventRegistration } from './entities/event-registration.entity';
+import { BlogPost } from './entities/blog-post.entity';
 import { JobOffer } from './entities/job-offer.entity';
 import { JobApplication } from './entities/job-application.entity';
-import { BlogPost } from './entities/blog-post.entity';
-import { FooterSection } from './modules/footer/entities/footer-section.entity';
-import { FooterLink } from './modules/footer/entities/footer-link.entity';
-import { FooterContact } from './modules/footer/entities/footer-contact.entity';
-import { FooterLegalLink } from './modules/footer/entities/footer-legal-link.entity';
 import { PageContent } from './entities/page-content.entity';
 import { PageBackground } from './entities/page-background.entity';
-import { Beneficiary } from './entities/beneficiary.entity';
-import { Background } from './entities/background.entity';
-import { Volunteer } from './entities/volunteer.entity';
-import { Partner } from './entities/partner.entity';
-import { Report } from './entities/report.entity';
+import { Contact } from './modules/contact/entities/contact.entity';
+import { Translation } from './modules/language/entities/translation.entity';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: '.env',
-    }),
+    ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         host: configService.get('DB_HOST', 'localhost'),
-        port: parseInt(configService.get('DB_PORT', '5432'), 10),
-        username: configService.get('DB_USERNAME', 'postgres'),
+        port: configService.get('DB_PORT', 5432),
+        username: configService.get('DB_USER', 'postgres'),
         password: configService.get('DB_PASSWORD', 'postgres'),
-        database: configService.get('DB_DATABASE', 'ymad_db'),
-        entities: [
-          User,
-          Project,
-          Member,
-          Donation,
-          Event,
-          EventRegistration,
-          JobOffer,
-          JobApplication,
-          BlogPost,
-          FooterSection,
-          FooterLink,
-          FooterContact,
-          FooterLegalLink,
-          PageContent,
-          PageBackground,
-          Beneficiary,
-          Background,
-          Volunteer,
-          Partner,
-          Report,
-        ],
+        database: configService.get('DB_NAME', 'ymad_db'),
+        entities: [User, Project, BlogPost, JobOffer, JobApplication, PageContent, PageBackground, Contact, Translation],
         synchronize: false,
         logging: true,
       }),
       inject: [ConfigService],
     }),
     AuthModule,
-    ProjectsModule,
-    FooterModule,
-    MembersModule,
-    DonationsModule,
-    EventsModule,
-    JobsModule,
     BlogModule,
-    UploadModule,
+    JobsModule,
+    ProjectsModule,
     PagesModule,
-    BeneficiariesModule,
-    BackgroundsModule,
-    PaymentsModule,
-    VolunteersModule,
-    PartnersModule,
-    ReportsModule,
-  ],
-  providers: [
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
   ],
 })
 export class AppModule {}

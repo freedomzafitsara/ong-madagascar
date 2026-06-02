@@ -11,28 +11,36 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!loading && !isAuthenticated) {
       router.push('/login');
     }
-    if (!isLoading && isAuthenticated && allowedRoles && !allowedRoles.includes(user?.role || '')) {
-      router.push('/dashboard');
+    if (!loading && isAuthenticated && allowedRoles && allowedRoles.length > 0) {
+      if (!allowedRoles.includes(user?.role || '')) {
+        router.push('/dashboard');
+      }
     }
-  }, [isLoading, isAuthenticated, router, allowedRoles, user?.role]);
+  }, [loading, isAuthenticated, router, allowedRoles, user?.role]);
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center"><div className="w-12 h-12 border-4 border-marine-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div><p>Chargement...</p></div>
+      <div className="min-h-screen flex items-center justify-center bg-ymad-gray-50">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-ymad-blue-200 border-t-ymad-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-ymad-gray-500">Chargement...</p>
+        </div>
       </div>
     );
   }
 
   if (!isAuthenticated) return null;
-  if (allowedRoles && !allowedRoles.includes(user?.role || '')) return null;
+  
+  if (allowedRoles && allowedRoles.length > 0) {
+    if (!allowedRoles.includes(user?.role || '')) return null;
+  }
 
   return <>{children}</>;
 };

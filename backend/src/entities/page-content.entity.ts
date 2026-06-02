@@ -1,106 +1,114 @@
+// backend/src/entities/page-content.entity.ts
+
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
+// Types de pages supportés par votre thème
 export enum PageType {
   HOME = 'home',
-  ABOUT = 'about',
   PROJECTS = 'projects',
   JOBS = 'jobs',
-  EVENTS = 'events',
-  BLOG = 'blog',
   CONTACT = 'contact',
-  DONATE = 'donate',
-  JOIN = 'join',
-  VOLUNTEERS = 'volunteers',
-  PARTNERS = 'partners',
+  LOGIN = 'login',
 }
 
-// Interface pour Hero Section
+// Interface pour Hero Section (bannière principale)
 export interface HeroSection {
-  title: string;
+  title_fr: string;
   title_mg: string;
-  subtitle: string;
+  subtitle_fr: string;
   subtitle_mg: string;
-  badge: string;
-  badge_mg: string;
-  buttonText: string;
-  buttonText_mg: string;
-  buttonLink: string;
-  imageUrl: string;
-  videoUrl: string;
+  button_text_fr: string;
+  button_text_mg: string;
+  button_link: string;
+  image_url: string;
 }
 
-// Interface pour une Section
+// Interface pour une Section générique
 export interface PageSection {
   id: string;
-  title: string;
+  title_fr: string;
   title_mg: string;
-  description: string;
+  description_fr: string;
   description_mg: string;
-  imageUrl: string;
-  icon: string;
+  image_url: string;
   order: number;
-  isActive: boolean;
+  is_active: boolean;
 }
 
-// Interface pour les Statistiques
+// Interface pour les Statistiques (ex: sur la page d'accueil)
 export interface PageStat {
   value: string;
-  label: string;
+  label_fr: string;
   label_mg: string;
   icon: string;
 }
 
-// Interface pour CTA
+// Interface pour CTA (Call To Action)
 export interface CtaSection {
-  title: string;
+  title_fr: string;
   title_mg: string;
-  description: string;
+  description_fr: string;
   description_mg: string;
-  buttonText: string;
-  buttonText_mg: string;
-  buttonLink: string;
-  imageUrl: string;
+  button_text_fr: string;
+  button_text_mg: string;
+  button_link: string;
 }
 
 @Entity('page_contents')
 @Index(['page'])
+@Index(['is_published'])
 export class PageContent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  // Nom de la page (home, projects, jobs, contact, login)
   @Column({ unique: true })
   page: string;
 
+  // Section Hero (bannière principale)
   @Column({ type: 'jsonb', nullable: true })
   hero: HeroSection;
 
+  // Sections dynamiques (liste de blocs)
   @Column({ type: 'jsonb', nullable: true })
   sections: PageSection[];
 
+  // Statistiques (chiffres clés)
   @Column({ type: 'jsonb', nullable: true })
   stats: PageStat[];
 
+  // Call To Action (bannière d'appel à l'action)
   @Column({ type: 'jsonb', nullable: true })
   cta: CtaSection;
 
+  // SEO (optimisation moteurs de recherche)
   @Column({ type: 'text', nullable: true })
-  seo_title: string;
+  seo_title_fr: string;
 
   @Column({ type: 'text', nullable: true })
-  seo_description: string;
+  seo_title_mg: string;
+
+  @Column({ type: 'text', nullable: true })
+  seo_description_fr: string;
+
+  @Column({ type: 'text', nullable: true })
+  seo_description_mg: string;
 
   @Column({ type: 'text', nullable: true })
   seo_keywords: string;
 
+  // Statut de publication
   @Column({ default: true })
   is_published: boolean;
 
+  // Champs personnalisés (pour flexibilité future)
   @Column({ type: 'jsonb', nullable: true })
   custom_fields: Record<string, any>;
 
+  // Dates
   @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  updated_at: Date;
 }

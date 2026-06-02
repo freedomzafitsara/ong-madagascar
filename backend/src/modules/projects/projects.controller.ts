@@ -10,93 +10,103 @@ import {
   Delete,
   Query,
   UseGuards,
-  Request,
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
-import { CreateProjectDto, UpdateProjectDto } from './dto/create-project.dto';
+import { CreateProjectDto, UpdateProjectDto, ProjectQueryDto } from './dto/create-project.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
-import { UserRole } from '../../entities/user.entity';
-import { ProjectStatus } from '../../entities/project.entity';
 
 @Controller('projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
+  // ============================================================
+  // CRÉER UN PROJET (Admin uniquement)
+  // ============================================================
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
-  async create(@Body() createDto: CreateProjectDto, @Request() req: any) {
-    return this.projectsService.create(createDto, req.user.id);
+  @Roles('super_admin', 'admin')
+  async create(@Body() createDto: CreateProjectDto) {
+    return this.projectsService.create(createDto);
   }
 
+  // ============================================================
+  // LISTER TOUS LES PROJETS (Admin)
+  // ============================================================
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
-  async findAll(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10',
-    @Query('status') status?: ProjectStatus,
-    @Query('region') region?: string,
-    @Query('category') category?: string,
-    @Query('search') search?: string,
-  ) {
-    return this.projectsService.findAll(parseInt(page), parseInt(limit), {
-      status,
-      region,
-      category,
-      search,
-    });
+  @Roles('super_admin', 'admin')
+  async findAll(@Query() query: ProjectQueryDto) {
+    return this.projectsService.findAll(query);
   }
 
+  // ============================================================
+  // LISTER LES PROJETS PUBLIÉS (Public)
+  // ============================================================
+  @Get('public')
+  @Public()
+  async findPublic(@Query() query: ProjectQueryDto) {
+    return this.projectsService.findPublic(query);
+  }
+
+  // ============================================================
+  // PROJETS À LA UNE (Public)
+  // ============================================================
   @Get('featured')
   @Public()
   async findFeatured() {
     return this.projectsService.findFeatured();
   }
 
+  // ============================================================
+  // STATISTIQUES (Admin)
+  // ============================================================
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
+  @Roles('super_admin', 'admin')
   async getStats() {
     return this.projectsService.getStats();
   }
 
+  // ============================================================
+  // TROUVER UN PROJET PAR ID (Public)
+  // ============================================================
   @Get(':id')
   @Public()
   async findOne(@Param('id') id: string) {
     return this.projectsService.findOne(id);
   }
 
+  // ============================================================
+  // METTRE À JOUR UN PROJET (Admin)
+  // ============================================================
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
-  async update(
-    @Param('id') id: string,
-    @Body() updateDto: UpdateProjectDto,
-    @Request() req: any,
-  ) {
-    return this.projectsService.update(id, updateDto, req.user.id, req.user.role);
+  @Roles('super_admin', 'admin')
+  async update(@Param('id') id: string, @Body() updateDto: UpdateProjectDto) {
+    return this.projectsService.update(id, updateDto);
   }
 
-  @Patch(':id/progress')
+  // ============================================================
+  // CHANGER LE STATUT D'UN PROJET (Admin)
+  // ============================================================
+  @Patch(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
-  async updateProgress(
-    @Param('id') id: string,
-    @Body('progress') progress: number,
-    @Request() req: any,
-  ) {
-    return this.projectsService.updateProgress(id, progress, req.user.id, req.user.role);
+  @Roles('super_admin', 'admin')
+  async updateStatus(@Param('id') id: string, @Body('status') status: string) {
+    return this.projectsService.updateStatus(id, status);
   }
 
+  // ============================================================
+  // SUPPRIMER UN PROJET (Super Admin uniquement)
+  // ============================================================
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
-  async remove(@Param('id') id: string, @Request() req: any) {
-    await this.projectsService.remove(id, req.user.id, req.user.role);
+  @Roles('super_admin')
+  async remove(@Param('id') id: string) {
+    await this.projectsService.remove(id);
     return { success: true, message: 'Projet supprimé avec succès' };
   }
 }

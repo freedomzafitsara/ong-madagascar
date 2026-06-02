@@ -5,30 +5,23 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link';
 import { 
-  Users, FolderOpen, Calendar, Briefcase, FileText, Heart, 
-  Gift, TrendingUp, ArrowRight, Settings, Globe,
+  Briefcase, FileText, TrendingUp, ArrowRight, 
   Loader2, Award, Target, Sparkles, GraduationCap,
-  AlertCircle, RefreshCw, UserPlus, PlusCircle, CalendarPlus,
-  FilePlus, BarChart4, Layout, Image, Plus
+  AlertCircle, RefreshCw, PlusCircle, FilePlus,
+  BarChart4, Layout, Image, Plus, FolderOpen, Users
 } from 'lucide-react';
 
 interface DashboardStats {
-  totalMembers: number;
-  activeMembers: number;
   totalProjects: number;
   activeProjects: number;
-  totalEvents: number;
-  upcomingEvents: number;
   totalJobs: number;
   activeJobs: number;
   totalApplications: number;
   pendingApplications: number;
-  totalDonations: number;
-  monthlyDonations: number;
-  totalVolunteers: number;
-  activeVolunteers: number;
-  totalBeneficiaries: number;
-  impactRate: number;
+  totalBlogPosts: number;
+  publishedBlogPosts: number;
+  totalContacts: number;
+  unreadContacts: number;
   lastUpdated?: string;
 }
 
@@ -36,76 +29,63 @@ const translations = {
   fr: {
     dashboard: 'Tableau de bord',
     welcome: 'Bienvenue,',
-    hereIsOverview: 'Voici un apercu de votre activite.',
-    lastUpdate: 'Derniere mise a jour',
-    members: 'Membres',
-    active: 'actifs',
+    hereIsOverview: 'Voici un aperçu de votre activité.',
+    lastUpdate: 'Dernière mise à jour',
     projects: 'Projets',
-    events: 'Evenements',
-    upcoming: 'a venir',
+    active: 'actifs',
     jobOffers: 'Offres emploi',
-    open: 'ouvertes',
+    open: 'publiées',
     applications: 'Candidatures',
     pending: 'en attente',
-    donations: 'Dons (mois)',
-    volunteers: 'Benevoles',
-    beneficiaries: 'Beneficiaires',
-    impactRate: 'Taux impact',
+    blog: 'Blog',
+    published: 'publiés',
+    contacts: 'Messages',
+    unread: 'non lus',
     yourImpact: 'Votre impact',
-    impactDescription: 'Grace a votre engagement, Y-Mad continue de transformer des vies a Madagascar.',
-    peopleImpacted: 'Personnes impactees',
+    impactDescription: 'Grâce à votre engagement, Y-MaD continue de connecter les jeunes aux opportunités d\'emploi à Madagascar.',
     activeProjects: 'Projets actifs',
+    activeJobs: 'Offres actives',
     quickActions: 'Actions rapides',
-    newMember: 'Nouveau membre',
     newProject: 'Nouveau projet',
-    newEvent: 'Nouvel evenement',
     newJob: 'Nouvelle offre',
     newArticle: 'Nouvel article',
-    generateReport: 'Generer rapport',
-    newBeneficiary: 'Nouveau beneficiaire',
+    generateReport: 'Générer rapport',
     siteManagement: 'Gestion du site',
-    siteManagementDesc: 'Personnalisez l apparence et le contenu du site',
-    managePages: 'Gerer les pages',
-    manageBackgrounds: 'Gerer les fonds d ecran',
-    viewDetails: 'Voir les details',
-    seeImpact: 'Voir le detail',
+    siteManagementDesc: 'Personnalisez l\'apparence et le contenu du site',
+    managePages: 'Gérer les pages',
+    manageBackgrounds: 'Gérer les fonds d\'écran',
+    viewDetails: 'Voir les détails',
+    seeImpact: 'Voir le détail',
     loading: 'Chargement...',
     error: 'Erreur lors du chargement',
-    retry: 'Reessayer',
+    retry: 'Réessayer',
     admin: 'Admin',
     refresh: 'Actualiser',
-    ariary: 'Ar',
   },
   mg: {
     dashboard: 'Takila fampisehoana',
     welcome: 'Tonga soa,',
     hereIsOverview: 'Ity ny famintinana ny asanao.',
     lastUpdate: 'Fanavaozana farany',
-    members: 'Mpikambana',
-    active: 'mavitrika',
     projects: 'Tetikasa',
-    events: 'Hetsika',
-    upcoming: 'ho avy',
+    active: 'mavitrika',
     jobOffers: 'Asa atolotra',
-    open: 'misokatra',
+    open: 'navoaka',
     applications: 'Fangatahana',
     pending: 'miandry',
-    donations: 'Fanomezana (volana)',
-    volunteers: 'Mpanao an-tsitrapo',
-    beneficiaries: 'Tompondaka',
-    impactRate: 'Tahan\'ny fiantraikany',
+    blog: 'Bitsika',
+    published: 'navoaka',
+    contacts: 'Hafatra',
+    unread: 'tsy novakiana',
     yourImpact: 'Ny fiantraikanao',
-    impactDescription: 'Noho ny fandraisanao anjara, Y-Mad dia manohy manova ny fiainan\'ny olona eto Madagasikara.',
-    peopleImpacted: 'Olona voatafika',
+    impactDescription: 'Noho ny fandraisanao anjara, Y-MaD dia manohy mampifandray ny tanora amin\'ny asa eto Madagasikara.',
     activeProjects: 'Tetikasa mavitrika',
+    activeJobs: 'Asa misokatra',
     quickActions: 'Hetsika haingana',
-    newMember: 'Mpikambana vaovao',
     newProject: 'Tetikasa vaovao',
-    newEvent: 'Hetsika vaovao',
     newJob: 'Asa vaovao',
     newArticle: 'Lahatsoratra vaovao',
     generateReport: 'Mamorona tatitra',
-    newBeneficiary: 'Tompondaka vaovao',
     siteManagement: 'Fitantanan-tranonkala',
     siteManagementDesc: 'Amboary ny endrika sy ny atiny',
     managePages: 'Hitantana pejy',
@@ -117,7 +97,6 @@ const translations = {
     retry: 'Andramo indray',
     admin: 'Mpandrindra',
     refresh: 'Havaozina',
-    ariary: 'Ar',
   }
 };
 
@@ -127,14 +106,11 @@ export default function DashboardHome() {
   const t = translations[language as keyof typeof translations] || translations.fr;
   
   const [stats, setStats] = useState<DashboardStats>({
-    totalMembers: 0, activeMembers: 0,
     totalProjects: 0, activeProjects: 0,
-    totalEvents: 0, upcomingEvents: 0,
     totalJobs: 0, activeJobs: 0,
     totalApplications: 0, pendingApplications: 0,
-    totalDonations: 0, monthlyDonations: 0,
-    totalVolunteers: 0, activeVolunteers: 0,
-    totalBeneficiaries: 0, impactRate: 0,
+    totalBlogPosts: 0, publishedBlogPosts: 0,
+    totalContacts: 0, unreadContacts: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -179,73 +155,35 @@ export default function DashboardHome() {
     setError(null);
 
     try {
-      const results = await Promise.allSettled([
-        fetchWithTimeout(`${API_URL}/members/stats/all`),
-        fetchWithTimeout(`${API_URL}/projects/stats`),
-        fetchWithTimeout(`${API_URL}/events?limit=100`),
-        fetchWithTimeout(`${API_URL}/jobs/offers/stats`),
-        fetchWithTimeout(`${API_URL}/donations/stats/all`),
-      ]);
+      // Projets
+      const projectsRes = await fetchWithTimeout(`${API_URL}/projects/stats`);
+      const projectsData = projectsRes.ok ? await projectsRes.json() : {};
+      
+      // Offres d'emploi
+      const jobsRes = await fetchWithTimeout(`${API_URL}/jobs/offers/stats`);
+      const jobsData = jobsRes.ok ? await jobsRes.json() : {};
+      
+      // Blog
+      const blogRes = await fetchWithTimeout(`${API_URL}/blog/stats`);
+      const blogData = blogRes.ok ? await blogRes.json() : {};
+      
+      // Contacts
+      const contactsRes = await fetchWithTimeout(`${API_URL}/contact`);
+      const contactsData = contactsRes.ok ? await contactsRes.json() : {};
 
-      const newStats: Partial<DashboardStats> = {};
-
-      if (results[0].status === 'fulfilled' && results[0].value.ok) {
-        const data = await results[0].value.json();
-        newStats.totalMembers = data.total || data.count || 0;
-        newStats.activeMembers = data.active || 0;
-        newStats.totalVolunteers = data.volunteers || 0;
-        newStats.activeVolunteers = data.activeVolunteers || 0;
-        newStats.totalBeneficiaries = data.beneficiaries || 0;
-        newStats.impactRate = data.impactRate || 75;
-      } else {
-        newStats.totalVolunteers = newStats.totalMembers || 0;
-        newStats.activeVolunteers = newStats.activeMembers || 0;
-        newStats.totalBeneficiaries = newStats.totalMembers || 0;
-        newStats.impactRate = 75;
-      }
-
-      if (results[1].status === 'fulfilled' && results[1].value.ok) {
-        const data = await results[1].value.json();
-        newStats.totalProjects = data.total || 0;
-        newStats.activeProjects = data.active || data.activeCount || 0;
-      }
-
-      if (results[2].status === 'fulfilled' && results[2].value.ok) {
-        const data = await results[2].value.json();
-        let events = [];
-        if (Array.isArray(data)) {
-          events = data;
-        } else if (data.data && Array.isArray(data.data)) {
-          events = data.data;
-        } else {
-          events = [];
-        }
-        const now = new Date();
-        const upcoming = events.filter((e: any) => 
-          e.status === 'published' && new Date(e.start_datetime) > now
-        ).length;
-        newStats.totalEvents = events.length;
-        newStats.upcomingEvents = upcoming;
-      }
-
-      if (results[3].status === 'fulfilled' && results[3].value.ok) {
-        const data = await results[3].value.json();
-        newStats.totalJobs = data.total || 0;
-        newStats.activeJobs = data.active || 0;
-        newStats.totalApplications = data.applications || data.applicationsCount || 0;
-        newStats.pendingApplications = data.pending || 0;
-      }
-
-      if (results[4].status === 'fulfilled' && results[4].value.ok) {
-        const data = await results[4].value.json();
-        newStats.monthlyDonations = data.monthly || data.monthlyTotal || 0;
-      }
-
-      setStats(prev => ({ 
-        ...prev, 
-        ...newStats, 
-        lastUpdated: new Date().toISOString() 
-      }));
+      setStats({
+        totalProjects: projectsData.total || 0,
+        activeProjects: projectsData.active || 0,
+        totalJobs: jobsData.total || 0,
+        activeJobs: jobsData.published || 0,
+        totalApplications: jobsData.totalApplications || 0,
+        pendingApplications: jobsData.pendingApplications || 0,
+        totalBlogPosts: blogData.total || 0,
+        publishedBlogPosts: blogData.published || 0,
+        totalContacts: contactsData.total || 0,
+        unreadContacts: contactsData.unread || 0,
+        lastUpdated: new Date().toISOString()
+      });
 
     } catch (err) {
       console.error('Erreur:', err);
@@ -266,29 +204,20 @@ export default function DashboardHome() {
 
   const handleRefresh = () => fetchStats(true);
 
-  const totalImpacted = stats.totalMembers + stats.totalVolunteers + stats.totalBeneficiaries;
-  const donationsFormatted = new Intl.NumberFormat('fr-MG').format(stats.monthlyDonations);
-
   const mainStatCards = [
-    { title: t.members, value: stats.totalMembers, subValue: stats.activeMembers + ' ' + t.active, icon: Users, href: '/dashboard/members', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { title: t.projects, value: stats.totalProjects, subValue: stats.activeProjects + ' ' + t.active, icon: FolderOpen, href: '/dashboard/projects', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { title: t.events, value: stats.totalEvents, subValue: stats.upcomingEvents + ' ' + t.upcoming, icon: Calendar, href: '/dashboard/events', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { title: t.jobOffers, value: stats.totalJobs, subValue: stats.activeJobs + ' ' + t.open, icon: Briefcase, href: '/dashboard/jobs', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
   ];
 
   const secondaryStatCards = [
     { title: t.applications, value: stats.totalApplications, subValue: stats.pendingApplications + ' ' + t.pending, icon: FileText, href: '/dashboard/applications', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { title: t.donations, value: donationsFormatted + ' ' + t.ariary, subValue: t.donations, icon: Gift, href: '/dashboard/donations', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { title: t.volunteers, value: stats.totalVolunteers, subValue: stats.activeVolunteers + ' ' + t.active, icon: Heart, href: '/dashboard/volunteers', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { title: t.beneficiaries, value: stats.totalBeneficiaries, subValue: stats.impactRate + '%', icon: GraduationCap, href: '/dashboard/beneficiaries', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { title: t.blog, value: stats.totalBlogPosts, subValue: stats.publishedBlogPosts + ' ' + t.published, icon: GraduationCap, href: '/dashboard/blog', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
+    { title: t.contacts, value: stats.totalContacts, subValue: stats.unreadContacts + ' ' + t.unread, icon: Users, href: '/dashboard/contacts', iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
   ];
 
   const quickActionsList = [
-    { label: t.newMember, href: '/dashboard/members/new', icon: UserPlus, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { label: t.newProject, href: '/dashboard/projects/new', icon: PlusCircle, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { label: t.newEvent, href: '/dashboard/events/new', icon: CalendarPlus, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { label: t.newJob, href: '/dashboard/jobs/new', icon: Plus, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
-    { label: t.newBeneficiary, href: '/dashboard/beneficiaries/new', icon: GraduationCap, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { label: t.newArticle, href: '/dashboard/blog/new', icon: FilePlus, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
     { label: t.generateReport, href: '/dashboard/reports', icon: BarChart4, iconColor: 'text-blue-600', bgColor: 'bg-blue-100' },
   ];
@@ -322,6 +251,7 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-8 pb-8">
+      {/* En-tête */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -336,7 +266,7 @@ export default function DashboardHome() {
             )}
           </div>
           <p className="text-gray-500">
-            {t.welcome} <span className="font-semibold text-gray-700">{user?.firstName || 'Super'} {user?.lastName || t.admin}</span> ! {t.hereIsOverview}
+            {t.welcome} <span className="font-semibold text-gray-700">{user?.first_name || 'Admin'} {user?.last_name || ''}</span> ! {t.hereIsOverview}
           </p>
         </div>
         
@@ -358,7 +288,8 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* Cartes principales */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {mainStatCards.map((card, index) => {
           const Icon = card.icon;
           return (
@@ -387,7 +318,8 @@ export default function DashboardHome() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* Cartes secondaires */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         {secondaryStatCards.map((card, index) => {
           const Icon = card.icon;
           return (
@@ -416,8 +348,10 @@ export default function DashboardHome() {
         })}
       </div>
 
+      {/* Section Impact et Actions rapides */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
+        {/* Impact */}
         <div className="bg-blue-600 rounded-2xl p-6 text-white shadow-lg">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -428,18 +362,14 @@ export default function DashboardHome() {
           <p className="text-blue-100 text-sm mb-5 leading-relaxed">
             {t.impactDescription}
           </p>
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="text-center bg-white/10 rounded-xl py-3 px-2">
-              <p className="text-2xl font-bold text-white">{totalImpacted.toLocaleString()}</p>
-              <p className="text-xs text-blue-200">{t.peopleImpacted}</p>
-            </div>
+          <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="text-center bg-white/10 rounded-xl py-3 px-2">
               <p className="text-2xl font-bold text-white">{stats.activeProjects}</p>
               <p className="text-xs text-blue-200">{t.activeProjects}</p>
             </div>
             <div className="text-center bg-white/10 rounded-xl py-3 px-2">
-              <p className="text-2xl font-bold text-white">{stats.impactRate || 75}%</p>
-              <p className="text-xs text-blue-200">{t.impactRate}</p>
+              <p className="text-2xl font-bold text-white">{stats.activeJobs}</p>
+              <p className="text-xs text-blue-200">{t.activeJobs}</p>
             </div>
           </div>
           <Link
@@ -450,6 +380,7 @@ export default function DashboardHome() {
           </Link>
         </div>
 
+        {/* Actions rapides */}
         <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -477,10 +408,11 @@ export default function DashboardHome() {
         </div>
       </div>
 
+      {/* Gestion du site */}
       <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-            <Globe className="w-4 h-4 text-blue-600" />
+            <Layout className="w-4 h-4 text-blue-600" />
           </div>
           <h2 className="text-lg font-semibold text-gray-800">{t.siteManagement}</h2>
         </div>

@@ -1,19 +1,27 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+// backend/src/modules/pages/pages.service.ts
+
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { PageContent, PageType, HeroSection, PageSection, PageStat, CtaSection } from '../../entities/page-content.entity';
+import { PageContent, HeroSection, PageSection, PageStat, CtaSection } from '../../entities/page-content.entity';
 import { PageBackground } from '../../entities/page-background.entity';
-import { CreatePageContentDto, UpdatePageContentDto } from './dto/create-page-content.dto';
-import { CreatePageBackgroundDto, UpdatePageBackgroundDto } from './dto/create-page-background.dto';
+import { UpdatePageContentDto } from './dto/create-page-content.dto';
+import { UpdatePageBackgroundDto } from './dto/create-page-background.dto';
 
 @Injectable()
 export class PagesService {
+  private readonly logger = new Logger(PagesService.name);
+
   constructor(
     @InjectRepository(PageContent)
     private pageContentRepository: Repository<PageContent>,
     @InjectRepository(PageBackground)
     private pageBackgroundRepository: Repository<PageBackground>,
   ) {}
+
+  // ============================================================
+  // GESTION DU CONTENU DES PAGES
+  // ============================================================
 
   async getAllPages(userRole: string): Promise<PageContent[]> {
     if (userRole !== 'super_admin' && userRole !== 'admin') {
@@ -61,6 +69,10 @@ export class PagesService {
     }
   }
 
+  // ============================================================
+  // GESTION DES FONDS D'ÉCRAN
+  // ============================================================
+
   async getAllBackgrounds(userRole: string): Promise<PageBackground[]> {
     if (userRole !== 'super_admin' && userRole !== 'admin') {
       throw new ForbiddenException('Accès non autorisé');
@@ -103,31 +115,35 @@ export class PagesService {
     await this.pageBackgroundRepository.delete(id);
   }
 
+  // ============================================================
+  // INITIALISATION DES PAGES PAR DÉFAUT
+  // ============================================================
+
   async initializeDefaultPages(): Promise<void> {
-    const pages = ['home', 'projects', 'jobs', 'about', 'events', 'blog', 'contact', 'donate', 'join', 'volunteers', 'partners'];
+    // Seulement les pages de votre thème
+    const pages = ['home', 'projects', 'jobs', 'contact', 'login'];
     
     for (const page of pages) {
       const exists = await this.pageContentRepository.findOne({ where: { page } });
       if (!exists) {
         const defaultContent = this.getDefaultContentForPage(page);
         await this.pageContentRepository.save(defaultContent);
+        this.logger.log(`Page par défaut créée: ${page}`);
       }
     }
   }
 
   private getDefaultContentForPage(page: string): Partial<PageContent> {
-    const defaultHero = {
-      title: page === 'home' ? 'Y-Mad Madagascar' : `Page ${page}`,
-      title_mg: page === 'home' ? 'Y-Mad Madagasikara' : `Pejy ${page}`,
-      subtitle: 'Bienvenue sur Y-Mad',
-      subtitle_mg: 'Tonga soa eto Y-Mad',
-      badge: 'Association reconnue',
-      badge_mg: 'Fikambanana ekena',
-      buttonText: 'En savoir plus',
-      buttonText_mg: 'Hamaky bebe kokoa',
-      buttonLink: `/${page}`,
-      imageUrl: '',
-      videoUrl: '',
+    // Structure HeroSection avec les nouveaux champs
+    const defaultHero: HeroSection = {
+      title_fr: page === 'home' ? 'Bienvenue sur Y-MaD' : this.getDefaultTitle(page, 'fr'),
+      title_mg: page === 'home' ? 'Tonga soa ao Y-MaD' : this.getDefaultTitle(page, 'mg'),
+      subtitle_fr: this.getDefaultSubtitle(page, 'fr'),
+      subtitle_mg: this.getDefaultSubtitle(page, 'mg'),
+      button_text_fr: 'En savoir plus',
+      button_text_mg: 'Hamaky bebe kokoa',
+      button_link: `/${page === 'home' ? 'jobs' : page}`,
+      image_url: '',
     };
 
     return {
@@ -135,5 +151,26 @@ export class PagesService {
       hero: defaultHero,
       is_published: true,
     };
+  }
+
+  private getDefaultTitle(page: string, lang: 'fr' | 'mg'): string {
+    const titles: Record<string, { fr: string; mg: string }> = {
+      projects: { fr: 'Nos Projets', mg: 'Ny Tetikasantsika' },
+      jobs: { fr: 'Offres d\'emploi', mg: 'Toerana asa' },
+      contact: { fr: 'Contactez-nous', mg: 'Mifandraisa aminay' },
+      login: { fr: 'Connexion Admin', mg: 'Fidirana Admin' },
+    };
+    return titles[page]?.[lang] || (lang === 'fr' ? `Page ${page}` : `Pejy ${page}`);
+  }
+
+  private getDefaultSubtitle(page: string, lang: 'fr' | 'mg'): string {
+    const subtitles: Record<string, { fr: string; mg: string }> = {
+      home: { fr: 'Plateforme de gestion des offres d\'emploi', mg: 'Sehatra fitantanana asa' },
+      projects: { fr: 'Découvrez nos actions à Madagascar', mg: 'Hitanareo ny asantsika eto Madagasikara' },
+      jobs: { fr: 'Trouvez votre prochain opportunité', mg: 'Mitadiava asa vaovao' },
+      contact: { fr: 'Nous sommes à votre écoute', mg: 'Mihainoa anay' },
+      login: { fr: 'Accès réservé à l\'administration', mg: 'Fidirana ho an\'ny Admin' },
+    };
+    return subtitles[page]?.[lang] || (lang === 'fr' ? 'Page description' : 'Famaritana pejy');
   }
 }

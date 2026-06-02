@@ -1,11 +1,10 @@
 // backend/src/modules/projects/projects.service.ts
 
-import { Injectable, NotFoundException, Logger, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere } from 'typeorm';
-import { Project, ProjectStatus } from '../../entities/project.entity';
-import { CreateProjectDto, UpdateProjectDto } from './dto/create-project.dto';
-import { User } from '../../entities/user.entity';
+import { Repository, Like } from 'typeorm';
+import { Project } from '../../entities/project.entity';
+import { CreateProjectDto, UpdateProjectDto, ProjectQueryDto } from './dto/create-project.dto';
 
 @Injectable()
 export class ProjectsService {
@@ -14,71 +13,69 @@ export class ProjectsService {
   constructor(
     @InjectRepository(Project)
     private projectRepository: Repository<Project>,
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
   ) {}
 
-  async create(createDto: CreateProjectDto, userId: string): Promise<Project> {
+  // ============================================================
+  // CRÉER UN PROJET
+  // ============================================================
+  async create(createDto: CreateProjectDto): Promise<Project> {
     const project = this.projectRepository.create({
-      ...createDto,
-      manager_id: userId,
-      status: createDto.status || ProjectStatus.PLANNING,
-      progress: createDto.progress || 0,
-      beneficiaries_count: createDto.beneficiaries_count || 0,
-      youth_impact: createDto.youth_impact || 0,
-      jobs_created: createDto.jobs_created || 0,
-      is_featured: createDto.is_featured || false,
+      title_fr: createDto.title_fr,
+      title_mg: createDto.title_mg,
+      description_fr: createDto.description_fr,
+      description_mg: createDto.description_mg,
+      location: createDto.location,
+      start_date: createDto.start_date ? new Date(createDto.start_date) : null,
+      image_url: createDto.image_url,
+      status: createDto.status || 'planning',
     });
 
     const saved = await this.projectRepository.save(project);
-    this.logger.log(`Projet créé: ${saved.id} - ${saved.title}`);
+    this.logger.log(`Projet créé: ${saved.id} - ${saved.title_fr}`);
     return saved;
   }
 
-  async findAll(
-    page: number = 1,
-    limit: number = 10,
-    filters?: {
-      status?: ProjectStatus;
-      region?: string;
-      category?: string;
-      search?: string;
-    }
-  ): Promise<{ data: Project[]; total: number; page: number; totalPages: number }> {
+  // ============================================================
+  // LISTER TOUS LES PROJETS (ADMIN)
+  // ============================================================
+  async findAll(queryDto: ProjectQueryDto): Promise<{
+    data: Project[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    const page = queryDto.page || 1;
+    const limit = queryDto.limit || 10;
     const skip = (page - 1) * limit;
-    const where: FindOptionsWhere<Project> = {};
 
-    if (filters?.status) where.status = filters.status;
-    if (filters?.region) where.region = filters.region;
-    if (filters?.category) where.category = filters.category;
+    const where: any = {};
 
-    const queryBuilder = this.projectRepository.createQueryBuilder('p')
-      .leftJoinAndSelect('p.manager', 'manager')
-      .orderBy('p.created_at', 'DESC');
+    if (queryDto.status) where.status = queryDto.status;
 
-    if (filters?.search) {
-      queryBuilder.andWhere(
-        '(p.title ILIKE :search OR p.title_mg ILIKE :search OR p.description ILIKE :search)',
-        { search: `%${filters.search}%` }
-      );
+    let data: Project[];
+    let total: number;
+
+    if (queryDto.search) {
+      // Recherche textuelle
+      [data, total] = await this.projectRepository.findAndCount({
+        where: [
+          { title_fr: Like(`%${queryDto.search}%`) },
+          { title_mg: Like(`%${queryDto.search}%`) },
+          { description_fr: Like(`%${queryDto.search}%`) },
+          { description_mg: Like(`%${queryDto.search}%`) },
+        ],
+        order: { created_at: 'DESC' },
+        skip,
+        take: limit,
+      });
+    } else {
+      [data, total] = await this.projectRepository.findAndCount({
+        where,
+        order: { created_at: 'DESC' },
+        skip,
+        take: limit,
+      });
     }
-
-    if (filters?.status) {
-      queryBuilder.andWhere('p.status = :status', { status: filters.status });
-    }
-
-    if (filters?.region) {
-      queryBuilder.andWhere('p.region = :region', { region: filters.region });
-    }
-
-    if (filters?.category) {
-      queryBuilder.andWhere('p.category = :category', { category: filters.category });
-    }
-
-    const [data, total] = await queryBuilder
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
 
     return {
       data,
@@ -88,102 +85,111 @@ export class ProjectsService {
     };
   }
 
+  // ============================================================
+  // LISTER LES PROJETS PUBLIÉS (PUBLIC)
+  // ============================================================
+  async findPublic(queryDto: ProjectQueryDto): Promise<{
+    data: Project[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    const page = queryDto.page || 1;
+    const limit = queryDto.limit || 9;
+    const skip = (page - 1) * limit;
+
+    const where: any = { status: 'active' };
+
+    const [data, total] = await this.projectRepository.findAndCount({
+      where,
+      order: { created_at: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  // ============================================================
+  // PROJETS À LA UNE (PUBLIC)
+  // ============================================================
   async findFeatured(): Promise<Project[]> {
     return this.projectRepository.find({
-      where: { is_featured: true, status: ProjectStatus.ACTIVE },
+      where: { status: 'active' },
       order: { created_at: 'DESC' },
-      take: 6,
+      take: 3,
     });
   }
 
+  // ============================================================
+  // TROUVER UN PROJET PAR ID
+  // ============================================================
   async findOne(id: string): Promise<Project> {
-    const project = await this.projectRepository.findOne({
-      where: { id },
-      relations: ['manager'],
-    });
+    const project = await this.projectRepository.findOne({ where: { id } });
     if (!project) {
       throw new NotFoundException(`Projet avec l'id ${id} non trouvé`);
     }
     return project;
   }
 
-  async update(id: string, updateDto: UpdateProjectDto, userId: string, userRole: string): Promise<Project> {
+  // ============================================================
+  // METTRE À JOUR UN PROJET
+  // ============================================================
+  async update(id: string, updateDto: UpdateProjectDto): Promise<Project> {
     const project = await this.findOne(id);
-    
-    // Vérifier les droits
-    if (userRole !== 'super_admin' && userRole !== 'admin' && project.manager_id !== userId) {
-      throw new ForbiddenException('Vous n\'avez pas les droits pour modifier ce projet');
-    }
-    
-    Object.assign(project, updateDto);
+
+    if (updateDto.title_fr !== undefined) project.title_fr = updateDto.title_fr;
+    if (updateDto.title_mg !== undefined) project.title_mg = updateDto.title_mg;
+    if (updateDto.description_fr !== undefined) project.description_fr = updateDto.description_fr;
+    if (updateDto.description_mg !== undefined) project.description_mg = updateDto.description_mg;
+    if (updateDto.location !== undefined) project.location = updateDto.location;
+    if (updateDto.start_date !== undefined) project.start_date = updateDto.start_date ? new Date(updateDto.start_date) : null;
+    if (updateDto.image_url !== undefined) project.image_url = updateDto.image_url;
+    if (updateDto.status !== undefined) project.status = updateDto.status;
+
     const updated = await this.projectRepository.save(project);
     this.logger.log(`Projet modifié: ${id}`);
     return updated;
   }
 
-  async updateProgress(id: string, progress: number, userId: string, userRole: string): Promise<Project> {
+  // ============================================================
+  // CHANGER LE STATUT D'UN PROJET
+  // ============================================================
+  async updateStatus(id: string, status: string): Promise<Project> {
     const project = await this.findOne(id);
-    
-    if (userRole !== 'super_admin' && userRole !== 'admin' && project.manager_id !== userId) {
-      throw new ForbiddenException('Vous n\'avez pas les droits pour modifier ce projet');
-    }
-    
-    project.progress = progress;
-    const updated = await this.projectRepository.save(project);
-    this.logger.log(`Progression du projet ${id} mise à jour: ${progress}%`);
-    return updated;
+    project.status = status;
+    return this.projectRepository.save(project);
   }
 
-  async remove(id: string, userId: string, userRole: string): Promise<void> {
+  // ============================================================
+  // SUPPRIMER UN PROJET
+  // ============================================================
+  async remove(id: string): Promise<void> {
     const project = await this.findOne(id);
-    
-    if (userRole !== 'super_admin' && userRole !== 'admin' && project.manager_id !== userId) {
-      throw new ForbiddenException('Vous n\'avez pas les droits pour supprimer ce projet');
-    }
-    
     await this.projectRepository.remove(project);
     this.logger.log(`Projet supprimé: ${id}`);
   }
 
+  // ============================================================
+  // STATISTIQUES
+  // ============================================================
   async getStats(): Promise<{
     total: number;
     active: number;
     completed: number;
     planning: number;
     draft: number;
-    totalBudget: number;
-    totalSpent: number;
-    totalBeneficiaries: number;
-    totalYouthImpact: number;
-    totalJobsCreated: number;
   }> {
-    const [total, active, completed, planning, draft, totalBudget, totalSpent, totalBeneficiaries, totalYouthImpact, totalJobsCreated] = await Promise.all([
-      this.projectRepository.count(),
-      this.projectRepository.count({ where: { status: ProjectStatus.ACTIVE } }),
-      this.projectRepository.count({ where: { status: ProjectStatus.COMPLETED } }),
-      this.projectRepository.count({ where: { status: ProjectStatus.PLANNING } }),
-      this.projectRepository.count({ where: { status: ProjectStatus.DRAFT } }),
-      this.projectRepository
-        .createQueryBuilder('p')
-        .select('SUM(p.budget)', 'total')
-        .getRawOne(),
-      this.projectRepository
-        .createQueryBuilder('p')
-        .select('SUM(p.spent)', 'total')
-        .getRawOne(),
-      this.projectRepository
-        .createQueryBuilder('p')
-        .select('SUM(p.beneficiaries_count)', 'total')
-        .getRawOne(),
-      this.projectRepository
-        .createQueryBuilder('p')
-        .select('SUM(p.youth_impact)', 'total')
-        .getRawOne(),
-      this.projectRepository
-        .createQueryBuilder('p')
-        .select('SUM(p.jobs_created)', 'total')
-        .getRawOne(),
-    ]);
+    const total = await this.projectRepository.count();
+    const active = await this.projectRepository.count({ where: { status: 'active' } });
+    const completed = await this.projectRepository.count({ where: { status: 'completed' } });
+    const planning = await this.projectRepository.count({ where: { status: 'planning' } });
+    const draft = await this.projectRepository.count({ where: { status: 'draft' } });
 
     return {
       total,
@@ -191,11 +197,6 @@ export class ProjectsService {
       completed,
       planning,
       draft,
-      totalBudget: parseFloat(totalBudget?.total || 0),
-      totalSpent: parseFloat(totalSpent?.total || 0),
-      totalBeneficiaries: parseInt(totalBeneficiaries?.total || 0),
-      totalYouthImpact: parseInt(totalYouthImpact?.total || 0),
-      totalJobsCreated: parseInt(totalJobsCreated?.total || 0),
     };
   }
 }

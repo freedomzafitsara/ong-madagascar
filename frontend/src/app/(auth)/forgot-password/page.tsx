@@ -10,7 +10,12 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+
+  const getText = (fr: string, mg: string) => {
+    const language = localStorage.getItem('y-mad-language') || 'fr';
+    return language === 'fr' ? fr : mg;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,14 +24,14 @@ export default function ForgotPasswordPage() {
     setSuccess(false);
 
     if (!email) {
-      setError('Veuillez entrer votre adresse email');
+      setError(getText('Veuillez entrer votre adresse email', 'Ampidiro ny adiresy email anao'));
       setLoading(false);
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setError('Veuillez entrer une adresse email valide');
+      setError(getText('Veuillez entrer une adresse email valide', 'Ampidiro adiresy email marina'));
       setLoading(false);
       return;
     }
@@ -34,21 +39,19 @@ export default function ForgotPasswordPage() {
     try {
       const response = await fetch(`${API_URL}/auth/forgot-password`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Une erreur est survenue');
+        throw new Error(data.message || getText('Une erreur est survenue', 'Nisy hadisoana nitranga'));
       }
 
       setSuccess(true);
     } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue');
+      setError(err.message || getText('Une erreur est survenue', 'Nisy hadisoana nitranga'));
     } finally {
       setLoading(false);
     }
@@ -56,22 +59,28 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <CheckCircle className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Email envoyé</h2>
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-10 h-10 text-green-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            {getText('Email envoyé', 'Voaefa ny mailaka')}
+          </h2>
           <p className="text-gray-600 mb-2">
-            Un lien de réinitialisation a été envoyé à <strong>{email}</strong>
+            {getText('Un lien de réinitialisation a été envoyé à', 'Rohy famerenana dia nalefa tany amin\'ny')}{' '}
+            <strong>{email}</strong>
           </p>
           <p className="text-gray-500 text-sm mb-6">
-            Veuillez vérifier vos emails, y compris dans les spams
+            {getText('Veuillez vérifier vos emails, y compris dans les spams', 
+                     'Jereo ny mailakao, ao anatin\'ny spam koa raha tsy hita')}
           </p>
           <Link
             href="/login"
             className="inline-flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-700 transition"
           >
             <ArrowLeft className="w-4 h-4" />
-            Retour à la connexion
+            {getText('Retour à la connexion', 'Hiverina any amin\'ny fidirana')}
           </Link>
         </div>
       </div>
@@ -79,28 +88,34 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
+        {/* Lien retour */}
         <div className="mb-6">
           <Link 
             href="/login" 
-            className="inline-flex items-center text-gray-500 hover:text-blue-600 transition"
+            className="inline-flex items-center gap-1 text-gray-500 hover:text-blue-600 transition"
           >
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Retour à la connexion
+            <ArrowLeft className="w-4 h-4" />
+            {getText('Retour à la connexion', 'Hiverina any amin\'ny fidirana')}
           </Link>
         </div>
 
+        {/* En-tête */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Mail className="w-8 h-8 text-blue-600" />
           </div>
-          <h2 className="text-3xl font-bold text-gray-800">Mot de passe oublié</h2>
-          <p className="text-gray-500 mt-2">
-            Saisissez votre adresse email pour recevoir un lien de réinitialisation
+          <h2 className="text-2xl font-bold text-gray-800">
+            {getText('Mot de passe oublié', 'Hadino ny tenimiafina')}
+          </h2>
+          <p className="text-gray-500 mt-2 text-sm">
+            {getText('Saisissez votre adresse email pour recevoir un lien de réinitialisation',
+                     'Ampidiro ny adiresy email anao mba hahazoana rohy famerenana')}
           </p>
         </div>
 
+        {/* Erreur */}
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-2">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -108,10 +123,11 @@ export default function ForgotPasswordPage() {
           </div>
         )}
 
+        {/* Formulaire */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Adresse email
+              {getText('Adresse email', 'Adiresy email')}
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -135,19 +151,20 @@ export default function ForgotPasswordPage() {
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Envoi en cours
+                {getText('Envoi en cours...', 'Fandefasana...')}
               </>
             ) : (
-              'Envoyer le lien de réinitialisation'
+              getText('Envoyer le lien de réinitialisation', 'Alefaso ny rohy famerenana')
             )}
           </button>
         </form>
 
+        {/* Lien d'inscription */}
         <div className="mt-6 text-center">
-          <p className="text-gray-600">
-            Pas encore de compte{' '}
+          <p className="text-gray-600 text-sm">
+            {getText('Pas encore de compte', 'Mbola tsy manana kaonty')}{' '}
             <Link href="/register" className="text-blue-600 font-semibold hover:underline">
-              S inscrire
+              {getText('S\'inscrire', 'Misoratra anarana')}
             </Link>
           </p>
         </div>
