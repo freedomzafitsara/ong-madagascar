@@ -1,6 +1,6 @@
-// backend/src/modules/auth/auth.controller.ts
+﻿// backend/src/modules/auth/auth.controller.ts
 
-import { Controller, Post, Body, Get, UseGuards, Request, Delete, Param, Put } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request, Delete, Param, Put, Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -22,12 +22,10 @@ export class AuthController {
   @Public()
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
-    // ? Un seul argument
     return this.authService.register(registerDto);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+  @UseGuards(JwtAuthGuard)
   @Get('profile')
   async getProfile(@Request() req) {
     return this.authService.getProfile(req.user.id);
@@ -42,9 +40,17 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin')
+  @Get('users/:id')
+  async findOne(@Param('id') id: string) {
+    return this.authService.findOne(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('super_admin')
   @Delete('users/:id')
   async remove(@Param('id') id: string) {
-    return this.authService.remove(id);
+    await this.authService.remove(id);
+    return { message: 'Utilisateur supprime avec succes' };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -52,5 +58,12 @@ export class AuthController {
   @Put('users/:id/toggle-status')
   async toggleStatus(@Param('id') id: string) {
     return this.authService.toggleStatus(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('super_admin')
+  @Put('users/:id/role')
+  async updateRole(@Param('id') id: string, @Body('role') role: string) {
+    return this.authService.updateRole(id, role);
   }
 }

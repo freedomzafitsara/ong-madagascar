@@ -1,6 +1,5 @@
 ﻿// src/services/page.service.ts
-
-import api from "./api";
+import api from '@/lib/axios';
 
 export interface PageContent {
   id: string;
@@ -34,17 +33,19 @@ export interface PageBackground {
   alt_text?: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
 
 export const pageService = {
   // ============================================================
-  // CONTENU DES PAGES
+  // CONTENU DES PAGES (PUBLIC)
   // ============================================================
   
-  // Récupérer le contenu d'une page (public) - utilise fetch sans token
+  /**
+   * Récupère le contenu d'une page (public - sans authentification)
+   */
   async getPageContent(page: string): Promise<PageContent | null> {
     try {
-      const response = await fetch(`${API_URL}/pages/public/${page}`);
+      const response = await fetch(`${API_URL}/api/pages/public/${page}`);
       if (!response.ok) return null;
       return await response.json();
     } catch (error) {
@@ -53,38 +54,39 @@ export const pageService = {
     }
   },
 
-  // Récupérer le contenu d'une page pour admin (avec token)
+  /**
+   * Récupère le contenu d'une page pour admin (avec token)
+   */
   async getPageContentForAdmin(page: string): Promise<PageContent> {
     const response = await api.get(`/pages/${page}`);
     return response.data;
   },
 
-  // Mettre à jour le contenu d'une page (admin)
+  /**
+   * Met à jour le contenu d'une page (admin)
+   */
   async updatePageContent(page: string, data: Partial<PageContent>): Promise<PageContent> {
     const response = await api.put(`/pages/${page}`, data);
     return response.data;
   },
 
   // ============================================================
-  // FONDS D'ECRAN
+  // FONDS D'ECRAN (PUBLIC)
   // ============================================================
   
-  // Récupérer le fond d'écran d'une page (public) - utilise fetch sans token
+  /**
+   * Récupère le fond d'écran d'une page (public - sans authentification)
+   */
   async getPageBackground(page: string): Promise<PageBackground | null> {
     try {
-      const response = await fetch(`${API_URL}/pages/backgrounds/${page}`);
+      const response = await fetch(`${API_URL}/api/pages/backgrounds/${page}`);
       
       if (!response.ok) {
-        // Si 401 (non autorisé) ou 404, retourner null silencieusement
-        if (response.status === 401 || response.status === 404) {
-          return null;
-        }
         return null;
       }
       
       const data = await response.json();
       
-      // Vérifier si le fond est actif
       if (data && data.is_active && data.image_url) {
         return data;
       }
@@ -96,19 +98,42 @@ export const pageService = {
     }
   },
 
-  // Récupérer tous les fonds d'écran (admin)
+  // ============================================================
+  // FONDS D'ECRAN (ADMIN)
+  // ============================================================
+  
+  /**
+   * Récupère tous les fonds d'écran (admin)
+   */
   async getAllBackgrounds(): Promise<PageBackground[]> {
     const response = await api.get("/pages/backgrounds/all");
     return response.data;
   },
 
-  // Mettre à jour le fond d'écran d'une page (admin)
+  /**
+   * Récupère le fond d'écran d'une page pour admin (avec token)
+   */
+  async getPageBackgroundForAdmin(page: string): Promise<PageBackground | null> {
+    try {
+      const response = await api.get(`/pages/backgrounds/${page}`);
+      return response.data;
+    } catch (error) {
+      console.error('Erreur chargement fond d écran admin:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Met à jour le fond d'écran d'une page (admin)
+   */
   async updatePageBackground(page: string, data: Partial<PageBackground>): Promise<PageBackground> {
     const response = await api.put(`/pages/backgrounds/${page}`, data);
     return response.data;
   },
 
-  // Supprimer un fond d'écran (admin)
+  /**
+   * Supprime un fond d'écran (admin)
+   */
   async deleteBackground(id: string): Promise<void> {
     await api.delete(`/pages/backgrounds/${id}`);
   },

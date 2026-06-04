@@ -24,6 +24,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 interface RequestWithUser extends Request {
   user: {
     sub: string;
+    id: string;
     email: string;
     role: string;
   };
@@ -63,7 +64,12 @@ export class PagesController {
     @Body() updateDto: UpdatePageContentDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.pagesService.createOrUpdatePageContent(page, updateDto, req.user.role);
+    return this.pagesService.createOrUpdatePageContent(
+      page, 
+      updateDto, 
+      req.user.id, 
+      req.user.role
+    );
   }
 
   // ============================================================
@@ -83,13 +89,48 @@ export class PagesController {
   }
 
   @Roles('super_admin', 'admin')
+  @Get('backgrounds/admin/:page')
+  async getBackgroundForAdmin(@Param('page') page: string, @Req() req: RequestWithUser) {
+    return this.pagesService.getBackgroundForAdmin(page, req.user.role);
+  }
+
+  @Roles('super_admin', 'admin')
   @Put('backgrounds/:page')
   async updateBackground(
     @Param('page') page: string,
     @Body() updateDto: UpdatePageBackgroundDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.pagesService.createOrUpdateBackground(page, updateDto, req.user.role);
+    return this.pagesService.createOrUpdateBackground(
+      page, 
+      updateDto, 
+      req.user.id, 
+      req.user.role
+    );
+  }
+
+  @Roles('super_admin', 'admin')
+  @Put('backgrounds/:page/image')
+  async updateBackgroundImage(
+    @Param('page') page: string,
+    @Body('image_url') imageUrl: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.pagesService.updateBackgroundImage(
+      page, 
+      imageUrl, 
+      req.user.id, 
+      req.user.role
+    );
+  }
+
+  @Roles('super_admin', 'admin')
+  @Put('backgrounds/:page/toggle')
+  async toggleBackgroundActive(
+    @Param('page') page: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.pagesService.toggleBackgroundActive(page, req.user.id, req.user.role);
   }
 
   @Roles('super_admin', 'admin')
@@ -110,8 +151,16 @@ export class PagesController {
 
   @Roles('super_admin', 'admin')
   @Post('backgrounds')
-  async createBackgroundLegacy(@Body() createDto: UpdatePageBackgroundDto, @Req() req: RequestWithUser) {
-    return this.pagesService.createOrUpdateBackground(createDto.page, createDto, req.user.role);
+  async createBackgroundLegacy(
+    @Body() createDto: UpdatePageBackgroundDto, 
+    @Req() req: RequestWithUser
+  ) {
+    return this.pagesService.createOrUpdateBackground(
+      createDto.page_key, 
+      createDto, 
+      req.user.id, 
+      req.user.role
+    );
   }
 
   @Roles('super_admin', 'admin')
@@ -124,7 +173,12 @@ export class PagesController {
     const backgrounds = await this.pagesService.getAllBackgrounds(req.user.role);
     const bg = backgrounds.find(b => b.id === id);
     if (bg) {
-      return this.pagesService.createOrUpdateBackground(bg.page, updateDto, req.user.role);
+      return this.pagesService.createOrUpdateBackground(
+        bg.page_key, 
+        updateDto, 
+        req.user.id, 
+        req.user.role
+      );
     }
     throw new NotFoundException('Fond d\'écran non trouvé');
   }
@@ -135,7 +189,7 @@ export class PagesController {
 
   @Roles('super_admin')
   @Post('initialize')
-  async initializePages() {
-    return this.pagesService.initializeDefaultPages();
+  async initializePages(@Req() req: RequestWithUser) {
+    return this.pagesService.initializeDefaultPages(req.user.id, req.user.role);
   }
 }

@@ -1,5 +1,5 @@
 ﻿// src/services/project.service.ts
-import api from "./api";
+import api from '@/lib/axios';
 
 export interface Project {
   id: string;
@@ -26,71 +26,100 @@ export interface CreateProjectDto {
   status?: string;
 }
 
+export interface PaginatedProjectsResponse {
+  data: Project[];
+  total: number;
+  page: number;
+  totalPages: number;
+  limit: number;
+}
+
+export interface ProjectStats {
+  total: number;
+  active: number;
+  completed: number;
+  planning: number;
+  draft: number;
+}
+
 export const projectService = {
-  // Récupérer tous les projets (admin)
+  /**
+   * Récupère tous les projets (admin) avec pagination
+   */
   async getAllProjects(params?: {
     page?: number;
     limit?: number;
     status?: string;
     search?: string;
-  }): Promise<{ data: Project[]; total: number; page: number; totalPages: number }> {
+  }): Promise<PaginatedProjectsResponse> {
     const response = await api.get("/projects", { params });
     return response.data;
   },
 
-  // Récupérer les projets publiés (public)
+  /**
+   * Récupère les projets publiés (public)
+   */
   async getPublishedProjects(params?: {
     page?: number;
     limit?: number;
     search?: string;
-  }): Promise<{ data: Project[]; total: number; page: number; totalPages: number }> {
+  }): Promise<PaginatedProjectsResponse> {
     const response = await api.get("/projects/public", { params });
     return response.data;
   },
 
-  // Récupérer les projets à la une
+  /**
+   * Récupère les projets à la une (featured)
+   */
   async getFeaturedProjects(): Promise<Project[]> {
     const response = await api.get("/projects/featured");
     return response.data;
   },
 
-  // Récupérer un projet par ID
+  /**
+   * Récupère un projet par son ID
+   */
   async getProjectById(id: string): Promise<Project> {
     const response = await api.get(`/projects/${id}`);
     return response.data;
   },
 
-  // Créer un projet (admin)
+  /**
+   * Crée un nouveau projet (admin)
+   */
   async createProject(data: CreateProjectDto): Promise<Project> {
     const response = await api.post("/projects", data);
     return response.data;
   },
 
-  // Mettre à jour un projet (admin)
+  /**
+   * Met à jour un projet (admin)
+   */
   async updateProject(id: string, data: Partial<CreateProjectDto>): Promise<Project> {
     const response = await api.patch(`/projects/${id}`, data);
     return response.data;
   },
 
-  // Mettre à jour le statut (admin)
+  /**
+   * Met à jour le statut d'un projet (admin)
+   */
   async updateProjectStatus(id: string, status: string): Promise<Project> {
     const response = await api.patch(`/projects/${id}/status`, { status });
     return response.data;
   },
 
-  // Supprimer un projet (admin)
-  async deleteProject(id: string): Promise<void> {
-    await api.delete(`/projects/${id}`);
+  /**
+   * Supprime un projet (admin)
+   */
+  async deleteProject(id: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.delete(`/projects/${id}`);
+    return response.data;
   },
 
-  // Statistiques (admin)
-  async getStats(): Promise<{
-    total: number;
-    active: number;
-    completed: number;
-    planning: number;
-    draft: number;
-  }> {
+  /**
+   * Récupère les statistiques des projets (admin)
+   */
+  async getStats(): Promise<ProjectStats> {
     const response = await api.get("/projects/stats");
     return response.data;
   },

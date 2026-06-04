@@ -1,4 +1,6 @@
-﻿import { Module } from '@nestjs/common';
+﻿// backend/src/modules/language/language.module.ts
+
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { LanguageController } from './language.controller';
 import { LanguageService } from './language.service';

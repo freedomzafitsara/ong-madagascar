@@ -1,5 +1,7 @@
 // src/lib/validation.ts
-// Version finale - Validation des formulaires Y-Mad
+// Version finale - Validation des formulaires Y-MaD
+// Association: Young for Madagascar Development
+// Theme: Gestion des offres d'emploi
 
 import { z } from 'zod';
 
@@ -7,16 +9,13 @@ import { z } from 'zod';
 // 1. VALIDATION AUTHENTIFICATION
 // ============================================================
 
-/**
- * Schéma de validation pour l'inscription
- */
 export const registerSchema = z.object({
-  firstName: z.string()
-    .min(2, 'Le prénom doit contenir au moins 2 caractères')
-    .max(50, 'Le prénom est trop long'),
+  first_name: z.string()
+    .min(2, 'Le prenom doit contenir au moins 2 caracteres')
+    .max(50, 'Le prenom est trop long'),
   
-  lastName: z.string()
-    .min(2, 'Le nom doit contenir au moins 2 caractères')
+  last_name: z.string()
+    .min(2, 'Le nom doit contenir au moins 2 caracteres')
     .max(50, 'Le nom est trop long'),
   
   email: z.string()
@@ -24,32 +23,19 @@ export const registerSchema = z.object({
     .min(5, 'Email trop court'),
   
   password: z.string()
-    .min(6, 'Le mot de passe doit contenir au moins 6 caractères')
+    .min(6, 'Le mot de passe doit contenir au moins 6 caracteres')
     .max(100, 'Mot de passe trop long'),
-  
-  phone: z.string()
-    .optional()
-    .refine(
-      (val) => !val || /^(?:(?:\+261|0)[234])\d{8}$/.test(val.replace(/\s/g, '')),
-      { message: 'Numéro de téléphone malgache invalide' }
-    ),
 });
 
-/**
- * Schéma de validation pour la connexion
- */
 export const loginSchema = z.object({
   email: z.string().email('Email invalide'),
   password: z.string().min(1, 'Mot de passe requis'),
 });
 
-/**
- * Schéma de validation pour le changement de mot de passe
- */
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Mot de passe actuel requis'),
   newPassword: z.string()
-    .min(6, 'Le nouveau mot de passe doit contenir au moins 6 caractères'),
+    .min(6, 'Le nouveau mot de passe doit contenir au moins 6 caracteres'),
   confirmPassword: z.string()
     .min(6, 'Confirmation requise'),
 }).refine((data) => data.newPassword === data.confirmPassword, {
@@ -57,19 +43,13 @@ export const changePasswordSchema = z.object({
   path: ['confirmPassword'],
 });
 
-/**
- * Schéma de validation pour mot de passe oublié
- */
 export const forgotPasswordSchema = z.object({
   email: z.string().email('Email invalide'),
 });
 
-/**
- * Schéma de validation pour réinitialisation du mot de passe
- */
 export const resetPasswordSchema = z.object({
   token: z.string().min(1, 'Token requis'),
-  newPassword: z.string().min(6, 'Le mot de passe doit contenir au moins 6 caractères'),
+  newPassword: z.string().min(6, 'Le mot de passe doit contenir au moins 6 caracteres'),
   confirmPassword: z.string().min(6, 'Confirmation requise'),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: 'Les mots de passe ne correspondent pas',
@@ -80,258 +60,214 @@ export const resetPasswordSchema = z.object({
 // 2. VALIDATION PROFIL
 // ============================================================
 
-/**
- * Schéma de validation pour la mise à jour du profil
- */
 export const updateProfileSchema = z.object({
-  firstName: z.string()
-    .min(2, 'Le prénom doit contenir au moins 2 caractères')
+  first_name: z.string()
+    .min(2, 'Le prenom doit contenir au moins 2 caracteres')
+    .max(50, 'Le prenom est trop long')
     .optional(),
   
-  lastName: z.string()
-    .min(2, 'Le nom doit contenir au moins 2 caractères')
+  last_name: z.string()
+    .min(2, 'Le nom doit contenir au moins 2 caracteres')
+    .max(50, 'Le nom est trop long')
     .optional(),
   
-  phone: z.string()
-    .optional()
-    .refine(
-      (val) => !val || /^(?:(?:\+261|0)[234])\d{8}$/.test(val.replace(/\s/g, '')),
-      { message: 'Numéro de téléphone malgache invalide' }
-    ),
-  
-  region: z.string().optional(),
-  bio: z.string().max(500, 'La bio ne peut pas dépasser 500 caractères').optional(),
-  position: z.string().max(100, 'Le poste est trop long').optional(),
-  department: z.string().max(100, 'Le département est trop long').optional(),
-  skills: z.string().max(500, 'Trop de compétences').optional(),
-  
-  socialLinkedin: z.string().url('URL LinkedIn invalide').optional().or(z.literal('')),
-  socialTwitter: z.string().url('URL Twitter invalide').optional().or(z.literal('')),
-  socialGithub: z.string().url('URL GitHub invalide').optional().or(z.literal('')),
+  email: z.string()
+    .email('Email invalide')
+    .optional(),
 });
 
 // ============================================================
-// 3. VALIDATION PROJETS
+// 3. VALIDATION OFFRES D'EMPLOI
 // ============================================================
 
-/**
- * Schéma de validation pour la création d'un projet
- */
-export const projectSchema = z.object({
-  title: z.string()
-    .min(3, 'Le titre doit contenir au moins 3 caractères')
-    .max(100, 'Le titre est trop long'),
+export const jobOfferSchema = z.object({
+  title_fr: z.string()
+    .min(3, 'Le titre doit contenir au moins 3 caracteres')
+    .max(255, 'Le titre est trop long'),
   
-  title_mg: z.string().optional(),
+  title_mg: z.string()
+    .max(255, 'Le titre est trop long')
+    .optional(),
   
-  description: z.string()
-    .min(10, 'La description doit contenir au moins 10 caractères')
+  description_fr: z.string()
+    .min(20, 'La description doit contenir au moins 20 caracteres')
     .max(5000, 'La description est trop longue'),
   
-  description_mg: z.string().optional(),
+  description_mg: z.string()
+    .max(5000, 'La description est trop longue')
+    .optional(),
   
-  location: z.string().optional(),
-  category: z.string().optional(),
-  region: z.string().optional(),
-  status: z.enum(['active', 'completed', 'draft', 'cancelled', 'paused']),
-  budget: z.number().min(0, 'Le budget ne peut pas être négatif').optional(),
-  progress: z.number().min(0).max(100).optional(),
-  start_date: z.string().optional(),
-  end_date: z.string().optional(),
+  company: z.string()
+    .min(2, 'Le nom de l entreprise est requis')
+    .max(255, 'Nom trop long'),
+  
+  location: z.string()
+    .max(255, 'Localisation trop longue')
+    .optional(),
+  
+  contract_type: z.enum(['CDI', 'CDD', 'STAGE', 'FREELANCE', 'BENEVOLE']),
+  
+  deadline: z.string()
+    .min(1, 'Date limite requise'),
+  
+  is_published: z.boolean().optional(),
+  image_url: z.string().url('URL invalide').optional().or(z.literal('')),
 });
 
-// ============================================================
-// 4. VALIDATION ÉVÉNEMENTS
-// ============================================================
-
-/**
- * Schéma de validation pour la création d'un événement
- */
-export const eventSchema = z.object({
-  title: z.string()
-    .min(3, 'Le titre doit contenir au moins 3 caractères')
-    .max(100, 'Le titre est trop long'),
-  
-  description: z.string()
-    .min(10, 'La description doit contenir au moins 10 caractères'),
-  
-  event_type: z.enum(['camp', 'workshop', 'hackathon', 'conference', 'formation']),
-  location: z.string().optional(),
-  region: z.string().optional(),
-  start_datetime: z.string().min(1, 'Date de début requise'),
-  end_datetime: z.string().optional(),
-  max_capacity: z.number().min(0).optional(),
-  is_free: z.boolean(),
-  price_mga: z.number().min(0).optional(),
-});
-
-/**
- * Schéma de validation pour l'inscription à un événement
- */
-export const eventRegistrationSchema = z.object({
-  eventId: z.string().uuid('ID d\'événement invalide'),
-  firstName: z.string().min(2, 'Prénom requis'),
-  lastName: z.string().min(2, 'Nom requis'),
-  email: z.string().email('Email invalide'),
-  phone: z.string().optional(),
-});
-
-// ============================================================
-// 5. VALIDATION OFFRES D'EMPLOI
-// ============================================================
-
-/**
- * Schéma de validation pour la création d'une offre d'emploi
- */
-export const jobOfferSchema = z.object({
-  title: z.string()
-    .min(3, 'Le titre doit contenir au moins 3 caractères')
-    .max(100, 'Le titre est trop long'),
-  
-  company_name: z.string()
-    .min(2, 'Le nom de l\'entreprise est requis'),
-  
-  description: z.string()
-    .min(20, 'La description doit contenir au moins 20 caractères'),
-  
-  requirements: z.string().optional(),
-  benefits: z.string().optional(),
-  
-  job_type: z.enum(['CDI', 'CDD', 'Stage', 'Freelance', 'Volontariat']),
-  sector: z.string().optional(),
-  region: z.string().optional(),
-  location: z.string().optional(),
-  salary_range: z.string().optional(),
-  deadline: z.string().optional(),
-  status: z.enum(['draft', 'published', 'closed', 'expired']).optional(),
-});
-
-/**
- * Schéma de validation pour la candidature
- */
 export const jobApplicationSchema = z.object({
   job_offer_id: z.string().uuid('Offre invalide'),
   full_name: z.string()
     .min(3, 'Nom complet requis')
-    .max(100, 'Nom trop long'),
+    .max(255, 'Nom trop long'),
   
   email: z.string().email('Email invalide'),
+  
   phone: z.string()
-    .min(10, 'Téléphone requis')
-    .refine(
-      (val) => /^(?:(?:\+261|0)[234])\d{8}$/.test(val.replace(/\s/g, '')),
-      { message: 'Numéro de téléphone malgache invalide' }
-    ),
+    .min(9, 'Telephone requis')
+    .max(20, 'Telephone trop long')
+    .optional(),
   
-  address: z.string()
-    .min(5, 'Adresse requise')
-    .max(200, 'Adresse trop longue'),
+  cv_url: z.string().url('URL du CV invalide').optional().or(z.literal('')),
   
-  experience_years: z.number().min(0).max(50).optional(),
-  cover_letter: z.string().max(2000, 'Lettre trop longue').optional(),
+  cover_letter: z.string()
+    .max(2000, 'Lettre trop longue')
+    .optional(),
 });
 
 // ============================================================
-// 6. VALIDATION DONS
+// 4. VALIDATION PROJETS
 // ============================================================
 
-/**
- * Schéma de validation pour un don
- */
-export const donationSchema = z.object({
-  amount: z.number()
-    .min(100, 'Le montant minimum est de 100 Ar')
-    .max(100_000_000, 'Montant trop élevé'),
+export const projectSchema = z.object({
+  title_fr: z.string()
+    .min(3, 'Le titre doit contenir au moins 3 caracteres')
+    .max(255, 'Le titre est trop long'),
   
-  donor_name: z.string().min(2, 'Nom requis').optional(),
-  donor_email: z.string().email('Email invalide').optional(),
-  donor_phone: z.string().optional(),
+  title_mg: z.string()
+    .max(255, 'Le titre est trop long')
+    .optional(),
   
-  currency: z.enum(['MGA', 'EUR', 'USD']).default('MGA'),
-  payment_method: z.enum(['mvola', 'orange_money', 'airtel', 'bank', 'cash', 'paypal']),
-  message: z.string().max(500, 'Message trop long').optional(),
-  project_id: z.string().uuid().optional(),
+  description_fr: z.string()
+    .min(10, 'La description doit contenir au moins 10 caracteres')
+    .max(5000, 'La description est trop longue'),
+  
+  description_mg: z.string()
+    .max(5000, 'La description est trop longue')
+    .optional(),
+  
+  location: z.string()
+    .max(255, 'Localisation trop longue')
+    .optional(),
+  
+  start_date: z.string().optional(),
+  image_url: z.string().url('URL invalide').optional().or(z.literal('')),
+  status: z.enum(['active', 'completed', 'planning', 'draft']).optional(),
 });
 
 // ============================================================
-// 7. VALIDATION BÉNÉFICIAIRES
+// 5. VALIDATION BLOG
 // ============================================================
 
-/**
- * Schéma de validation pour un bénéficiaire
- */
-export const beneficiarySchema = z.object({
-  firstName: z.string()
-    .min(2, 'Prénom requis')
-    .max(50, 'Prénom trop long'),
+export const blogPostSchema = z.object({
+  title_fr: z.string()
+    .min(3, 'Le titre doit contenir au moins 3 caracteres')
+    .max(255, 'Le titre est trop long'),
   
-  lastName: z.string()
-    .min(2, 'Nom requis')
-    .max(50, 'Nom trop long'),
+  title_mg: z.string()
+    .max(255, 'Le titre est trop long')
+    .optional(),
   
-  birthDate: z.string().optional(),
-  gender: z.enum(['male', 'female', 'other']).optional(),
-  email: z.string().email('Email invalide').optional().or(z.literal('')),
-  phone: z.string().optional(),
-  region: z.string().optional(),
-  commune: z.string().optional(),
-  fokontany: z.string().optional(),
-  educationLevel: z.enum(['primaire', 'ceg', 'lycee', 'universite', 'aucun']).optional(),
-  employmentStatus: z.enum(['chomeur', 'etudiant', 'employe', 'entrepreneur']).optional(),
-  beforeYmAd: z.string().max(500, 'Trop long').optional(),
-  afterYmAd: z.string().max(500, 'Trop long').optional(),
+  content_fr: z.string()
+    .min(20, 'Le contenu doit contenir au moins 20 caracteres'),
+  
+  content_mg: z.string()
+    .optional(),
+  
+  cover_image: z.string().url('URL invalide').optional().or(z.literal('')),
+  
+  slug: z.string()
+    .max(255, 'Slug trop long')
+    .optional(),
+  
+  status: z.enum(['draft', 'published', 'archived']).optional(),
+  category_id: z.string().uuid('Categorie invalide').optional(),
 });
 
 // ============================================================
-// 8. VALIDATION CONTACT
+// 6. VALIDATION CONTACT
 // ============================================================
 
-/**
- * Schéma de validation pour le formulaire de contact
- */
 export const contactSchema = z.object({
-  name: z.string()
-    .min(2, 'Nom requis')
-    .max(100, 'Nom trop long'),
+  full_name: z.string()
+    .min(2, 'Nom complet requis')
+    .max(255, 'Nom trop long'),
   
   email: z.string().email('Email invalide'),
+  
   subject: z.string()
     .min(3, 'Sujet requis')
-    .max(200, 'Sujet trop long'),
+    .max(255, 'Sujet trop long'),
   
   message: z.string()
     .min(10, 'Message trop court')
-    .max(2000, 'Message trop long'),
+    .max(5000, 'Message trop long'),
 });
 
 // ============================================================
-// 9. TYPES INFÉRÉS (pour TypeScript)
+// 7. VALIDATION PAGES (fonds d'écran)
+// ============================================================
+
+export const pageBackgroundSchema = z.object({
+  page_key: z.string()
+    .min(1, 'Page requise'),
+  
+  image_url: z.string().url('URL de l image invalide'),
+  
+  alt_fr: z.string().max(255, 'Texte alternatif trop long').optional(),
+  alt_mg: z.string().max(255, 'Texte alternatif trop long').optional(),
+  
+  is_active: z.boolean().optional(),
+  overlay_opacity: z.number().min(0).max(100).optional(),
+  position: z.enum(['center', 'top', 'bottom', 'left', 'right']).optional(),
+  size: z.enum(['cover', 'contain', 'auto']).optional(),
+});
+
+// ============================================================
+// 8. VALIDATION LANGUE (traductions)
+// ============================================================
+
+export const translationSchema = z.object({
+  key: z.string()
+    .min(1, 'Cle requise')
+    .max(255, 'Cle trop longue'),
+  
+  value_fr: z.string()
+    .min(1, 'Traduction francaise requise'),
+  
+  value_mg: z.string()
+    .min(1, 'Traduction malgache requise'),
+});
+
+// ============================================================
+// 9. TYPES INFERES (pour TypeScript)
 // ============================================================
 
 export type RegisterFormData = z.infer<typeof registerSchema>;
 export type LoginFormData = z.infer<typeof loginSchema>;
 export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 export type UpdateProfileFormData = z.infer<typeof updateProfileSchema>;
-export type ProjectFormData = z.infer<typeof projectSchema>;
-export type EventFormData = z.infer<typeof eventSchema>;
-export type EventRegistrationFormData = z.infer<typeof eventRegistrationSchema>;
 export type JobOfferFormData = z.infer<typeof jobOfferSchema>;
 export type JobApplicationFormData = z.infer<typeof jobApplicationSchema>;
-export type DonationFormData = z.infer<typeof donationSchema>;
-export type BeneficiaryFormData = z.infer<typeof beneficiarySchema>;
+export type ProjectFormData = z.infer<typeof projectSchema>;
+export type BlogPostFormData = z.infer<typeof blogPostSchema>;
 export type ContactFormData = z.infer<typeof contactSchema>;
+export type PageBackgroundFormData = z.infer<typeof pageBackgroundSchema>;
+export type TranslationFormData = z.infer<typeof translationSchema>;
 
 // ============================================================
 // 10. FONCTION UTILITAIRE POUR VALIDATION
 // ============================================================
 
-/**
- * Valide un formulaire et retourne les erreurs formatées
- * 
- * @param schema - Schéma Zod
- * @param data - Données à valider
- * @returns { success, errors, data }
- */
 export const validateForm = <T>(schema: z.ZodSchema<T>, data: unknown) => {
   const result = schema.safeParse(data);
   

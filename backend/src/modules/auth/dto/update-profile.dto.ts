@@ -1,51 +1,31 @@
-import { IsString, IsOptional, IsUrl, Length } from 'class-validator';
+// backend/src/modules/auth/dto/update-profile.dto.ts
+
+import { IsString, IsOptional, IsUrl, IsEmail, Length, IsBoolean } from 'class-validator';
 
 export class UpdateProfileDto {
   @IsString({ message: 'Le prenom doit être une chaîne de caracteres' })
   @IsOptional()
-  firstName?: string;
+  @Length(2, 100, { message: 'Le prenom doit contenir entre 2 et 100 caracteres' })
+  first_name?: string;
 
   @IsString({ message: 'Le nom doit être une chaîne de caracteres' })
   @IsOptional()
-  lastName?: string;
+  @Length(2, 100, { message: 'Le nom doit contenir entre 2 et 100 caracteres' })
+  last_name?: string;
 
-  @IsString({ message: 'Le telephone doit être une chaîne de caracteres' })
+  @IsEmail({}, { message: 'Veuillez fournir une adresse email valide' })
   @IsOptional()
-  phone?: string;
+  email?: string;
 
-  @IsString({ message: 'La region doit être une chaîne de caracteres' })
+  @IsString({ message: 'Le role doit être une chaîne de caracteres' })
   @IsOptional()
-  region?: string;
+  role?: string;
 
-  @IsString({ message: 'La biographie doit être une chaîne de caracteres' })
   @IsOptional()
-  bio?: string;
+  @IsBoolean({ message: 'Le statut actif doit être un booleen' })
+  is_active?: boolean;
 
-  @IsString({ message: 'Le poste doit être une chaîne de caracteres' })
+  @IsUrl({}, { message: 'L URL de l avatar doit être une URL valide' })
   @IsOptional()
-  position?: string;
-
-  @IsString({ message: 'Le département doit être une chaîne de caracteres' })
-  @IsOptional()
-  department?: string;
-
-  @IsString({ message: 'Les compétences doivent être une chaîne de caracteres' })
-  @IsOptional()
-  skills?: string;
-
-  @IsUrl({}, { message: 'Le lien LinkedIn doit être une URL valide' })
-  @IsOptional()
-  socialLinkedin?: string;
-
-  @IsUrl({}, { message: 'Le lien Twitter doit être une URL valide' })
-  @IsOptional()
-  socialTwitter?: string;
-
-  @IsUrl({}, { message: 'Le lien GitHub doit être une URL valide' })
-  @IsOptional()
-  socialGithub?: string;
-
-  @IsString({ message: 'L URL de l avatar doit être une chaîne de caracteres' })
-  @IsOptional()
-  avatar_url?: string;
+  avatar?: string;
 }

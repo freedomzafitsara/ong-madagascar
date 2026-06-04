@@ -4,35 +4,13 @@ const nextConfig = {
   // CONFIGURATION DES IMAGES
   // ========================================
   images: {
-    domains: [
-      'localhost', 
-      'api.ong-madagascar.mg', 
-      'res.cloudinary.com'
-    ],
-    formats: ['image/avif', 'image/webp'],
+    //  domains est déprécié, on utilise remotePatterns uniquement
     remotePatterns: [
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '3000',
-        pathname: '/uploads/**',
-      },
       {
         protocol: 'http',
         hostname: 'localhost',
         port: '4001',
         pathname: '/uploads/**',
-      },
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '5000',
-        pathname: '/uploads/**',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.unsplash.com',
-        pathname: '/**',
       },
       {
         protocol: 'https',
@@ -45,7 +23,7 @@ const nextConfig = {
         pathname: '/**',
       },
     ],
-    // Optimisation des images
+    formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 60,
@@ -111,8 +89,13 @@ const nextConfig = {
         permanent: true,
       },
       {
-        source: '/job',
-        destination: '/emploi',
+        source: '/emploi',
+        destination: '/jobs',
+        permanent: true,
+      },
+      {
+        source: '/offres',
+        destination: '/jobs',
         permanent: true,
       },
     ];
@@ -125,7 +108,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:4001/:path*',
+        destination: 'http://localhost:4001/api/:path*',  // ✅ Correction: ajout de /api
       },
     ];
   },

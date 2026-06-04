@@ -1,5 +1,5 @@
 ﻿// src/services/contact.service.ts
-import api from "./api";
+import api from '@/lib/axios';
 
 export interface ContactMessage {
   id: string;
@@ -16,35 +16,54 @@ export interface CreateContactDto {
   message: string;
 }
 
+export interface PaginatedMessagesResponse {
+  data: ContactMessage[];
+  total: number;
+  page: number;
+  totalPages: number;
+  limit: number;
+}
+
 export const contactService = {
-  // Envoyer un message (public)
+  /**
+   * Envoie un message de contact (public)
+   */
   async sendMessage(data: CreateContactDto): Promise<ContactMessage> {
     const response = await api.post("/contact", data);
     return response.data;
   },
 
-  // Récupérer tous les messages (admin)
+  /**
+   * Récupère tous les messages (admin) avec pagination
+   */
   async getAllMessages(params?: {
     page?: number;
     limit?: number;
     is_read?: boolean;
-  }): Promise<{ data: ContactMessage[]; total: number; page: number; totalPages: number }> {
+  }): Promise<PaginatedMessagesResponse> {
     const response = await api.get("/contact", { params });
     return response.data;
   },
 
-  // Marquer un message comme lu (admin)
+  /**
+   * Marque un message comme lu (admin)
+   */
   async markAsRead(id: string): Promise<ContactMessage> {
     const response = await api.patch(`/contact/${id}/read`);
     return response.data;
   },
 
-  // Supprimer un message (admin)
-  async deleteMessage(id: string): Promise<void> {
-    await api.delete(`/contact/${id}`);
+  /**
+   * Supprime un message (admin)
+   */
+  async deleteMessage(id: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.delete(`/contact/${id}`);
+    return response.data;
   },
 
-  // Compter les messages non lus (admin)
+  /**
+   * Compte les messages non lus (admin)
+   */
   async getUnreadCount(): Promise<{ count: number }> {
     const response = await api.get("/contact/unread/count");
     return response.data;

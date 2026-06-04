@@ -10,6 +10,8 @@ import {
   Delete,
   Query,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto, UpdateProjectDto, ProjectQueryDto } from './dto/create-project.dto';
@@ -105,8 +107,8 @@ export class ProjectsController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin')
+  @HttpCode(HttpStatus.OK)
   async remove(@Param('id') id: string) {
-    await this.projectsService.remove(id);
-    return { success: true, message: 'Projet supprimé avec succès' };
+    return this.projectsService.remove(id);
   }
 }

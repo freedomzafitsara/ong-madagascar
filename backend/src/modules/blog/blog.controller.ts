@@ -44,8 +44,7 @@ export class BlogController {
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
     @Query('status') status?: string,
-    @Query('type') type?: string,
-    @Query('is_published') is_published?: string,
+    @Query('category_id') category_id?: string,
     @Query('search') search?: string,
   ) {
     return this.blogService.findAll(
@@ -53,8 +52,7 @@ export class BlogController {
       parseInt(limit), 
       {
         status,
-        type,
-        is_published: is_published === 'true',
+        category_id,
         search,
       }
     );
@@ -93,6 +91,15 @@ export class BlogController {
   }
 
   // ============================================================
+  // TROUVER UN ARTICLE PAR SLUG (Public)
+  // ============================================================
+  @Get('public/slug/:slug')
+  @Public()
+  async findBySlug(@Param('slug') slug: string) {
+    return this.blogService.findBySlug(slug);
+  }
+
+  // ============================================================
   // TROUVER UN ARTICLE PUBLIC PAR ID (Public)
   // ============================================================
   @Get('public/:id')
@@ -108,7 +115,6 @@ export class BlogController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin', 'admin')
   async update(@Param('id') id: string, @Body() updateDto: UpdateBlogPostDto, @Request() req: any) {
-    // Nettoyer le DTO pour enlever les champs undefined
     const cleanedDto = Object.fromEntries(
       Object.entries(updateDto).filter(([_, v]) => v !== undefined && v !== null)
     );
@@ -121,24 +127,27 @@ export class BlogController {
   }
 
   // ============================================================
-  // PUBLIER/DÉPUBLIER UN ARTICLE (Admin)
+  // PUBLIER UN ARTICLE (Admin)
   // ============================================================
   @Patch(':id/publish')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin', 'admin')
   async publish(@Param('id') id: string) {
-    return this.blogService.updatePublishStatus(id, true);
+    return this.blogService.publish(id);
   }
 
+  // ============================================================
+  // DÉPUBLIER UN ARTICLE (Admin)
+  // ============================================================
   @Patch(':id/unpublish')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin', 'admin')
   async unpublish(@Param('id') id: string) {
-    return this.blogService.updatePublishStatus(id, false);
+    return this.blogService.unpublish(id);
   }
 
   // ============================================================
-  // SUPPRIMER UN ARTICLE (Admin uniquement)
+  // SUPPRIMER UN ARTICLE (Super Admin uniquement)
   // ============================================================
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)

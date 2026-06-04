@@ -1,5 +1,5 @@
 ﻿// src/services/auth.service.ts
-import api from "./api";
+import api from '@/lib/axios';
 
 export interface LoginCredentials {
   email: string;
@@ -30,14 +30,22 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface ChangePasswordData {
+  oldPassword: string;
+  newPassword: string;
+}
+
 export const authService = {
-  // Connexion
+  /**
+   * Connexion de l'utilisateur
+   */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response = await api.post("/auth/login", credentials);
     const data = response.data;
     
     // Stocker le token et l'utilisateur
     if (data.access_token) {
+      localStorage.setItem("access_token", data.access_token);
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("user", JSON.stringify(data.user));
     }
@@ -45,19 +53,25 @@ export const authService = {
     return data;
   },
 
-  // Inscription (admin uniquement)
+  /**
+   * Inscription d'un nouvel utilisateur (admin uniquement)
+   */
   async register(userData: RegisterData): Promise<User> {
     const response = await api.post("/auth/register", userData);
     return response.data;
   },
 
-  // Récupérer le profil
+  /**
+   * Récupère le profil de l'utilisateur connecté
+   */
   async getProfile(): Promise<User> {
     const response = await api.get("/auth/profile");
     return response.data;
   },
 
-  // Mettre à jour le profil
+  /**
+   * Met à jour le profil de l'utilisateur
+   */
   async updateProfile(data: Partial<User>): Promise<User> {
     const response = await api.put("/auth/profile", data);
     if (response.data) {
@@ -66,37 +80,81 @@ export const authService = {
     return response.data;
   },
 
-  // Changer le mot de passe
-  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
-    await api.put("/auth/change-password", { oldPassword, newPassword });
+  /**
+   * Change le mot de passe de l'utilisateur
+   */
+  async changePassword(oldPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.post("/auth/change-password", { oldPassword, newPassword });
+    return response.data;
   },
 
-  // Déconnexion
+  /**
+   * Déconnexion - Supprime le token et redirige
+   */
   logout(): void {
+    localStorage.removeItem("access_token");
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     window.location.href = "/login";
   },
 
-  // Vérifier si l'utilisateur est connecté
+  /**
+   * Vérifie si l'utilisateur est connecté
+   */
   isAuthenticated(): boolean {
-    const token = localStorage.getItem("token");
+    if (typeof window === 'undefined') return false;
+    const token = localStorage.getItem("access_token") || localStorage.getItem("token");
     return !!token;
   },
 
-  // Récupérer l'utilisateur connecté
+  /**
+   * Récupère l'utilisateur connecté depuis le localStorage
+   */
   getCurrentUser(): User | null {
+    if (typeof window === 'undefined') return null;
     const userStr = localStorage.getItem("user");
     if (userStr) {
-      return JSON.parse(userStr);
+      try {
+        return JSON.parse(userStr);
+      } catch {
+        return null;
+      }
     }
     return null;
   },
 
-  // Vérifier si l'utilisateur a le rôle admin
+  /**
+   * Vérifie si l'utilisateur a un rôle administrateur
+   */
   isAdmin(): boolean {
     const user = this.getCurrentUser();
     return user?.role === "admin" || user?.role === "super_admin";
+  },
+
+  /**
+   * Vérifie si l'utilisateur est super administrateur
+   */
+  isSuperAdmin(): boolean {
+    const user = this.getCurrentUser();
+    return user?.role === "super_admin";
+  },
+
+  /**
+   * Rafraîchit le token d'accès
+   */
+  async refreshToken(): Promise<string | null> {
+    try {
+      const response = await api.post("/auth/refresh");
+      const newToken = response.data.access_token;
+      if (newToken) {
+        localStorage.setItem("access_token", newToken);
+        localStorage.setItem("token", newToken);
+      }
+      return newToken;
+    } catch (error) {
+      this.logout();
+      return null;
+    }
   },
 };
 

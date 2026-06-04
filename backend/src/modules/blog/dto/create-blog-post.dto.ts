@@ -1,31 +1,20 @@
 // backend/src/modules/blog/dto/create-blog-post.dto.ts
 
-import { IsString, IsOptional, IsEnum, IsBoolean, MaxLength } from 'class-validator';
-
-// Types d'articles simplifiés pour le thème
-export enum ArticleType {
-  NEWS = 'news',
-  SUCCESS_STORY = 'success_story',
-  REPORT = 'report',
-}
-
-// Statuts simplifiés
-export enum PostStatus {
-  DRAFT = 'draft',
-  PUBLISHED = 'published',
-}
+import { IsString, IsOptional, IsBoolean, MaxLength, IsUUID, IsNotEmpty } from 'class-validator';
 
 export class CreateBlogPostDto {
   @IsString()
-  @MaxLength(255)
+  @IsNotEmpty({ message: 'Le titre français est requis' })
+  @MaxLength(255, { message: 'Le titre ne doit pas dépasser 255 caractères' })
   title_fr: string;
 
   @IsString()
   @IsOptional()
-  @MaxLength(255)
+  @MaxLength(255, { message: 'Le titre malgache ne doit pas dépasser 255 caractères' })
   title_mg?: string;
 
   @IsString()
+  @IsNotEmpty({ message: 'Le contenu français est requis' })
   content_fr: string;
 
   @IsString()
@@ -34,26 +23,28 @@ export class CreateBlogPostDto {
 
   @IsString()
   @IsOptional()
-  summary_fr?: string;
+  @MaxLength(500, { message: 'L\'URL de l\'image ne doit pas dépasser 500 caractères' })
+  cover_image?: string;
 
   @IsString()
   @IsOptional()
-  summary_mg?: string;
-
-  @IsEnum(ArticleType)
-  @IsOptional()
-  type?: ArticleType;
+  slug?: string;
 
   @IsString()
   @IsOptional()
-  image_url?: string;
+  status?: string;
 
   @IsBoolean()
   @IsOptional()
   is_published?: boolean;
 
-  @IsString()
+  @IsUUID()
+  @IsNotEmpty({ message: 'L\'ID de l\'auteur est requis' })
   author_id: string;
+
+  @IsUUID()
+  @IsOptional()
+  category_id?: string;
 }
 
 export class UpdateBlogPostDto {
@@ -77,21 +68,38 @@ export class UpdateBlogPostDto {
 
   @IsString()
   @IsOptional()
-  summary_fr?: string;
+  cover_image?: string;
 
   @IsString()
   @IsOptional()
-  summary_mg?: string;
-
-  @IsEnum(ArticleType)
-  @IsOptional()
-  type?: ArticleType;
+  slug?: string;
 
   @IsString()
   @IsOptional()
-  image_url?: string;
+  status?: string;
 
   @IsBoolean()
   @IsOptional()
   is_published?: boolean;
+
+  @IsUUID()
+  @IsOptional()
+  category_id?: string;
+}
+
+export class BlogPostQueryDto {
+  @IsOptional()
+  page?: number = 1;
+
+  @IsOptional()
+  limit?: number = 10;
+
+  @IsOptional()
+  status?: string;
+
+  @IsOptional()
+  category_id?: string;
+
+  @IsOptional()
+  search?: string;
 }

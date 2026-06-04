@@ -1,5 +1,5 @@
 ﻿// src/services/blog.service.ts
-import api from "./api";
+import api from '@/lib/axios';
 
 export interface BlogPost {
   id: string;
@@ -35,8 +35,24 @@ export interface CreateBlogPostDto {
   is_published?: boolean;
 }
 
+export interface PaginatedBlogResponse {
+  data: BlogPost[];
+  total: number;
+  page: number;
+  totalPages: number;
+  limit: number;
+}
+
+export interface BlogStats {
+  total: number;
+  published: number;
+  draft: number;
+}
+
 export const blogService = {
-  // Récupérer tous les articles (admin)
+  /**
+   * Récupère tous les articles (admin) avec pagination
+   */
   async getAllPosts(params?: {
     page?: number;
     limit?: number;
@@ -44,67 +60,83 @@ export const blogService = {
     type?: string;
     is_published?: boolean;
     search?: string;
-  }): Promise<{ data: BlogPost[]; total: number; page: number; totalPages: number }> {
+  }): Promise<PaginatedBlogResponse> {
     const response = await api.get("/blog", { params });
     return response.data;
   },
 
-  // Récupérer les articles publiés (public)
+  /**
+   * Récupère les articles publiés (public)
+   */
   async getPublishedPosts(params?: {
     page?: number;
     limit?: number;
-  }): Promise<{ data: BlogPost[]; total: number; page: number; totalPages: number }> {
+    type?: string;
+  }): Promise<PaginatedBlogResponse> {
     const response = await api.get("/blog/public", { params });
     return response.data;
   },
 
-  // Récupérer un article par ID (public)
+  /**
+   * Récupère un article par son ID (public)
+   */
   async getPostById(id: string): Promise<BlogPost> {
     const response = await api.get(`/blog/public/${id}`);
     return response.data;
   },
 
-  // Récupérer un article par ID (admin)
+  /**
+   * Récupère un article par son ID (admin)
+   */
   async getPostForAdmin(id: string): Promise<BlogPost> {
     const response = await api.get(`/blog/${id}`);
     return response.data;
   },
 
-  // Créer un article (admin)
+  /**
+   * Crée un nouvel article (admin)
+   */
   async createPost(data: CreateBlogPostDto): Promise<BlogPost> {
     const response = await api.post("/blog", data);
     return response.data;
   },
 
-  // Mettre à jour un article (admin)
+  /**
+   * Met à jour un article (admin)
+   */
   async updatePost(id: string, data: Partial<CreateBlogPostDto>): Promise<BlogPost> {
     const response = await api.patch(`/blog/${id}`, data);
     return response.data;
   },
 
-  // Publier un article (admin)
+  /**
+   * Publie un article (admin)
+   */
   async publishPost(id: string): Promise<BlogPost> {
     const response = await api.patch(`/blog/${id}/publish`);
     return response.data;
   },
 
-  // Dépublier un article (admin)
+  /**
+   * Dépublie un article (admin)
+   */
   async unpublishPost(id: string): Promise<BlogPost> {
     const response = await api.patch(`/blog/${id}/unpublish`);
     return response.data;
   },
 
-  // Supprimer un article (admin)
-  async deletePost(id: string): Promise<void> {
-    await api.delete(`/blog/${id}`);
+  /**
+   * Supprime un article (admin)
+   */
+  async deletePost(id: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.delete(`/blog/${id}`);
+    return response.data;
   },
 
-  // Statistiques (admin)
-  async getStats(): Promise<{
-    total: number;
-    published: number;
-    draft: number;
-  }> {
+  /**
+   * Récupère les statistiques des articles (admin)
+   */
+  async getStats(): Promise<BlogStats> {
     const response = await api.get("/blog/stats");
     return response.data;
   },

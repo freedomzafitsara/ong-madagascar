@@ -1,6 +1,7 @@
+// backend/src/modules/auth/guards/super-admin.guard.ts
+
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { UserRole } from '../../../entities/user.entity';
 
 @Injectable()
 export class SuperAdminGuard implements CanActivate {
@@ -9,11 +10,12 @@ export class SuperAdminGuard implements CanActivate {
   ): boolean | Promise<boolean> | Observable<boolean> {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-
-    if (!user || user.role !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Accès réservé au Super Administrateur');
+    
+    // Correction: Utiliser les valeurs string au lieu du type UserRole
+    if (!user || user.role !== 'super_admin') {
+      throw new ForbiddenException('Accès réservé aux super administrateurs');
     }
-
+    
     return true;
   }
 }

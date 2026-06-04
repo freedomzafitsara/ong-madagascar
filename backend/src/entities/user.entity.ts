@@ -12,10 +12,7 @@ import {
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
-export enum UserRole {
-  SUPER_ADMIN = 'super_admin',
-  ADMIN = 'admin',
-}
+export type UserRole = 'admin' | 'super_admin';
 
 @Entity('users')
 @Index(['email'])
@@ -37,11 +34,7 @@ export class User {
   @Column({ select: false, length: 255 })
   password: string;
 
-  @Column({ 
-    type: 'varchar', 
-    length: 20,
-    default: UserRole.ADMIN 
-  })
+  @Column({ length: 20, default: 'admin' })
   role: string;
 
   @Column({ name: 'is_active', default: true })
@@ -49,6 +42,9 @@ export class User {
 
   @Column({ name: 'last_login', nullable: true })
   last_login: Date;
+
+  @Column({ nullable: true })
+  avatar: string;
 
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;

@@ -22,7 +22,6 @@ export class AuthService {
   async login(loginDto: LoginDto): Promise<{ access_token: string; user: any }> {
     const { email, password } = loginDto;
 
-    // ✅ NE PAS sélectionner les colonnes qui n'existent pas
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
@@ -35,7 +34,7 @@ export class AuthService {
     }
 
     if (!user.is_active) {
-      throw new UnauthorizedException('Compte desactive');
+      throw new UnauthorizedException('Compte desactive. Veuillez contacter un administrateur');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -50,7 +49,7 @@ export class AuthService {
     const payload = { sub: user.id, email: user.email, role: user.role };
     const access_token = this.jwtService.sign(payload);
 
-    this.logger.log(`Connexion reussie: ${email}`);
+    this.logger.log(`Connexion reussie: ${email} (${user.role})`);
 
     return {
       access_token,
@@ -73,9 +72,11 @@ export class AuthService {
       throw new ConflictException('Cet email est deja utilise');
     }
 
+    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
     const user = this.userRepository.create({
       email: registerDto.email,
-      password: registerDto.password,
+      password: hashedPassword,
       first_name: registerDto.first_name,
       last_name: registerDto.last_name,
       role: registerDto.role || 'admin',
@@ -83,7 +84,7 @@ export class AuthService {
     });
 
     const savedUser = await this.userRepository.save(user);
-    this.logger.log(`Nouvel admin cree: ${savedUser.email}`);
+    this.logger.log(`Nouvel administrateur cree: ${savedUser.email} (${savedUser.role})`);
 
     const { password, ...result } = savedUser;
     return result;
@@ -115,15 +116,38 @@ export class AuthService {
   }
 
   async findAll(): Promise<any[]> {
-    return this.userRepository.find({
-      select: ['id', 'email', 'first_name', 'last_name', 'role', 'is_active', 'last_login', 'created_at'],
+    const users = await this.userRepository.find({
+      select: ['id', 'email', 'first_name', 'last_name', 'role', 'is_active', 'last_login', 'created_at', 'updated_at', 'avatar'],
       order: { created_at: 'DESC' },
     });
+    
+    return users.map(user => ({
+      ...user,
+      last_login: user.last_login || null
+    }));
+  }
+
+  async findOne(id: string): Promise<any> {
+    const user = await this.userRepository.findOne({
+      where: { id },
+      select: ['id', 'email', 'first_name', 'last_name', 'role', 'is_active', 'last_login', 'created_at', 'updated_at', 'avatar'],
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur non trouve');
+    }
+
+    return user;
   }
 
   async remove(id: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur non trouve');
+    }
+    
     await this.userRepository.delete(id);
-    this.logger.log(`Admin supprime: ${id}`);
+    this.logger.log(`Administrateur supprime: ${user.email} (${user.first_name} ${user.last_name})`);
   }
 
   async toggleStatus(id: string): Promise<User> {
@@ -132,6 +156,19 @@ export class AuthService {
       throw new UnauthorizedException('Utilisateur non trouve');
     }
     user.is_active = !user.is_active;
-    return this.userRepository.save(user);
+    const updatedUser = await this.userRepository.save(user);
+    this.logger.log(`Statut administrateur modifie: ${user.email} -> actif: ${user.is_active}`);
+    return updatedUser;
+  }
+
+  async updateRole(id: string, role: string): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur non trouve');
+    }
+    user.role = role;
+    const updatedUser = await this.userRepository.save(user);
+    this.logger.log(`Role administrateur modifie: ${user.email} -> ${role}`);
+    return updatedUser;
   }
 }

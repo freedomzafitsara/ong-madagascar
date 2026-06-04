@@ -7,52 +7,26 @@ import {
   CreateDateColumn, 
   UpdateDateColumn, 
   OneToMany,
-  Index,
-  BeforeUpdate
+  Index
 } from 'typeorm';
 import { JobApplication } from './job-application.entity';
 
-export enum JobType {
-  CDI = 'cdi',
-  CDD = 'cdd',
-  STAGE = 'stage',
-  FREELANCE = 'freelance',
-  BENEVOLAT = 'benevolat',
-  ALTERNANCE = 'alternance',
-  TEMPORARY = 'temporary',
-}
-
-export enum JobStatus {
-  DRAFT = 'draft',
-  PUBLISHED = 'published',
-  CLOSED = 'closed',
-  EXPIRED = 'expired',
-  ARCHIVED = 'archived',
-}
-
-export enum ContractType {
-  CDI = 'CDI',
-  CDD = 'CDD',
-  STAGE = 'STAGE',
-  FREELANCE = 'FREELANCE',
-}
+// Types simples (pas d'enums PostgreSQL pour éviter les erreurs)
+export type ContractType = 'CDI' | 'CDD' | 'STAGE' | 'BENEVOLE' | 'FREELANCE';
+export type JobStatusType = 'draft' | 'published' | 'expired' | 'closed' | 'archived';
 
 @Entity('job_offers')
-@Index(['status', 'deadline'])
-@Index(['is_published'])
+@Index(['status'])
+@Index(['deadline'])
 @Index(['contract_type'])
-@Index(['company'])
 export class JobOffer {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // ============================================================
-  // INFORMATIONS DE BASE (FR/MG)
-  // ============================================================
-  @Column({ name: 'title_fr', type: 'varchar', length: 255 })
+  @Column({ name: 'title_fr', length: 255 })
   title_fr: string;
 
-  @Column({ name: 'title_mg', type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'title_mg', length: 255, nullable: true })
   title_mg: string;
 
   @Column({ name: 'description_fr', type: 'text' })
@@ -61,79 +35,48 @@ export class JobOffer {
   @Column({ name: 'description_mg', type: 'text', nullable: true })
   description_mg: string;
 
-  // ============================================================
-  // ENTREPRISE ET LOCALISATION
-  // ============================================================
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ length: 255, nullable: true })
   company: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ length: 255, nullable: true })
   location: string;
 
-  @Column({ name: 'contract_type', type: 'varchar', length: 50, default: 'CDI' })
+  @Column({ name: 'contract_type', length: 50, default: 'CDI' })
   contract_type: string;
 
-  // ============================================================
-  // DATES ET STATUT
-  // ============================================================
   @Column({ type: 'date', nullable: true })
   deadline: Date;
 
-  @Column({ type: 'varchar', default: 'draft' })
+  @Column({ default: 'draft' })
   status: string;
 
-  @Column({ name: 'is_published', type: 'boolean', default: false })
+  @Column({ name: 'is_published', default: false })
   is_published: boolean;
 
-  // ============================================================
-  // MÉDIAS
-  // ============================================================
-  @Column({ name: 'image_url', type: 'varchar', length: 500, nullable: true })
+  @Column({ name: 'image_url', nullable: true })
   image_url: string;
 
-  // ============================================================
-  // ANCIENNES COLONNES (pour compatibilité descendante)
-  // Ne pas utiliser directement, préférer les nouvelles colonnes
-  // ============================================================
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  title: string;
-
-  @Column({ type: 'text', nullable: true })
-  description: string;
-
-  @Column({ name: 'company_name', type: 'varchar', length: 255, nullable: true })
-  company_name: string;
-
-  // ============================================================
-  // MÉTRIQUES
-  // ============================================================
-  @Column({ name: 'views_count', type: 'int', default: 0 })
+  @Column({ name: 'views_count', default: 0 })
   views_count: number;
 
-  @Column({ name: 'applications_count', type: 'int', default: 0 })
+  @Column({ name: 'applications_count', default: 0 })
   applications_count: number;
 
-  // ============================================================
-  // DATES SYSTÈME
-  // ============================================================
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at' })
   updated_at: Date;
 
-  // ============================================================
-  // RELATIONS
-  // ============================================================
   @OneToMany(() => JobApplication, (application) => application.jobOffer)
   applications: JobApplication[];
 
   // ============================================================
-  // MÉTHODES UTILITAIRES (adaptées)
+  // MÉTHODES UTILITAIRES
   // ============================================================
 
   isPublished(): boolean {
-    return this.is_published === true;
+    return this.is_published === true && this.status === 'published';
   }
 
   isExpired(): boolean {
@@ -142,24 +85,16 @@ export class JobOffer {
   }
 
   isDraft(): boolean {
-    return !this.is_published && this.status === 'draft';
-  }
-
-  getDaysUntilDeadline(): number | null {
-    if (!this.deadline) return null;
-    const today = new Date();
-    const deadline = new Date(this.deadline);
-    const diffTime = deadline.getTime() - today.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return this.status === 'draft';
   }
 
   getStatusLabel(): string {
     const labels: Record<string, string> = {
       draft: 'Brouillon',
       published: 'Publiée',
-      closed: 'Fermée',
       expired: 'Expirée',
-      archived: 'Archivée',
+      closed: 'Fermée',
+      archived: 'Archivée'
     };
     return labels[this.status] || this.status;
   }
@@ -170,9 +105,7 @@ export class JobOffer {
       CDD: 'CDD',
       STAGE: 'Stage',
       FREELANCE: 'Freelance',
-      benevolat: 'Bénévolat',
-      alternance: 'Alternance',
-      temporary: 'Temporaire',
+      BENEVOLE: 'Bénévolat'
     };
     return labels[this.contract_type] || this.contract_type;
   }
@@ -186,8 +119,10 @@ export class JobOffer {
   }
 
   publish(): void {
-    this.is_published = true;
-    this.status = 'published';
+    if (this.deadline && new Date(this.deadline) > new Date()) {
+      this.is_published = true;
+      this.status = 'published';
+    }
   }
 
   unpublish(): void {
@@ -198,28 +133,5 @@ export class JobOffer {
   close(): void {
     this.is_published = false;
     this.status = 'closed';
-  }
-
-  @BeforeUpdate()
-  checkExpiration(): void {
-    if (this.isPublished() && this.isExpired()) {
-      this.status = 'expired';
-      this.is_published = false;
-    }
-  }
-
-  // Méthode pour obtenir le titre (avec fallback)
-  getTitle(): string {
-    return this.title_fr || this.title || 'Sans titre';
-  }
-
-  // Méthode pour obtenir la description (avec fallback)
-  getDescription(): string {
-    return this.description_fr || this.description || '';
-  }
-
-  // Méthode pour obtenir le nom de l'entreprise (avec fallback)
-  getCompanyName(): string {
-    return this.company || this.company_name || 'Entreprise non spécifiée';
   }
 }

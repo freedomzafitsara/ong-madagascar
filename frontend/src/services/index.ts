@@ -1,8 +1,16 @@
-ï»¿// src/services/index.ts
-export { default as api } from "./api";
-export { default as authService } from "./auth.service";
-export { default as jobService } from "./job.service";
-export { default as projectService } from "./project.service";
-export { default as blogService } from "./blog.service";
-export { default as contactService } from "./contact.service";
-export { default as pageService } from "./page.service";
+// ============================================================
+// EXPORTS CENTRALISÉS DES SERVICES
+// ============================================================
+
+export { default as api } from '@/lib/axios';
+export { authService } from './auth.service';
+export { jobService } from './job.service';
+export { uploadService } from './upload.service';
+export { contactService } from './contact.service';
+export { blogService } from './blog.service';
+export { projectService } from './project.service';
+export { pageService } from './page.service';
+
+// Types
+export type { JobOffer, JobApplication, JobStatus, ContractType } from './job.service';
+export type { UploadedImage, UploadType } from './upload.service';

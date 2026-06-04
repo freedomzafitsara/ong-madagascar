@@ -3,60 +3,48 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { jobsApi, uploadApi } from '@/lib/api';
+import { jobService, JobOffer, ContractType, JobStatus } from '@/services/job.service';
+import { uploadService } from '@/services/upload.service';
 import { 
   ArrowLeft, Save, Loader2, AlertCircle, CheckCircle,
-  Building, MapPin, Briefcase, DollarSign, Calendar,
+  Building, MapPin, Briefcase, Calendar,
   FileText, Users, Eye, XCircle, Clock, Star, X,
-  Upload, Trash2
+  Upload, Trash2, Globe
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// Types compatibles avec le backend
-interface JobOffer {
-  id: string;
-  title: string;
-  title_mg?: string;
-  description: string;
-  description_mg?: string;
-  company_name: string;
-  image_url?: string;
-  location?: string;
-  region?: string;
-  job_type: string;
-  salary_range?: string;
-  sector?: string;
-  requirements?: string;
-  requirements_mg?: string;
-  benefits?: string;
-  deadline?: string;
-  status: 'draft' | 'published' | 'closed' | 'expired';
-  applications_count: number;
-  is_featured: boolean;
-  created_at: string;
-}
+// ============================================================
+// CONFIGURATION
+// ============================================================
 
-// Types de contrat
-const CONTRACT_TYPES = [
-  { value: 'cdi', label: 'CDI' },
-  { value: 'cdd', label: 'CDD' },
-  { value: 'stage', label: 'Stage' },
-  { value: 'freelance', label: 'Freelance' },
-  { value: 'benevolat', label: 'Bénévolat' },
+const CONTRACT_TYPES: { value: ContractType; label: string }[] = [
+  { value: ContractType.CDI, label: 'CDI' },
+  { value: ContractType.CDD, label: 'CDD' },
+  { value: ContractType.STAGE, label: 'Stage' },
+  { value: ContractType.FREELANCE, label: 'Freelance' },
+  { value: ContractType.ALTERNANCE, label: 'Alternance' },
+  { value: ContractType.TEMPORARY, label: 'Temporaire' },
 ];
 
-// Statuts
 const STATUS_OPTIONS = [
-  { value: 'draft', label: 'Brouillon' },
-  { value: 'published', label: 'Publié' },
-  { value: 'closed', label: 'Fermé' },
-  { value: 'expired', label: 'Expiré' },
+  { value: JobStatus.DRAFT, label: 'Brouillon' },
+  { value: JobStatus.PUBLISHED, label: 'Publié' },
+  { value: JobStatus.CLOSED, label: 'Fermé' },
+  { value: JobStatus.EXPIRED, label: 'Expiré' },
+  { value: JobStatus.ARCHIVED, label: 'Archivé' },
 ];
 
-// Composant d'upload d'image intégré
-function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload: (url: string) => void; currentImageUrl: string }) {
+// ============================================================
+// COMPOSANT D'UPLOAD D'IMAGE
+// ============================================================
+
+function ImageUploadSection({ onImageUpload, currentImageUrl }: { 
+  onImageUpload: (url: string) => void; 
+  currentImageUrl: string;
+}) {
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(currentImageUrl);
   const [error, setError] = useState('');
@@ -73,7 +61,7 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      setError('Format non supporté (JPG, PNG, WEBP, GIF)');
+      setError('Format non supporte (JPG, PNG, WEBP, GIF)');
       setPreviewUrl(currentImageUrl);
       setUploading(false);
       return;
@@ -87,10 +75,10 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
     }
 
     try {
-      const url = await uploadApi.uploadImage(file);
+      const url = await uploadService.uploadImage(file);
       setPreviewUrl(url);
       onImageUpload(url);
-      toast.success('Image uploadée avec succès');
+      toast.success('Image uploadee avec succes');
     } catch (err: any) {
       setError(err.message || 'Erreur lors de l\'upload');
       setPreviewUrl(currentImageUrl);
@@ -103,7 +91,7 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
   const handleRemove = () => {
     setPreviewUrl('');
     onImageUpload('');
-    toast.success('Image supprimée');
+    toast.success('Image supprimee');
   };
 
   return (
@@ -114,8 +102,8 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
       
       {previewUrl ? (
         <div className="relative">
-          <div className="w-full h-48 bg-gray-100 rounded-xl border border-gray-200 overflow-hidden">
-            <img src={previewUrl} alt="Aperçu" className="w-full h-full object-cover" />
+          <div className="w-full h-48 bg-gray-100 rounded-xl border border-gray-200 overflow-hidden relative">
+            <Image src={previewUrl} alt="Apercu" fill className="object-cover" />
           </div>
           <div className="absolute top-2 right-2 flex gap-2">
             <button
@@ -149,7 +137,13 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
               </>
             )}
           </div>
-          <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" onChange={handleFileSelect} className="hidden" disabled={uploading} />
+          <input 
+            type="file" 
+            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" 
+            onChange={handleFileSelect} 
+            className="hidden" 
+            disabled={uploading} 
+          />
         </label>
       )}
       
@@ -158,10 +152,14 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
   );
 }
 
+// ============================================================
+// COMPOSANT PRINCIPAL
+// ============================================================
+
 export default function EditJobPage() {
   const params = useParams();
   const router = useRouter();
-  const { token, user, isAuthenticated } = useAuth();
+  const { user, token, isAuthenticated } = useAuth();
   const { language } = useLanguage();
   const [job, setJob] = useState<JobOffer | null>(null);
   const [loading, setLoading] = useState(true);
@@ -170,8 +168,10 @@ export default function EditJobPage() {
   const [success, setSuccess] = useState('');
   const [imageUrl, setImageUrl] = useState('');
 
-  const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'staff' || user?.role === 'partner';
+  const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin';
   const isSuperAdmin = user?.role === 'super_admin';
+
+  const t = (fr: string, mg: string) => language === 'fr' ? fr : mg;
 
   useEffect(() => {
     if (!isAuthenticated || !hasEditRights) {
@@ -184,14 +184,14 @@ export default function EditJobPage() {
   const fetchJob = async () => {
     setLoading(true);
     try {
-      const response = await jobsApi.getOne(params.id as string);
+      const response = await jobService.getOfferById(params.id as string);
       setJob(response);
       setImageUrl(response.image_url || '');
       setError('');
     } catch (error: any) {
       console.error('Erreur:', error);
-      setError(error.message || 'Offre non trouvée');
-      toast.error(error.message || 'Erreur de chargement');
+      setError(error.message || t('Offre non trouvée', 'Tsy hita ny asa'));
+      toast.error(error.message || t('Erreur de chargement', 'Nisy hadisoana'));
     } finally {
       setLoading(false);
     }
@@ -218,70 +218,61 @@ export default function EditJobPage() {
 
     try {
       const updateData = {
-        title: job.title,
+        title_fr: job.title_fr,
         title_mg: job.title_mg,
-        description: job.description,
+        description_fr: job.description_fr,
         description_mg: job.description_mg,
-        company_name: job.company_name,
-        image_url: imageUrl || undefined,
+        company: job.company,
         location: job.location,
-        region: job.region,
-        job_type: job.job_type,
-        sector: job.sector,
-        salary_range: job.salary_range,
-        requirements: job.requirements,
-        requirements_mg: job.requirements_mg,
-        benefits: job.benefits,
+        contract_type: job.contract_type,
         deadline: job.deadline,
-        status: job.status,
-        is_featured: job.is_featured,
+        is_published: job.is_published,
+        image_url: imageUrl || undefined,
       };
 
-      await jobsApi.update(job.id, updateData);
+      await jobService.updateOffer(job.id, updateData);
       
-      setSuccess('Offre mise à jour avec succès !');
-      toast.success('Offre mise à jour avec succès !');
+      setSuccess(t('Offre mise à jour avec succès !', 'Vita ny fanovana ny asa!'));
+      toast.success(t('Offre mise à jour', 'Vita ny fanovana'));
       setTimeout(() => {
         router.push(`/dashboard/jobs/${job.id}`);
       }, 1500);
     } catch (error: any) {
       console.error('Erreur:', error);
-      setError(error.message || 'Erreur lors de la mise à jour');
-      toast.error(error.message || 'Erreur lors de la mise à jour');
+      setError(error.response?.data?.message || t('Erreur lors de la mise à jour', 'Nisy hadisoana tamin\'ny fanovana'));
+      toast.error(error.response?.data?.message || t('Erreur', 'Nisy hadisoana'));
     } finally {
       setSaving(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch(status) {
-      case 'published':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
-            <CheckCircle className="w-3 h-3" /> Publiée
-          </span>
-        );
-      case 'draft':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
-            <Clock className="w-3 h-3" /> Brouillon
-          </span>
-        );
-      case 'closed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
-            <XCircle className="w-3 h-3" /> Fermée
-          </span>
-        );
-      case 'expired':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-700">
-            <Clock className="w-3 h-3" /> Expirée
-          </span>
-        );
-      default:
-        return <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">{status}</span>;
-    }
+  const getStatusBadge = (status: JobStatus) => {
+    const config: Record<JobStatus, { fr: string; mg: string; className: string }> = {
+      [JobStatus.PUBLISHED]: { fr: 'Publiée', mg: 'Navoaka', className: 'bg-green-100 text-green-700' },
+      [JobStatus.DRAFT]: { fr: 'Brouillon', mg: 'Volavola', className: 'bg-gray-100 text-gray-600' },
+      [JobStatus.CLOSED]: { fr: 'Fermée', mg: 'Nakatona', className: 'bg-red-100 text-red-700' },
+      [JobStatus.EXPIRED]: { fr: 'Expirée', mg: 'Lany daty', className: 'bg-orange-100 text-orange-700' },
+      [JobStatus.ARCHIVED]: { fr: 'Archivée', mg: 'Voatahiry', className: 'bg-purple-100 text-purple-700' }
+    };
+    const badge = config[status];
+    if (!badge) return <span className="px-2 py-1 text-xs rounded-full bg-gray-100">{status}</span>;
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${badge.className}`}>
+        {language === 'fr' ? badge.fr : badge.mg}
+      </span>
+    );
+  };
+
+  const getContractLabel = (type?: ContractType): string => {
+    const labels: Record<ContractType, string> = {
+      [ContractType.CDI]: 'CDI',
+      [ContractType.CDD]: 'CDD',
+      [ContractType.STAGE]: t('Stage', 'Fiofanana'),
+      [ContractType.FREELANCE]: 'Freelance',
+      [ContractType.ALTERNANCE]: t('Alternance', 'Fiofanana mifandimby'),
+      [ContractType.TEMPORARY]: t('Temporaire', 'Vonjimaika')
+    };
+    return type ? labels[type] : '';
   };
 
   if (loading) {
@@ -291,7 +282,7 @@ export default function EditJobPage() {
           <div className="w-16 h-16 border-4 border-gray-200 rounded-full"></div>
           <div className="absolute top-0 left-0 w-16 h-16 border-4 border-blue-600 rounded-full animate-spin border-t-transparent"></div>
         </div>
-        <p className="text-gray-500 font-medium">Chargement de l'offre...</p>
+        <p className="text-gray-500 font-medium">{t('Chargement...', 'Mampiditra...')}</p>
       </div>
     );
   }
@@ -302,10 +293,10 @@ export default function EditJobPage() {
         <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-12 h-12 text-gray-400" />
         </div>
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">Offre non trouvée</h3>
+        <h3 className="text-xl font-semibold text-gray-700 mb-2">{t('Offre non trouvée', 'Tsy hita ny asa')}</h3>
         <p className="text-gray-500 mb-6">{error}</p>
         <Link href="/dashboard/jobs" className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm">
-          Retour aux offres
+          {t('Retour aux offres', 'Hiverina any amin\'ny asa')}
         </Link>
       </div>
     );
@@ -313,16 +304,12 @@ export default function EditJobPage() {
 
   if (!job) return null;
 
-  const getText = (frText: string, mgText: string) => {
-    return language === 'fr' ? frText : mgText;
-  };
-
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* En-tête */}
       <div>
         <Link href={`/dashboard/jobs/${params.id}`} className="inline-flex items-center text-gray-500 hover:text-blue-600 transition mb-2">
-          <ArrowLeft className="w-4 h-4 mr-1" /> Retour
+          <ArrowLeft className="w-4 h-4 mr-1" /> {t('Retour', 'Hiverina')}
         </Link>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -331,8 +318,8 @@ export default function EditJobPage() {
                 <Briefcase className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-800">Modifier l'offre</h1>
-                <p className="text-gray-500 text-sm">Modifiez les informations de l'offre d'emploi</p>
+                <h1 className="text-2xl font-bold text-gray-800">{t('Modifier l\'offre', 'Hanova ny asa')}</h1>
+                <p className="text-gray-500 text-sm">{t('Modifiez les informations de l\'offre', 'Hanova ny fampahalalana momba ny asa')}</p>
               </div>
               {isSuperAdmin && (
                 <span className="ml-2 px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">Super Admin</span>
@@ -367,58 +354,68 @@ export default function EditJobPage() {
           {/* Section Informations générales */}
           <div className="border-b border-gray-200 pb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" /> Informations générales
+              <FileText className="w-5 h-5 text-blue-600" /> {t('Informations générales', 'Fampahalalana ankapobeny')}
             </h2>
             <div className="grid grid-cols-1 gap-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Titre du poste (français) <span className="text-red-500">*</span>
+                  {t('Titre du poste (français)', 'Lohateny (frantsay)')} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  name="title"
+                  name="title_fr"
                   required
-                  value={job.title || ''}
+                  value={job.title_fr || ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                   placeholder="Ex: Coordinateur de projet"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Titre (malagasy)</label>
-                <input
-                  type="text"
-                  name="title_mg"
-                  value={job.title_mg || ''}
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('Titre (malagasy)', 'Lohateny (malagasy)')}
+                </label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    name="title_mg"
+                    value={job.title_mg || ''}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                    placeholder="Ex: Mpanandrindra tetikasa"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('Description (français)', 'Famaritana (frantsay)')} <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  name="description_fr"
+                  rows={5}
+                  required
+                  value={job.description_fr || ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  placeholder="Ex: Mpanandrindra tetikasa"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
+                  placeholder="Description detaillee du poste..."
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description (français) <span className="text-red-500">*</span>
+                  {t('Description (malagasy)', 'Famaritana (malagasy)')}
                 </label>
-                <textarea
-                  name="description"
-                  rows={5}
-                  required
-                  value={job.description || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-                  placeholder="Description détaillée du poste..."
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description (malagasy)</label>
-                <textarea
-                  name="description_mg"
-                  rows={4}
-                  value={job.description_mg || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-                  placeholder="Famaritana ny asa amin'ny malagasy..."
-                />
+                <div className="relative">
+                  <Globe className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                  <textarea
+                    name="description_mg"
+                    rows={4}
+                    value={job.description_mg || ''}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
+                    placeholder="Famaritana amin'ny malagasy..."
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -426,25 +423,30 @@ export default function EditJobPage() {
           {/* Section Entreprise */}
           <div className="border-b border-gray-200 pb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Building className="w-5 h-5 text-blue-600" /> Entreprise
+              <Building className="w-5 h-5 text-blue-600" /> {t('Entreprise', 'Orinasa')}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nom de l'entreprise <span className="text-red-500">*</span>
+                  {t('Nom de l\'entreprise', 'Anaran\'ny orinasa')} <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  name="company_name"
-                  required
-                  value={job.company_name || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  placeholder="Ex: Y-Mad Madagascar"
-                />
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    name="company"
+                    required
+                    value={job.company || ''}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                    placeholder="Ex: Y-Mad Madagascar"
+                  />
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Lieu</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('Lieu', 'Toerana')}
+                </label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
@@ -457,31 +459,22 @@ export default function EditJobPage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Secteur</label>
-                <input
-                  type="text"
-                  name="sector"
-                  value={job.sector || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  placeholder="Ex: Technologie, Agriculture"
-                />
-              </div>
             </div>
           </div>
 
           {/* Section Contrat */}
           <div className="border-b border-gray-200 pb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-blue-600" /> Contrat
+              <Briefcase className="w-5 h-5 text-blue-600" /> {t('Contrat', 'Fifanarahana')}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Type de contrat</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('Type de contrat', 'Karazana fifanarahana')}
+                </label>
                 <select
-                  name="job_type"
-                  value={job.job_type || 'cdi'}
+                  name="contract_type"
+                  value={job.contract_type || ContractType.CDI}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                 >
@@ -491,72 +484,9 @@ export default function EditJobPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Salaire</label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    name="salary_range"
-                    value={job.salary_range || ''}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                    placeholder="Ex: 800 000 - 1 200 000 Ar"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Section Prérequis */}
-          <div className="border-b border-gray-200 pb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Users className="w-5 h-5 text-blue-600" /> Prérequis
-            </h2>
-            <div className="grid grid-cols-1 gap-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prérequis (français)</label>
-                <textarea
-                  name="requirements"
-                  rows={4}
-                  value={job.requirements || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-                  placeholder="Liste des prérequis..."
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prérequis (malagasy)</label>
-                <textarea
-                  name="requirements_mg"
-                  rows={3}
-                  value={job.requirements_mg || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-                  placeholder="Fepetra ilaina amin'ny malagasy..."
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Avantages</label>
-                <textarea
-                  name="benefits"
-                  rows={2}
-                  value={job.benefits || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-                  placeholder="Ex: Mutuelle, télétravail, formation continue..."
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section Dates et Statut */}
-          <div className="border-b border-gray-200 pb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-blue-600" /> Dates et Statut
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date limite de candidature</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('Date limite', 'Farany')}
+                </label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
@@ -568,11 +498,22 @@ export default function EditJobPage() {
                   />
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Section Statut */}
+          <div className="border-b border-gray-200 pb-6">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-600" /> {t('Statut', 'Sata')}
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('Statut de publication', 'Satan\'ny famoahana')}
+                </label>
                 <select
                   name="status"
-                  value={job.status || 'draft'}
+                  value={job.status || JobStatus.DRAFT}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                 >
@@ -581,24 +522,22 @@ export default function EditJobPage() {
                   ))}
                 </select>
               </div>
+              <div className="flex items-center pt-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="is_published"
+                    checked={job.is_published || false}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    {t('Publier directement', 'Avoaka avy hatrany')}
+                  </span>
+                </label>
+              </div>
             </div>
-          </div>
-
-          {/* Section Mise en avant */}
-          <div className="pt-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                name="is_featured"
-                checked={job.is_featured || false}
-                onChange={handleChange}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-700 flex items-center gap-1">
-                <Star className="w-4 h-4 text-yellow-500" />
-                Mettre en avant (offre vedette)
-              </span>
-            </label>
           </div>
         </div>
 
@@ -608,7 +547,7 @@ export default function EditJobPage() {
             href={`/dashboard/jobs/${params.id}`}
             className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition flex items-center gap-2 font-medium"
           >
-            <X className="w-4 h-4" /> Annuler
+            <X className="w-4 h-4" /> {t('Annuler', 'Aoka')}
           </Link>
           <button
             type="submit"
@@ -618,12 +557,12 @@ export default function EditJobPage() {
             {saving ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Enregistrement...
+                {t('Enregistrement...', 'Fanovana...')}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                Enregistrer les modifications
+                {t('Enregistrer', 'Tehirizo')}
               </>
             )}
           </button>

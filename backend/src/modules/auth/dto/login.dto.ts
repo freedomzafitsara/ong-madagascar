@@ -3,10 +3,10 @@
 import { IsEmail, IsString, MinLength } from 'class-validator';
 
 export class LoginDto {
-  @IsEmail()
+  @IsEmail({}, { message: 'Veuillez fournir une adresse email valide' })
   email: string;
 
-  @IsString()
-  @MinLength(6)
+  @IsString({ message: 'Le mot de passe doit être une chaîne de caracteres' })
+  @MinLength(6, { message: 'Le mot de passe doit contenir au moins 6 caracteres' })
   password: string;
 }

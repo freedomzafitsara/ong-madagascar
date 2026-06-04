@@ -1,4 +1,6 @@
-﻿import { Module } from '@nestjs/common';
+﻿// backend/src/modules/auth/auth.module.ts
+
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -10,7 +12,6 @@ import { User } from '../../entities/user.entity';
 
 @Module({
   imports: [
-    ConfigModule,
     TypeOrmModule.forFeature([User]),
     PassportModule.register({ 
       defaultStrategy: 'jwt',
@@ -19,21 +20,12 @@ import { User } from '../../entities/user.entity';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => {
-        const expiresIn = configService.get<string>('JWT_EXPIRES_IN') || '7d';
-        const secret = configService.get<string>('JWT_SECRET') || 'y_mad_super_secret_key_2025';
-        
-        return {
-          secret: secret,
-          signOptions: { 
-            expiresIn: expiresIn as any,
-            algorithm: 'HS256',
-          },
-          verifyOptions: {
-            ignoreExpiration: false,
-          },
-        };
-      },
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: {
+          expiresIn: configService.get<string>('JWT_EXPIRES_IN') as any,
+        },
+      }),
     }),
   ],
   controllers: [AuthController],

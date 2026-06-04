@@ -3,31 +3,98 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
-import { jobsApi, uploadApi } from '@/lib/api';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { jobService, ContractType } from '@/services/job.service';
+import { uploadService } from '@/services/upload.service';
+import { RichTextEditor } from '@/components/admin/RichTextEditor';
 import { 
   ArrowLeft, Save, Briefcase, MapPin, Building, Calendar, 
-  DollarSign, FileText, X, Loader2, AlertCircle, CheckCircle,
-  Upload, Eye, Trash2
+  FileText, X, Loader2, AlertCircle, CheckCircle,
+  Upload, Eye, Trash2, Globe, Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const CONTRACT_TYPES = [
-  { value: 'cdi', label: 'CDI' },
-  { value: 'cdd', label: 'CDD' },
-  { value: 'stage', label: 'Stage' },
-  { value: 'freelance', label: 'Freelance' },
-  { value: 'benevolat', label: 'Bénévolat' },
+const CONTRACT_TYPES: { value: ContractType; label: string }[] = [
+  { value: ContractType.CDI, label: 'CDI' },
+  { value: ContractType.CDD, label: 'CDD' },
+  { value: ContractType.STAGE, label: 'Stage' },
+  { value: ContractType.FREELANCE, label: 'Freelance' },
+  { value: ContractType.ALTERNANCE, label: 'Alternance' },
+  { value: ContractType.TEMPORARY, label: 'Temporaire' },
 ];
 
-const SECTORS = [
-  'Agriculture', 'Éducation', 'Santé', 'Environnement', 
-  'Technologie', 'Construction', 'Commerce', 'Administration',
-  'Communication', 'Transport', 'Tourisme', 'Autre'
-];
+// ============================================================
+// FONCTIONS UTILITAIRES POUR LES DATES
+// ============================================================
 
-// Composant d'upload d'image intégré
-function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload: (url: string) => void; currentImageUrl: string }) {
+const getTodayDate = (): string => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDateInDays = (days: number): string => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getMaxDate = (): string => {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() + 1);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateDisplay = (dateString: string): string => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+};
+
+const getDaysRemaining = (dateString: string): number => {
+  if (!dateString) return 0;
+  const today = new Date();
+  const deadline = new Date(dateString);
+  const diffTime = deadline.getTime() - today.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+const isDateExpired = (dateString: string): boolean => {
+  if (!dateString) return false;
+  return new Date(dateString) < new Date();
+};
+
+const isDateNear = (dateString: string): boolean => {
+  if (!dateString) return false;
+  const daysRemaining = getDaysRemaining(dateString);
+  return daysRemaining > 0 && daysRemaining <= 7;
+};
+
+// ============================================================
+// COMPOSANT D'UPLOAD D'IMAGE
+// ============================================================
+
+function ImageUploadSection({ 
+  onImageUpload, 
+  currentImageUrl 
+}: { 
+  onImageUpload: (url: string) => void; 
+  currentImageUrl: string;
+}) {
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(currentImageUrl);
   const [error, setError] = useState('');
@@ -39,14 +106,12 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
     setError('');
     setUploading(true);
     
-    // Preview local
     const localPreview = URL.createObjectURL(file);
     setPreviewUrl(localPreview);
 
-    // Validation
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      setError('Format non supporté (JPG, PNG, WEBP, GIF)');
+      setError('Format non supporte (JPG, PNG, WEBP, GIF)');
       setPreviewUrl(currentImageUrl);
       setUploading(false);
       return;
@@ -60,10 +125,10 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
     }
 
     try {
-      const url = await uploadApi.uploadImage(file);
+      const url = await uploadService.uploadImage(file);
       setPreviewUrl(url);
       onImageUpload(url);
-      toast.success('Image uploadée avec succès');
+      toast.success('Image uploadee avec succes');
     } catch (err: any) {
       setError(err.message || 'Erreur lors de l\'upload');
       setPreviewUrl(currentImageUrl);
@@ -76,7 +141,7 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
   const handleRemove = () => {
     setPreviewUrl('');
     onImageUpload('');
-    toast.success('Image supprimée');
+    toast.success('Image supprimee');
   };
 
   return (
@@ -87,8 +152,8 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
       
       {previewUrl ? (
         <div className="relative">
-          <div className="w-full h-48 bg-gray-100 rounded-xl border border-gray-200 overflow-hidden">
-            <img src={previewUrl} alt="Aperçu" className="w-full h-full object-cover" />
+          <div className="w-full h-48 bg-gray-100 rounded-xl border border-gray-200 overflow-hidden relative">
+            <Image src={previewUrl} alt="Apercu" fill className="object-cover" />
           </div>
           <div className="absolute top-2 right-2 flex gap-2">
             <button
@@ -122,7 +187,13 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
               </>
             )}
           </div>
-          <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" onChange={handleFileSelect} className="hidden" disabled={uploading} />
+          <input 
+            type="file" 
+            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" 
+            onChange={handleFileSelect} 
+            className="hidden" 
+            disabled={uploading} 
+          />
         </label>
       )}
       
@@ -131,40 +202,181 @@ function ImageUploadSection({ onImageUpload, currentImageUrl }: { onImageUpload:
   );
 }
 
+// ============================================================
+// COMPOSANT DATE PICKER SIMPLIFIÉ (SANS MENU DÉROULANT)
+// ============================================================
+
+function DatePickerField({ 
+  value, 
+  onChange, 
+  error,
+  label
+}: { 
+  value: string; 
+  onChange: (value: string) => void; 
+  error?: string;
+  label: string;
+}) {
+  const getStatusIcon = () => {
+    if (!value) return null;
+    if (isDateExpired(value)) {
+      return <AlertCircle className="w-3.5 h-3.5 text-red-500" />;
+    }
+    if (isDateNear(value)) {
+      return <Clock className="w-3.5 h-3.5 text-orange-500" />;
+    }
+    return <CheckCircle className="w-3.5 h-3.5 text-green-500" />;
+  };
+
+  const getStatusText = () => {
+    if (!value) return null;
+    if (isDateExpired(value)) {
+      return <span className="text-red-500">Date depassee</span>;
+    }
+    if (isDateNear(value)) {
+      const days = getDaysRemaining(value);
+      return <span className="text-orange-500">Plus que {days} jour(s)</span>;
+    }
+    const days = getDaysRemaining(value);
+    return <span className="text-green-500">{days} jours restants</span>;
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+      </label>
+      
+      <div className="relative">
+        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          type="date"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          min={getTodayDate()}
+          max={getMaxDate()}
+          className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
+            error ? 'border-red-500' : 'border-gray-300'
+          }`}
+        />
+      </div>
+      
+      {/* Suggestions rapides sous le champ (sans menu déroulant) */}
+      <div className="flex flex-wrap gap-2 mt-2">
+        <button
+          type="button"
+          onClick={() => onChange(getDateInDays(7))}
+          className="text-xs px-2 py-1 bg-gray-100 rounded-full hover:bg-blue-100 hover:text-blue-600 transition"
+        >
+          +7 jours
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(getDateInDays(14))}
+          className="text-xs px-2 py-1 bg-gray-100 rounded-full hover:bg-blue-100 hover:text-blue-600 transition"
+        >
+          +14 jours
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(getDateInDays(30))}
+          className="text-xs px-2 py-1 bg-gray-100 rounded-full hover:bg-blue-100 hover:text-blue-600 transition"
+        >
+          +1 mois
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(getDateInDays(60))}
+          className="text-xs px-2 py-1 bg-gray-100 rounded-full hover:bg-blue-100 hover:text-blue-600 transition"
+        >
+          +2 mois
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(getDateInDays(90))}
+          className="text-xs px-2 py-1 bg-gray-100 rounded-full hover:bg-blue-100 hover:text-blue-600 transition"
+        >
+          +3 mois
+        </button>
+      </div>
+      
+      {/* Statut de la date */}
+      {value && (
+        <div className="mt-2 text-xs flex items-center gap-1.5">
+          {getStatusIcon()}
+          {getStatusText()}
+          <span className="text-gray-400 ml-1">
+            ({formatDateDisplay(value)})
+          </span>
+        </div>
+      )}
+      
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
+  );
+}
+
+// ============================================================
+// COMPOSANT PRINCIPAL
+// ============================================================
+
 export default function NewJobPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
+  const { language } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
   const [formData, setFormData] = useState({
-    title: '',
+    title_fr: '',
     title_mg: '',
-    description: '',
+    description_fr: '',
     description_mg: '',
-    company_name: '',
+    company: '',
     location: '',
-    region: 'Analamanga',
-    job_type: 'cdi',
-    sector: '',
-    salary: '',
-    requirements: '',
-    requirements_mg: '',
-    benefits: '',
+    contract_type: ContractType.CDI,
     deadline: '',
-    status: 'draft',
-    is_featured: false,
+    is_published: false,
   });
 
-  const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'staff';
+  const t = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+  const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin';
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    
+    if (!formData.title_fr.trim()) {
+      errors.title_fr = 'Le titre francais est requis';
+    } else if (formData.title_fr.length < 3) {
+      errors.title_fr = 'Le titre doit contenir au moins 3 caracteres';
+    }
+    
+    if (!formData.description_fr.trim()) {
+      errors.description_fr = 'La description francaise est requise';
+    } else if (formData.description_fr.length < 20) {
+      errors.description_fr = 'La description doit contenir au moins 20 caracteres';
+    }
+    
+    if (!formData.company.trim()) {
+      errors.company = 'Le nom de l\'entreprise est requis';
+    }
+    
+    if (formData.deadline && isDateExpired(formData.deadline)) {
+      errors.deadline = 'La date limite doit etre dans le futur';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   if (!isAuthenticated || !hasEditRights) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-800">Accès non autorisé</h1>
-          <p className="text-gray-500 mt-2">Vous n'avez pas les droits pour créer une offre d'emploi.</p>
+          <h1 className="text-2xl font-bold text-gray-800">Acces non autorise</h1>
+          <p className="text-gray-500 mt-2">Vous n'avez pas les droits pour creer une offre d'emploi.</p>
           <Link href="/dashboard/jobs" className="mt-4 inline-flex items-center gap-2 text-blue-600 hover:underline">
             Retour aux offres
           </Link>
@@ -175,43 +387,48 @@ export default function NewJobPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      toast.error('Veuillez corriger les erreurs dans le formulaire');
+      return;
+    }
+    
     setLoading(true);
     
     try {
       const jobData = {
-        title: formData.title,
-        title_mg: formData.title_mg || undefined,
-        description: formData.description,
-        description_mg: formData.description_mg || undefined,
-        company_name: formData.company_name,
-        image_url: imageUrl || undefined,
-        location: formData.location || undefined,
-        region: formData.region,
-        job_type: formData.job_type,
-        sector: formData.sector || undefined,
-        salary: formData.salary || undefined,
-        requirements: formData.requirements || undefined,
-        requirements_mg: formData.requirements_mg || undefined,
-        benefits: formData.benefits || undefined,
+        title_fr: formData.title_fr.trim(),
+        title_mg: formData.title_mg?.trim() || undefined,
+        description_fr: formData.description_fr.trim(),
+        description_mg: formData.description_mg?.trim() || undefined,
+        company: formData.company.trim(),
+        location: formData.location?.trim() || undefined,
+        contract_type: formData.contract_type,
         deadline: formData.deadline || undefined,
-        status: formData.status,
-        is_featured: formData.is_featured,
+        is_published: formData.is_published,
+        image_url: imageUrl || undefined,
       };
 
-      await jobsApi.create(jobData);
-      toast.success('Offre d\'emploi créée avec succès !');
+      await jobService.createOffer(jobData);
+      toast.success('Offre d\'emploi creee avec succes !');
       router.push('/dashboard/jobs');
     } catch (error: any) {
       console.error('Erreur:', error);
-      toast.error(error.message || 'Erreur lors de la création');
+      toast.error(error.response?.data?.message || 'Erreur lors de la creation');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData({...formData, [field]: value});
+    if (validationErrors[field]) {
+      setValidationErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
-      {/* En-tête */}
       <div className="flex items-center gap-4 mb-6">
         <Link href="/dashboard/jobs" className="p-2 hover:bg-gray-100 rounded-lg transition">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -223,47 +440,46 @@ export default function NewJobPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Nouvelle offre d'emploi</h1>
-              <p className="text-gray-500 text-sm">Créez une nouvelle opportunité pour les candidats</p>
+              <p className="text-gray-500 text-sm">Creez une nouvelle opportunite pour les candidats</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Formulaire */}
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="p-6 space-y-6">
           
-          {/* Upload Image */}
           <ImageUploadSection onImageUpload={setImageUrl} currentImageUrl={imageUrl} />
 
-          {/* Titres */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Titre du poste (français) <span className="text-red-500">*</span>
+                Titre du poste (francais) <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
-                value={formData.title}
-                onChange={(e) => setFormData({...formData, title: e.target.value})}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                value={formData.title_fr}
+                onChange={(e) => handleInputChange('title_fr', e.target.value)}
+                className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
+                  validationErrors.title_fr ? 'border-red-500' : 'border-gray-300'
+                }`}
                 placeholder="Ex: Coordinateur de projet"
               />
+              {validationErrors.title_fr && <p className="text-xs text-red-500 mt-1">{validationErrors.title_fr}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Titre (malagasy)</label>
               <input
                 type="text"
                 value={formData.title_mg}
-                onChange={(e) => setFormData({...formData, title_mg: e.target.value})}
+                onChange={(e) => handleInputChange('title_mg', e.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                 placeholder="Ex: Mpanandrindra tetikasa"
               />
             </div>
           </div>
 
-          {/* Entreprise */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nom de l'entreprise <span className="text-red-500">*</span>
@@ -273,56 +489,37 @@ export default function NewJobPage() {
               <input
                 type="text"
                 required
-                value={formData.company_name}
-                onChange={(e) => setFormData({...formData, company_name: e.target.value})}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                value={formData.company}
+                onChange={(e) => handleInputChange('company', e.target.value)}
+                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
+                  validationErrors.company ? 'border-red-500' : 'border-gray-300'
+                }`}
                 placeholder="Ex: Y-Mad Madagascar"
+              />
+            </div>
+            {validationErrors.company && <p className="text-xs text-red-500 mt-1">{validationErrors.company}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Lieu</label>
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={formData.location}
+                onChange={(e) => handleInputChange('location', e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                placeholder="Ex: Antananarivo"
               />
             </div>
           </div>
 
-          {/* Lieu et Région */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Lieu</label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({...formData, location: e.target.value})}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  placeholder="Ex: Antananarivo"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Région</label>
-              <select
-                value={formData.region}
-                onChange={(e) => setFormData({...formData, region: e.target.value})}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-              >
-                <option value="Analamanga">Analamanga</option>
-                <option value="Vakinankaratra">Vakinankaratra</option>
-                <option value="Haute Matsiatra">Haute Matsiatra</option>
-                <option value="Atsimo Atsinanana">Atsimo Atsinanana</option>
-                <option value="Ihorombe">Ihorombe</option>
-                <option value="Boeny">Boeny</option>
-                <option value="Sofia">Sofia</option>
-                <option value="Diana">Diana</option>
-                <option value="Menabe">Menabe</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Type et Secteur */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Type de contrat</label>
               <select
-                value={formData.job_type}
-                onChange={(e) => setFormData({...formData, job_type: e.target.value})}
+                value={formData.contract_type}
+                onChange={(e) => handleInputChange('contract_type', e.target.value as ContractType)}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
               >
                 {CONTRACT_TYPES.map(type => (
@@ -330,141 +527,75 @@ export default function NewJobPage() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Secteur</label>
-              <select
-                value={formData.sector}
-                onChange={(e) => setFormData({...formData, sector: e.target.value})}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-              >
-                <option value="">Sélectionner un secteur</option>
-                {SECTORS.map(sector => (
-                  <option key={sector} value={sector}>{sector}</option>
-                ))}
-              </select>
-            </div>
+            
+            <DatePickerField
+              value={formData.deadline}
+              onChange={(value) => handleInputChange('deadline', value)}
+              error={validationErrors.deadline}
+              label="Date limite de candidature"
+            />
           </div>
 
-          {/* Salaire et Date limite */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Salaire (optionnel)</label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={formData.salary}
-                  onChange={(e) => setFormData({...formData, salary: e.target.value})}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  placeholder="Ex: 800 000 - 1 200 000 Ar"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date limite</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="date"
-                  value={formData.deadline}
-                  onChange={(e) => setFormData({...formData, deadline: e.target.value})}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description (français) <span className="text-red-500">*</span>
+              Description (francais) <span className="text-red-500">*</span>
             </label>
-            <textarea
-              rows={5}
-              required
-              value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-              placeholder="Description détaillée du poste..."
+            <RichTextEditor
+              value={formData.description_fr}
+              onChange={(value) => handleInputChange('description_fr', value)}
+              placeholder="Description detaillee du poste..."
+              language={language}
+              minHeight="300px"
             />
+            {validationErrors.description_fr && <p className="text-xs text-red-500 mt-1">{validationErrors.description_fr}</p>}
+            <p className="text-xs text-gray-400 mt-2">
+              Minimum 20 caracteres. Utilisez les outils de mise en forme (gras, italique, listes, couleurs...)
+            </p>
           </div>
 
-          {/* Description Malagasy */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description (malagasy)</label>
-            <textarea
-              rows={4}
+            <RichTextEditor
               value={formData.description_mg}
-              onChange={(e) => setFormData({...formData, description_mg: e.target.value})}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
+              onChange={(value) => handleInputChange('description_mg', value)}
               placeholder="Famaritana amin'ny malagasy..."
+              language={language}
+              minHeight="200px"
             />
           </div>
 
-          {/* Prérequis */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Prérequis (français)</label>
-            <textarea
-              rows={4}
-              value={formData.requirements}
-              onChange={(e) => setFormData({...formData, requirements: e.target.value})}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-              placeholder="Liste des prérequis..."
-            />
-          </div>
-
-          {/* Prérequis Malagasy */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Prérequis (malagasy)</label>
-            <textarea
-              rows={3}
-              value={formData.requirements_mg}
-              onChange={(e) => setFormData({...formData, requirements_mg: e.target.value})}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-              placeholder="Fepetra ilaina amin'ny malagasy..."
-            />
-          </div>
-
-          {/* Avantages */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Avantages (optionnel)</label>
-            <textarea
-              rows={3}
-              value={formData.benefits}
-              onChange={(e) => setFormData({...formData, benefits: e.target.value})}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-              placeholder="Ex: Mutuelle, télétravail, formation continue..."
-            />
-          </div>
-
-          {/* Statut et Mise en avant */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({...formData, status: e.target.value})}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-              >
-                <option value="draft">Brouillon (non visible)</option>
-                <option value="published">Publié (visible par les candidats)</option>
-              </select>
-            </div>
-            <div className="flex items-center pt-6">
+          <div className="pt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Statut de publication</label>
+            <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
-                  type="checkbox"
-                  checked={formData.is_featured}
-                  onChange={(e) => setFormData({...formData, is_featured: e.target.checked})}
-                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  type="radio"
+                  checked={!formData.is_published}
+                  onChange={() => handleInputChange('is_published', false)}
+                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-sm text-gray-700">Mettre cette offre à la une</span>
+                <span className="text-sm text-gray-700 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" /> Brouillon (non visible)
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={formData.is_published}
+                  onChange={() => handleInputChange('is_published', true)}
+                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700 flex items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Publier directement
+                </span>
               </label>
             </div>
+            <p className="text-xs text-gray-400 mt-2">
+              Les offres publiees sont visibles par les candidats sur le site public.
+            </p>
           </div>
         </div>
 
-        {/* Boutons d'action */}
         <div className="flex justify-end gap-3 p-6 bg-gray-50 border-t border-gray-200 rounded-b-xl">
           <Link
             href="/dashboard/jobs"
@@ -480,12 +611,12 @@ export default function NewJobPage() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Création...
+                Creation...
               </>
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                Publier l'offre
+                {formData.is_published ? 'Publier l\'offre' : 'Sauvegarder le brouillon'}
               </>
             )}
           </button>

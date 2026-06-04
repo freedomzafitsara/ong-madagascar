@@ -1,12 +1,10 @@
 // frontend/src/lib/api.ts
-// Configuration API pour Y-Mad - Compatible avec le backend NestJS
+// Configuration API pour Y-MaD - Compatible avec le backend NestJS
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 
-// Configuration de base
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
-// Création de l'instance Axios
 export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -16,11 +14,6 @@ export const api: AxiosInstance = axios.create({
   timeout: 30000,
 });
 
-// ============================================================
-// INTERCEPTEURS
-// ============================================================
-
-// Intercepteur pour ajouter le token d'authentification
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
     if (typeof window !== 'undefined') {
@@ -32,12 +25,11 @@ api.interceptors.request.use(
     return config;
   },
   (error: AxiosError) => {
-    console.error('Erreur de requête:', error.message);
+    console.error('Erreur de requete:', error.message);
     return Promise.reject(error);
   }
 );
 
-// Intercepteur pour gérer les réponses et les erreurs
 api.interceptors.response.use(
   (response: AxiosResponse) => {
     return response;
@@ -57,11 +49,11 @@ api.interceptors.response.use(
       }
       
       if (status === 403) {
-        console.error('Accès interdit:', data?.message || 'Vous n\'avez pas les droits nécessaires');
+        console.error('Acces interdit:', data?.message || 'Vous n\'avez pas les droits necessaires');
       }
       
       if (status === 404) {
-        console.error('Ressource non trouvée:', data?.message || 'La ressource demandée n\'existe pas');
+        console.error('Ressource non trouvee:', data?.message || 'La ressource demandee n\'existe pas');
       }
       
       const errorMessage = data?.message || data?.error || `Erreur ${status}`;
@@ -69,8 +61,8 @@ api.interceptors.response.use(
     }
     
     if (error.request) {
-      console.error('Pas de réponse du serveur:', error.message);
-      return Promise.reject(new Error('Impossible de contacter le serveur. Vérifiez votre connexion.'));
+      console.error('Pas de reponse du serveur:', error.message);
+      return Promise.reject(new Error('Impossible de contacter le serveur. Verifiez votre connexion.'));
     }
     
     console.error('Erreur de configuration:', error.message);
@@ -78,14 +70,9 @@ api.interceptors.response.use(
   }
 );
 
-// Helper pour extraire les données d'une réponse
 export const extractData = <T>(response: AxiosResponse<T>): T => {
   return response.data;
 };
-
-// ============================================================
-// TYPES
-// ============================================================
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -99,7 +86,6 @@ export interface ApiResponse<T = any> {
 
 export interface LoginResponse {
   access_token: string;
-  token?: string;
   user: {
     id: string;
     email: string;
@@ -108,7 +94,6 @@ export interface LoginResponse {
     role: string;
     is_active: boolean;
   };
-  message?: string;
 }
 
 // ============================================================
@@ -134,7 +119,7 @@ export const authApi = {
     password: string;
     first_name: string;
     last_name: string;
-    phone?: string;
+    role?: string;
   }) => {
     const response = await api.post('/auth/register', userData);
     return response.data;
@@ -154,43 +139,23 @@ export const authApi = {
     return response.data;
   },
 
-  updateProfile: async (data: {
-    first_name?: string;
-    last_name?: string;
-    phone?: string;
-    bio?: string;
-    region?: string;
-  }) => {
-    const response = await api.put('/auth/profile', data);
+  getUsers: async () => {
+    const response = await api.get('/auth/users');
     return response.data;
   },
 
-  forgotPassword: async (email: string) => {
-    const response = await api.post('/auth/forgot-password', { email });
+  toggleUserStatus: async (userId: string) => {
+    const response = await api.put(`/auth/users/${userId}/toggle-status`);
     return response.data;
   },
 
-  resetPassword: async (token: string, password: string) => {
-    const response = await api.post('/auth/reset-password', { token, password });
+  updateUserRole: async (userId: string, role: string) => {
+    const response = await api.put(`/auth/users/${userId}/role`, { role });
     return response.data;
   },
 
-  changePassword: async (oldPassword: string, newPassword: string) => {
-    const response = await api.put('/auth/change-password', { oldPassword, newPassword });
-    return response.data;
-  },
-
-  uploadPhoto: async (file: File) => {
-    const formData = new FormData();
-    formData.append('photo', file);
-    const response = await api.post('/auth/upload-photo', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
-  },
-
-  deletePhoto: async () => {
-    const response = await api.delete('/auth/photo');
+  deleteUser: async (userId: string) => {
+    const response = await api.delete(`/auth/users/${userId}`);
     return response.data;
   },
 
@@ -208,211 +173,6 @@ export const authApi = {
     }
     return null;
   },
-
-  getUsers: async (page: number = 1, limit: number = 10, role?: string) => {
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('limit', limit.toString());
-    if (role) params.append('role', role);
-    const response = await api.get(`/auth/users?${params.toString()}`);
-    return response.data;
-  },
-
-  updateUserRole: async (userId: string, role: string) => {
-    const response = await api.put(`/auth/users/${userId}/role`, { role });
-    return response.data;
-  },
-
-  toggleUserStatus: async (userId: string) => {
-    const response = await api.put(`/auth/users/${userId}/toggle-status`);
-    return response.data;
-  },
-
-  deleteUser: async (userId: string) => {
-    const response = await api.delete(`/auth/users/${userId}`);
-    return response.data;
-  },
-};
-
-// ============================================================
-// UPLOAD API (NOUVEAU)
-// ============================================================
-
-export const uploadApi = {
-  uploadImage: async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await api.post('/upload/single', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    
-    const data = response.data;
-    return data.url || data.data?.url || data.fileUrl;
-  },
-
-  uploadMultiple: async (files: File[]): Promise<string[]> => {
-    const formData = new FormData();
-    files.forEach(file => formData.append('files', file));
-    
-    const response = await api.post('/upload/multiple', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    
-    const data = response.data;
-    return data.urls || data.data?.urls || [];
-  },
-
-  deleteFile: async (filename: string): Promise<void> => {
-    await api.delete(`/upload?filename=${filename}`);
-  },
-};
-
-// ============================================================
-// ÉVÉNEMENTS API
-// ============================================================
-
-export const eventsApi = {
-  getAll: async (page: number = 1, limit: number = 10, type?: string, status?: string, search?: string) => {
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('limit', limit.toString());
-    if (type && type !== 'all') params.append('type', type);
-    if (status && status !== 'all') params.append('status', status);
-    if (search) params.append('search', search);
-    const response = await api.get(`/events?${params.toString()}`);
-    return response.data;
-  },
-
-  getPublic: async (page: number = 1, limit: number = 9, type?: string) => {
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('limit', limit.toString());
-    if (type && type !== 'all') params.append('type', type);
-    const response = await api.get(`/events/public?${params.toString()}`);
-    return response.data;
-  },
-
-  getOne: async (id: string) => {
-    const response = await api.get(`/events/${id}`);
-    return response.data;
-  },
-
-  getStats: async () => {
-    const response = await api.get('/events/stats');
-    return response.data;
-  },
-
-  getUpcoming: async (limit: number = 5) => {
-    const response = await api.get(`/events/upcoming?limit=${limit}`);
-    return response.data;
-  },
-
-  create: async (data: {
-    title: string;
-    title_mg?: string;
-    description: string;
-    description_mg?: string;
-    type: string;
-    location: string;
-    region?: string;
-    startDate: Date;
-    endDate?: Date;
-    maxCapacity?: number;
-    isFree?: boolean;
-    price?: number;
-    imageUrl?: string;
-    status?: string;
-  }) => {
-    const response = await api.post('/events', data);
-    return response.data;
-  },
-
-  update: async (id: string, data: any) => {
-    const response = await api.patch(`/events/${id}`, data);
-    return response.data;
-  },
-
-  delete: async (id: string) => {
-    const response = await api.delete(`/events/${id}`);
-    return response.data;
-  },
-
-  register: async (eventId: string) => {
-    const response = await api.post(`/events/${eventId}/register`);
-    return response.data;
-  },
-
-  cancelRegistration: async (eventId: string) => {
-    const response = await api.delete(`/events/${eventId}/register`);
-    return response.data;
-  },
-
-  getMyRegistrations: async () => {
-    const response = await api.get('/events/my/registrations');
-    return response.data;
-  },
-
-  getEventRegistrations: async (eventId: string) => {
-    const response = await api.get(`/events/${eventId}/registrations`);
-    return response.data;
-  },
-
-  changeStatus: async (id: string, status: string) => {
-    const response = await api.patch(`/events/${id}/status`, { status });
-    return response.data;
-  },
-};
-
-// ============================================================
-// PROJETS API
-// ============================================================
-
-export const projectsApi = {
-  getAll: async (page: number = 1, limit: number = 10, region?: string, category?: string) => {
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('limit', limit.toString());
-    if (region) params.append('region', region);
-    if (category) params.append('category', category);
-    const response = await api.get(`/projects?${params.toString()}`);
-    return response.data;
-  },
-
-  getOne: async (id: string) => {
-    const response = await api.get(`/projects/${id}`);
-    return response.data;
-  },
-
-  getFeatured: async () => {
-    const response = await api.get('/projects/featured');
-    return response.data;
-  },
-
-  getStats: async () => {
-    const response = await api.get('/projects/stats');
-    return response.data;
-  },
-
-  create: async (data: any) => {
-    const response = await api.post('/projects', data);
-    return response.data;
-  },
-
-  update: async (id: string, data: any) => {
-    const response = await api.patch(`/projects/${id}`, data);
-    return response.data;
-  },
-
-  updateProgress: async (id: string, progress: number) => {
-    const response = await api.patch(`/projects/${id}/progress`, { progress });
-    return response.data;
-  },
-
-  delete: async (id: string) => {
-    const response = await api.delete(`/projects/${id}`);
-    return response.data;
-  },
 };
 
 // ============================================================
@@ -420,24 +180,21 @@ export const projectsApi = {
 // ============================================================
 
 export const jobsApi = {
-  getAll: async (page: number = 1, limit: number = 10, status?: string, jobType?: string, search?: string, region?: string) => {
+  getAll: async (page: number = 1, limit: number = 10, status?: string, contract_type?: string) => {
     const params = new URLSearchParams();
     params.append('page', page.toString());
     params.append('limit', limit.toString());
-    if (status && status !== 'all') params.append('status', status);
-    if (jobType && jobType !== 'all') params.append('jobType', jobType);
-    if (search) params.append('search', search);
-    if (region && region !== 'all') params.append('region', region);
+    if (status) params.append('status', status);
+    if (contract_type) params.append('contract_type', contract_type);
     const response = await api.get(`/jobs/offers?${params.toString()}`);
     return response.data;
   },
 
-  getPublic: async (page: number = 1, limit: number = 9, jobType?: string, region?: string) => {
+  getPublic: async (page: number = 1, limit: number = 9, contract_type?: string) => {
     const params = new URLSearchParams();
     params.append('page', page.toString());
     params.append('limit', limit.toString());
-    if (jobType && jobType !== 'all') params.append('jobType', jobType);
-    if (region && region !== 'all') params.append('region', region);
+    if (contract_type) params.append('contract_type', contract_type);
     const response = await api.get(`/jobs/offers/public?${params.toString()}`);
     return response.data;
   },
@@ -467,41 +224,38 @@ export const jobsApi = {
     return response.data;
   },
 
-  delete: async (id: string) => {
-    const response = await api.delete(`/jobs/offers/${id}`);
-    return response.data;
-  },
-
   updateStatus: async (id: string, status: string) => {
     const response = await api.patch(`/jobs/offers/${id}/status`, { status });
     return response.data;
   },
 
-  apply: async (formData: FormData) => {
-    const response = await api.post('/jobs/apply', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+  delete: async (id: string) => {
+    const response = await api.delete(`/jobs/offers/${id}`);
     return response.data;
   },
 
-  applyAuth: async (formData: FormData) => {
-    const response = await api.post('/jobs/apply/auth', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+  apply: async (data: {
+    job_offer_id: string;
+    full_name: string;
+    email: string;
+    phone?: string;
+    cv_url?: string;
+    cover_letter?: string;
+  }) => {
+    const response = await api.post('/jobs/apply', data);
     return response.data;
   },
 
-  getApplications: async (offerId: string, page: number = 1, limit: number = 10, status?: string) => {
+  getApplications: async (jobId?: string, page: number = 1, limit: number = 10, status?: string) => {
+    let url = '/jobs/applications';
+    if (jobId) {
+      url = `/jobs/offers/${jobId}/applications`;
+    }
     const params = new URLSearchParams();
     params.append('page', page.toString());
     params.append('limit', limit.toString());
-    if (status && status !== 'all') params.append('status', status);
-    const response = await api.get(`/jobs/offers/${offerId}/applications?${params.toString()}`);
-    return response.data;
-  },
-
-  getApplication: async (id: string) => {
-    const response = await api.get(`/jobs/applications/${id}`);
+    if (status) params.append('status', status);
+    const response = await api.get(`${url}?${params.toString()}`);
     return response.data;
   },
 
@@ -510,120 +264,86 @@ export const jobsApi = {
     return response.data;
   },
 
-  getMyApplications: async (page: number = 1, limit: number = 10) => {
-    const response = await api.get(`/jobs/applications/my?page=${page}&limit=${limit}`);
+  deleteApplication: async (id: string) => {
+    const response = await api.delete(`/jobs/applications/${id}`);
     return response.data;
   },
 
-  getAllApplications: async (page: number = 1, limit: number = 10, status?: string) => {
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('limit', limit.toString());
-    if (status && status !== 'all') params.append('status', status);
-    const response = await api.get(`/jobs/applications/all?${params.toString()}`);
+  getApplicationStats: async () => {
+    const response = await api.get('/jobs/applications/stats');
+    return response.data;
+  },
+
+  exportApplications: async (jobId?: string): Promise<Blob> => {
+    const url = jobId ? `/jobs/applications/export?jobId=${jobId}` : '/jobs/applications/export';
+    const response = await api.get(url, { responseType: 'blob' });
     return response.data;
   },
 };
 
 // ============================================================
-// MEMBRES API
+// PROJETS API
 // ============================================================
 
-export const membersApi = {
+export const projectsApi = {
   getAll: async (page: number = 1, limit: number = 10, status?: string) => {
     const params = new URLSearchParams();
     params.append('page', page.toString());
     params.append('limit', limit.toString());
     if (status) params.append('status', status);
-    const response = await api.get(`/members?${params.toString()}`);
+    const response = await api.get(`/projects?${params.toString()}`);
     return response.data;
   },
 
-  getMyMember: async () => {
-    const response = await api.get('/members/me');
+  getPublic: async (page: number = 1, limit: number = 9) => {
+    const params = new URLSearchParams();
+    params.append('page', page.toString());
+    params.append('limit', limit.toString());
+    const response = await api.get(`/projects/public?${params.toString()}`);
     return response.data;
   },
 
   getOne: async (id: string) => {
-    const response = await api.get(`/members/${id}`);
+    const response = await api.get(`/projects/${id}`);
+    return response.data;
+  },
+
+  getFeatured: async () => {
+    const response = await api.get('/projects/featured');
+    return response.data;
+  },
+
+  getStats: async () => {
+    const response = await api.get('/projects/stats');
     return response.data;
   },
 
   create: async (data: {
-    membershipType: string;
-    paymentMethod: string;
-    amount: number;
+    title_fr: string;
+    title_mg?: string;
+    description_fr: string;
+    description_mg?: string;
+    location?: string;
+    start_date?: string;
+    image_url?: string;
+    status?: string;
   }) => {
-    const response = await api.post('/members', data);
+    const response = await api.post('/projects', data);
+    return response.data;
+  },
+
+  update: async (id: string, data: any) => {
+    const response = await api.patch(`/projects/${id}`, data);
     return response.data;
   },
 
   updateStatus: async (id: string, status: string) => {
-    const response = await api.put(`/members/${id}/status`, { status });
+    const response = await api.patch(`/projects/${id}/status`, { status });
     return response.data;
   },
 
-  getStats: async () => {
-    const response = await api.get('/members/stats/all');
-    return response.data;
-  },
-
-  getCard: async (memberNumber: string) => {
-    const response = await api.get(`/members/card/${memberNumber}`);
-    return response.data;
-  },
-};
-
-// ============================================================
-// DONS API
-// ============================================================
-
-export const donationsApi = {
-  getAll: async (page: number = 1, limit: number = 10) => {
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('limit', limit.toString());
-    const response = await api.get(`/donations?${params.toString()}`);
-    return response.data;
-  },
-
-  getStats: async () => {
-    const response = await api.get('/donations/stats/all');
-    return response.data;
-  },
-
-  create: async (data: {
-    amount: number;
-    currency?: string;
-    paymentProvider: string;
-    phoneNumber?: string;
-    donorName?: string;
-    donorEmail?: string;
-    message?: string;
-    isAnonymous?: boolean;
-    projectId?: string;
-  }) => {
-    const response = await api.post('/donations', data);
-    return response.data;
-  },
-
-  createAuth: async (data: any) => {
-    const response = await api.post('/donations/auth', data);
-    return response.data;
-  },
-
-  confirm: async (transactionId: string, provider: string) => {
-    const response = await api.post('/donations/confirm', { transactionId, provider });
-    return response.data;
-  },
-
-  getMyDonations: async () => {
-    const response = await api.get('/donations/my-donations');
-    return response.data;
-  },
-
-  getOne: async (id: string) => {
-    const response = await api.get(`/donations/${id}`);
+  delete: async (id: string) => {
+    const response = await api.delete(`/projects/${id}`);
     return response.data;
   },
 };
@@ -633,13 +353,22 @@ export const donationsApi = {
 // ============================================================
 
 export const blogApi = {
-  getAll: async (page: number = 1, limit: number = 9, type?: string, tag?: string) => {
+  getAll: async (page: number = 1, limit: number = 10, status?: string, category_id?: string, search?: string) => {
     const params = new URLSearchParams();
     params.append('page', page.toString());
     params.append('limit', limit.toString());
-    if (type) params.append('type', type);
-    if (tag) params.append('tag', tag);
+    if (status) params.append('status', status);
+    if (category_id) params.append('category_id', category_id);
+    if (search) params.append('search', search);
     const response = await api.get(`/blog?${params.toString()}`);
+    return response.data;
+  },
+
+  getPublic: async (page: number = 1, limit: number = 10) => {
+    const params = new URLSearchParams();
+    params.append('page', page.toString());
+    params.append('limit', limit.toString());
+    const response = await api.get(`/blog/public?${params.toString()}`);
     return response.data;
   },
 
@@ -648,23 +377,47 @@ export const blogApi = {
     return response.data;
   },
 
-  getStats: async () => {
-    const response = await api.get('/blog/stats/all');
+  getPublicById: async (id: string) => {
+    const response = await api.get(`/blog/public/${id}`);
     return response.data;
   },
 
-  create: async (data: any) => {
+  getBySlug: async (slug: string) => {
+    const response = await api.get(`/blog/public/slug/${slug}`);
+    return response.data;
+  },
+
+  getStats: async () => {
+    const response = await api.get('/blog/stats');
+    return response.data;
+  },
+
+  create: async (data: {
+    title_fr: string;
+    title_mg?: string;
+    content_fr: string;
+    content_mg?: string;
+    cover_image?: string;
+    slug?: string;
+    status?: string;
+    category_id?: string;
+  }) => {
     const response = await api.post('/blog', data);
     return response.data;
   },
 
   update: async (id: string, data: any) => {
-    const response = await api.put(`/blog/${id}`, data);
+    const response = await api.patch(`/blog/${id}`, data);
     return response.data;
   },
 
   publish: async (id: string) => {
-    const response = await api.put(`/blog/${id}/publish`);
+    const response = await api.patch(`/blog/${id}/publish`);
+    return response.data;
+  },
+
+  unpublish: async (id: string) => {
+    const response = await api.patch(`/blog/${id}/unpublish`);
     return response.data;
   },
 
@@ -675,13 +428,182 @@ export const blogApi = {
 };
 
 // ============================================================
-// UPLOAD AVANCE (Pour offres d'emploi)
+// PAGES API
 // ============================================================
 
-export const jobUploadApi = {
-  uploadImage: async (file: File): Promise<string> => {
+export const pagesApi = {
+  getAll: async () => {
+    const response = await api.get('/pages');
+    return response.data;
+  },
+
+  getPublicPage: async (pageKey: string) => {
+    const response = await api.get(`/pages/public/${pageKey}`);
+    return response.data;
+  },
+
+  getPageForAdmin: async (pageKey: string) => {
+    const response = await api.get(`/pages/${pageKey}`);
+    return response.data;
+  },
+
+  updatePage: async (pageKey: string, data: any) => {
+    const response = await api.put(`/pages/${pageKey}`, data);
+    return response.data;
+  },
+
+  getAllBackgrounds: async () => {
+    const response = await api.get('/pages/backgrounds/all');
+    return response.data;
+  },
+
+  getBackground: async (pageKey: string) => {
+    const response = await api.get(`/pages/backgrounds/${pageKey}`);
+    return response.data;
+  },
+
+  getBackgroundForAdmin: async (pageKey: string) => {
+    const response = await api.get(`/pages/backgrounds/admin/${pageKey}`);
+    return response.data;
+  },
+
+  updateBackground: async (pageKey: string, data: any) => {
+    const response = await api.put(`/pages/backgrounds/${pageKey}`, data);
+    return response.data;
+  },
+
+  updateBackgroundImage: async (pageKey: string, imageUrl: string) => {
+    const response = await api.put(`/pages/backgrounds/${pageKey}/image`, { image_url: imageUrl });
+    return response.data;
+  },
+
+  toggleBackground: async (pageKey: string) => {
+    const response = await api.put(`/pages/backgrounds/${pageKey}/toggle`);
+    return response.data;
+  },
+
+  deleteBackground: async (id: string) => {
+    const response = await api.delete(`/pages/backgrounds/${id}`);
+    return response.data;
+  },
+
+  initializePages: async () => {
+    const response = await api.post('/pages/initialize');
+    return response.data;
+  },
+};
+
+// ============================================================
+// CONTACT API
+// ============================================================
+
+export const contactApi = {
+  sendMessage: async (data: {
+    full_name: string;
+    email: string;
+    subject: string;
+    message: string;
+  }) => {
+    const response = await api.post('/contact', data);
+    return response.data;
+  },
+
+  getAll: async (page: number = 1, limit: number = 10, status?: string, search?: string) => {
+    const params = new URLSearchParams();
+    params.append('page', page.toString());
+    params.append('limit', limit.toString());
+    if (status) params.append('status', status);
+    if (search) params.append('search', search);
+    const response = await api.get(`/contact?${params.toString()}`);
+    return response.data;
+  },
+
+  getOne: async (id: string) => {
+    const response = await api.get(`/contact/${id}`);
+    return response.data;
+  },
+
+  getStats: async () => {
+    const response = await api.get('/contact/stats');
+    return response.data;
+  },
+
+  updateStatus: async (id: string, status: string, admin_notes?: string) => {
+    const response = await api.patch(`/contact/${id}/status`, { status, admin_notes });
+    return response.data;
+  },
+
+  markAsRead: async (id: string) => {
+    const response = await api.patch(`/contact/${id}/read`);
+    return response.data;
+  },
+
+  markAsReplied: async (id: string) => {
+    const response = await api.patch(`/contact/${id}/replied`);
+    return response.data;
+  },
+
+  archive: async (id: string) => {
+    const response = await api.patch(`/contact/${id}/archive`);
+    return response.data;
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/contact/${id}`);
+    return response.data;
+  },
+};
+
+// ============================================================
+// LANGUAGE API (Traductions)
+// ============================================================
+
+export const languageApi = {
+  getAll: async () => {
+    const response = await api.get('/language');
+    return response.data;
+  },
+
+  getByKey: async (key: string) => {
+    const response = await api.get(`/language/${key}`);
+    return response.data;
+  },
+
+  getByLocale: async (locale: string) => {
+    const response = await api.get(`/language/locale/${locale}`);
+    return response.data;
+  },
+
+  exportJson: async () => {
+    const response = await api.get('/language/export/json');
+    return response.data;
+  },
+
+  createOrUpdate: async (key: string, value_fr: string, value_mg: string) => {
+    const response = await api.post('/language', { key, value_fr, value_mg });
+    return response.data;
+  },
+
+  delete: async (key: string) => {
+    const response = await api.delete(`/language/${key}`);
+    return response.data;
+  },
+
+  getStats: async () => {
+    const response = await api.get('/language/stats/count');
+    return response.data;
+  },
+};
+
+// ============================================================
+// UPLOAD API
+// ============================================================
+
+export const uploadApi = {
+  uploadImage: async (file: File, type: string = 'job'): Promise<string> => {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('type', type);
     
     const response = await api.post('/upload/single', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -690,7 +612,16 @@ export const jobUploadApi = {
     const data = response.data;
     return data.url || data.data?.url || data.fileUrl;
   },
+
+  getImages: async () => {
+    const response = await api.get('/upload');
+    return response.data;
+  },
+
+  deleteImage: async (filename: string) => {
+    const response = await api.delete(`/upload?filename=${filename}`);
+    return response.data;
+  },
 };
 
-// Export de l'instance axios par défaut
 export default api;

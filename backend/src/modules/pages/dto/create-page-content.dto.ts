@@ -1,13 +1,40 @@
 // backend/src/modules/pages/dto/create-page-content.dto.ts
 
-import { IsString, IsOptional, IsBoolean, IsArray, IsObject, ValidateNested, IsNumber, Min, Max } from 'class-validator';
+import { 
+  IsString, 
+  IsOptional, 
+  IsBoolean, 
+  IsArray, 
+  IsObject, 
+  ValidateNested, 
+  IsNumber, 
+  Min, 
+  Max,
+  IsIn,
+  IsUUID
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { PartialType } from '@nestjs/mapped-types';
 
 // ============================================================
-// HERO SECTION (avec structure FR/MG)
+// TYPES DE PAGES
 // ============================================================
-class HeroDto {
+export type PageType = 
+  | 'home'
+  | 'projects'
+  | 'jobs'
+  | 'blog'
+  | 'contact'
+  | 'login'
+  | 'dashboard'
+  | 'profile'
+  | 'about'
+  | 'faq';
+
+// ============================================================
+// HERO SECTION (bannière principale)
+// ============================================================
+export class HeroDto {
   @IsOptional()
   @IsString()
   title_fr?: string;
@@ -39,12 +66,16 @@ class HeroDto {
   @IsOptional()
   @IsString()
   image_url?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  is_active?: boolean;
 }
 
 // ============================================================
 // SECTION DYNAMIQUE
 // ============================================================
-class SectionDto {
+export class SectionDto {
   @IsOptional()
   @IsString()
   id?: string;
@@ -71,17 +102,30 @@ class SectionDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   order?: number;
 
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  @IsOptional()
+  @IsString()
+  button_text_fr?: string;
+
+  @IsOptional()
+  @IsString()
+  button_text_mg?: string;
+
+  @IsOptional()
+  @IsString()
+  button_link?: string;
 }
 
 // ============================================================
-// STATISTIQUES
+// STATISTIQUES (chiffres clés)
 // ============================================================
-class StatDto {
+export class StatDto {
   @IsString()
   value: string;
 
@@ -94,12 +138,16 @@ class StatDto {
   @IsOptional()
   @IsString()
   icon?: string;
+
+  @IsOptional()
+  @IsString()
+  color?: string;
 }
 
 // ============================================================
-// CALL TO ACTION
+// CALL TO ACTION (appel à l'action)
 // ============================================================
-class CtaDto {
+export class CtaDto {
   @IsOptional()
   @IsString()
   title_fr?: string;
@@ -127,6 +175,14 @@ class CtaDto {
   @IsOptional()
   @IsString()
   button_link?: string;
+
+  @IsOptional()
+  @IsString()
+  background_color?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  is_active?: boolean;
 }
 
 // ============================================================
@@ -134,7 +190,16 @@ class CtaDto {
 // ============================================================
 export class CreatePageContentDto {
   @IsString()
-  page: string;
+  @IsIn(['home', 'projects', 'jobs', 'blog', 'contact', 'login', 'dashboard', 'profile', 'about', 'faq'])
+  page_key: string;
+
+  @IsOptional()
+  @IsString()
+  content_fr?: string;
+
+  @IsOptional()
+  @IsString()
+  content_mg?: string;
 
   @IsOptional()
   @IsObject()
@@ -187,6 +252,10 @@ export class CreatePageContentDto {
   @IsOptional()
   @IsObject()
   custom_fields?: Record<string, any>;
+
+  @IsOptional()
+  @IsUUID()
+  updated_by?: string;
 }
 
 // ============================================================

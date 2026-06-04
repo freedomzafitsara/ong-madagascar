@@ -1,9 +1,7 @@
-﻿// backend/src/main.ts
-
-import { NestFactory } from '@nestjs/core';
+﻿import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, BadRequestException } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -21,7 +19,9 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'debug'],
   });
 
-  // Validation globale
+  // ============================================================
+  // VALIDATION GLOBALE AVEC DETAILS DES ERREURS
+  // ============================================================
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -30,10 +30,31 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
+      exceptionFactory: (errors) => {
+        const formattedErrors = errors.map(error => ({
+          property: error.property,
+          constraints: error.constraints,
+          value: error.value,
+        }));
+        
+        logger.error('Echec de validation des donnees recues');
+        formattedErrors.forEach(err => {
+          logger.error(`Champ: ${err.property} - Erreur: ${JSON.stringify(err.constraints)}`);
+        });
+        
+        return new BadRequestException({
+          statusCode: 400,
+          message: 'Erreur de validation des donnees',
+          errors: formattedErrors,
+          timestamp: new Date().toISOString(),
+        });
+      },
     }),
   );
 
-  // Configuration CORS
+  // ============================================================
+  // CONFIGURATION CORS
+  // ============================================================
   app.enableCors({
     origin: true,
     credentials: true,
@@ -41,10 +62,14 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
-  // Prefixe global
+  // ============================================================
+  // PREFIXE GLOBAL
+  // ============================================================
   app.setGlobalPrefix('api');
 
-  // Configuration Swagger
+  // ============================================================
+  // CONFIGURATION SWAGGER
+  // ============================================================
   const config = new DocumentBuilder()
     .setTitle('Y-MaD API - Gestion des offres d emploi')
     .setDescription(`
@@ -56,6 +81,7 @@ async function bootstrap() {
       - Blog: Gestion des articles (CRUD)
       - Jobs: Gestion des offres d emploi et candidatures
       - Pages: Gestion du contenu des pages et fonds d ecran
+      - Upload: Gestion des fichiers (images, CV, documents)
 
       Charte graphique:
       - Bleu primaire: #1E3A8A
@@ -69,36 +95,59 @@ async function bootstrap() {
     .addTag('blog', 'Gestion du blog')
     .addTag('jobs', 'Offres d emploi et candidatures')
     .addTag('pages', 'Contenu des pages et fonds d ecran')
+    .addTag('upload', 'Upload de fichiers')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
   logger.log('Swagger UI disponible sur /api/docs');
 
-  // Dossier uploads (pour les fichiers temporaires)
+  // ============================================================
+  // CREATION DES DOSSIERS UPLOADS
+  // ============================================================
   const uploadsPath = path.join(process.cwd(), 'uploads');
+  const subDirs = ['banner', 'project', 'blog', 'profile', 'logo', 'background', 'job', 'cv', 'diploma', 'attestation'];
+  
   if (!fs.existsSync(uploadsPath)) {
     fs.mkdirSync(uploadsPath, { recursive: true });
-    logger.log('Dossier uploads cree: ' + uploadsPath);
+    logger.log('Dossier uploads cree');
   }
+  
+  for (const dir of subDirs) {
+    const subPath = path.join(uploadsPath, dir);
+    if (!fs.existsSync(subPath)) {
+      fs.mkdirSync(subPath, { recursive: true });
+    }
+  }
+  logger.log('Sous-dossiers uploads crees avec succes');
 
+  // ============================================================
+  // SERVEUR DE FICHIERS STATIQUES
+  // ============================================================
   app.useStaticAssets(uploadsPath, {
     prefix: '/uploads/',
   });
+  logger.log('Fichiers statiques disponibles sur /uploads/');
 
-  // Demarrage du serveur
+  // ============================================================
+  // DEMARRAGE DU SERVEUR
+  // ============================================================
   const port = process.env.PORT || 4001;
   await app.listen(port);
 
+  // ============================================================
+  // AFFICHAGE DES INFORMATIONS DE DEMARRAGE
+  // ============================================================
   console.log('');
   console.log('============================================================');
   console.log('Y-MaD API - Youthful Madagascar');
   console.log('Theme: Gestion des offres d emploi');
   console.log('============================================================');
   console.log('');
-  console.log('Serveur      : http://localhost:' + port);
-  console.log('API Prefixe  : http://localhost:' + port + '/api');
-  console.log('Swagger UI   : http://localhost:' + port + '/api/docs');
+  console.log(`Serveur      : http://localhost:${port}`);
+  console.log(`API Prefixe  : http://localhost:${port}/api`);
+  console.log(`Swagger UI   : http://localhost:${port}/api/docs`);
+  console.log(`Uploads      : http://localhost:${port}/uploads/`);
   console.log('');
   console.log('Modules actifs:');
   console.log('   - Auth (authentification admin)');
@@ -106,6 +155,12 @@ async function bootstrap() {
   console.log('   - Blog (gestion des articles)');
   console.log('   - Jobs (offres d emploi et candidatures)');
   console.log('   - Pages (contenus et fonds d ecran)');
+  console.log('   - Upload (gestion des fichiers)');
+  console.log('');
+  console.log('Sous-dossiers uploads crees:');
+  for (const dir of subDirs) {
+    console.log(`   - /uploads/${dir}/`);
+  }
   console.log('');
   console.log('Charte graphique: Bleu (#1E3A8A) et Gris (#6B7280)');
   console.log('');

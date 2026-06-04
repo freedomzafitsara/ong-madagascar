@@ -2,7 +2,6 @@
 
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
-// Types de pages supportés par votre thème
 export enum PageType {
   HOME = 'home',
   PROJECTS = 'projects',
@@ -11,7 +10,6 @@ export enum PageType {
   LOGIN = 'login',
 }
 
-// Interface pour Hero Section (bannière principale)
 export interface HeroSection {
   title_fr: string;
   title_mg: string;
@@ -21,9 +19,9 @@ export interface HeroSection {
   button_text_mg: string;
   button_link: string;
   image_url: string;
+  is_active?: boolean;  // ✅ Corrigé: is_active au lieu de s_active
 }
 
-// Interface pour une Section générique
 export interface PageSection {
   id: string;
   title_fr: string;
@@ -35,7 +33,6 @@ export interface PageSection {
   is_active: boolean;
 }
 
-// Interface pour les Statistiques (ex: sur la page d'accueil)
 export interface PageStat {
   value: string;
   label_fr: string;
@@ -43,7 +40,6 @@ export interface PageStat {
   icon: string;
 }
 
-// Interface pour CTA (Call To Action)
 export interface CtaSection {
   title_fr: string;
   title_mg: string;
@@ -52,60 +48,58 @@ export interface CtaSection {
   button_text_fr: string;
   button_text_mg: string;
   button_link: string;
+  is_active?: boolean;
 }
 
 @Entity('page_contents')
-@Index(['page'])
+@Index(['page_key'])
 @Index(['is_published'])
 export class PageContent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // Nom de la page (home, projects, jobs, contact, login)
-  @Column({ unique: true })
-  page: string;
+  @Column({ name: 'page_key', length: 100, unique: true })
+  page_key: string;
 
-  // Section Hero (bannière principale)
+  @Column({ name: 'content_fr', type: 'text', nullable: true })
+  content_fr: string;
+
+  @Column({ name: 'content_mg', type: 'text', nullable: true })
+  content_mg: string;
+
   @Column({ type: 'jsonb', nullable: true })
   hero: HeroSection;
 
-  // Sections dynamiques (liste de blocs)
   @Column({ type: 'jsonb', nullable: true })
   sections: PageSection[];
 
-  // Statistiques (chiffres clés)
   @Column({ type: 'jsonb', nullable: true })
   stats: PageStat[];
 
-  // Call To Action (bannière d'appel à l'action)
   @Column({ type: 'jsonb', nullable: true })
   cta: CtaSection;
 
-  // SEO (optimisation moteurs de recherche)
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'seo_title_fr', length: 70, nullable: true })
   seo_title_fr: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'seo_title_mg', length: 70, nullable: true })
   seo_title_mg: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'seo_description_fr', length: 160, nullable: true })
   seo_description_fr: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'seo_description_mg', length: 160, nullable: true })
   seo_description_mg: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'seo_keywords', nullable: true })
   seo_keywords: string;
 
-  // Statut de publication
-  @Column({ default: true })
+  @Column({ name: 'is_published', default: true })
   is_published: boolean;
 
-  // Champs personnalisés (pour flexibilité future)
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ name: 'custom_fields', type: 'jsonb', nullable: true })
   custom_fields: Record<string, any>;
 
-  // Dates
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 
