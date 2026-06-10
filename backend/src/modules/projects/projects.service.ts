@@ -15,19 +15,30 @@ export class ProjectsService {
     private projectRepository: Repository<Project>,
   ) {}
 
-  /**
-   * Crée un nouveau projet
-   */
   async create(createDto: CreateProjectDto): Promise<Project> {
     try {
+      let progress = createDto.progress || 0;
+      if (createDto.budget && createDto.budget > 0 && !createDto.progress) {
+        progress = Math.round(((createDto.spent || 0) / createDto.budget) * 100);
+      }
+
       const project = this.projectRepository.create({
         title_fr: createDto.title_fr,
         title_mg: createDto.title_mg || null,
         description_fr: createDto.description_fr,
         description_mg: createDto.description_mg || null,
         location: createDto.location || null,
+        region: createDto.region || null,
         status: createDto.status || 'planning',
+        budget: createDto.budget || 0,
+        spent: createDto.spent || 0,
+        beneficiaries_count: createDto.beneficiaries_count || 0,
+        youth_impact: createDto.youth_impact || 0,
+        jobs_created: createDto.jobs_created || 0,
+        progress: progress,
         start_date: createDto.start_date ? new Date(createDto.start_date) : null,
+        end_date: createDto.end_date ? new Date(createDto.end_date) : null,
+        is_featured: createDto.is_featured || false,
         image_url: createDto.image_url || null,
       });
       
@@ -40,9 +51,6 @@ export class ProjectsService {
     }
   }
 
-  /**
-   * Récupère tous les projets (admin) avec pagination et recherche
-   */
   async findAll(queryDto: ProjectQueryDto): Promise<{
     data: Project[];
     total: number;
@@ -58,6 +66,7 @@ export class ProjectsService {
       const where: FindOptionsWhere<Project> = {};
 
       if (queryDto.status) where.status = queryDto.status;
+      if (queryDto.region) where.region = queryDto.region;
       
       if (queryDto.search) {
         return this.searchProjects(queryDto.search, page, limit);
@@ -77,9 +86,6 @@ export class ProjectsService {
     }
   }
 
-  /**
-   * Recherche textuelle dans les projets
-   */
   async searchProjects(search: string, page: number, limit: number): Promise<{
     data: Project[];
     total: number;
@@ -105,9 +111,6 @@ export class ProjectsService {
     return { data, total, page, totalPages: Math.ceil(total / limit), limit };
   }
 
-  /**
-   * Récupère les projets publics (uniquement actifs)
-   */
   async findPublic(queryDto: ProjectQueryDto): Promise<{
     data: Project[];
     total: number;
@@ -126,7 +129,7 @@ export class ProjectsService {
 
       const [data, total] = await this.projectRepository.findAndCount({
         where,
-        order: { created_at: 'DESC' },
+        order: { is_featured: 'DESC', created_at: 'DESC' },
         skip,
         take: limit,
       });
@@ -138,13 +141,10 @@ export class ProjectsService {
     }
   }
 
-  /**
-   * Récupère les projets à la une (featured)
-   */
   async findFeatured(): Promise<Project[]> {
     try {
       return await this.projectRepository.find({
-        where: { status: 'active' },
+        where: { status: 'active', is_featured: true },
         order: { created_at: 'DESC' },
         take: 3,
       });
@@ -154,9 +154,6 @@ export class ProjectsService {
     }
   }
 
-  /**
-   * Récupère un projet par son ID
-   */
   async findOne(id: string): Promise<Project> {
     const project = await this.projectRepository.findOne({ where: { id } });
     if (!project) {
@@ -165,9 +162,6 @@ export class ProjectsService {
     return project;
   }
 
-  /**
-   * Met à jour un projet
-   */
   async update(id: string, updateDto: UpdateProjectDto): Promise<Project> {
     try {
       const project = await this.findOne(id);
@@ -177,9 +171,26 @@ export class ProjectsService {
       if (updateDto.description_fr !== undefined) project.description_fr = updateDto.description_fr;
       if (updateDto.description_mg !== undefined) project.description_mg = updateDto.description_mg;
       if (updateDto.location !== undefined) project.location = updateDto.location;
+      if (updateDto.region !== undefined) project.region = updateDto.region;
       if (updateDto.status !== undefined) project.status = updateDto.status;
+      if (updateDto.budget !== undefined) project.budget = updateDto.budget;
+      if (updateDto.spent !== undefined) project.spent = updateDto.spent;
+      if (updateDto.beneficiaries_count !== undefined) project.beneficiaries_count = updateDto.beneficiaries_count;
+      if (updateDto.youth_impact !== undefined) project.youth_impact = updateDto.youth_impact;
+      if (updateDto.jobs_created !== undefined) project.jobs_created = updateDto.jobs_created;
+      if (updateDto.progress !== undefined) project.progress = updateDto.progress;
       if (updateDto.start_date !== undefined) project.start_date = new Date(updateDto.start_date);
+      if (updateDto.end_date !== undefined) project.end_date = new Date(updateDto.end_date);
+      if (updateDto.is_featured !== undefined) project.is_featured = updateDto.is_featured;
       if (updateDto.image_url !== undefined) project.image_url = updateDto.image_url;
+      
+      if (updateDto.budget !== undefined || updateDto.spent !== undefined) {
+        const budget = updateDto.budget !== undefined ? updateDto.budget : project.budget;
+        const spent = updateDto.spent !== undefined ? updateDto.spent : project.spent;
+        if (budget > 0) {
+          project.progress = Math.round((spent / budget) * 100);
+        }
+      }
       
       const updated = await this.projectRepository.save(project);
       this.logger.log(`Projet mis à jour: ${id}`);
@@ -190,9 +201,6 @@ export class ProjectsService {
     }
   }
 
-  /**
-   * Met à jour le statut d'un projet
-   */
   async updateStatus(id: string, status: string): Promise<Project> {
     try {
       const project = await this.findOne(id);
@@ -206,9 +214,6 @@ export class ProjectsService {
     }
   }
 
-  /**
-   * Supprime un projet
-   */
   async remove(id: string): Promise<{ success: boolean; message: string }> {
     const project = await this.findOne(id);
     await this.projectRepository.remove(project);
@@ -216,9 +221,6 @@ export class ProjectsService {
     return { success: true, message: 'Projet supprimé avec succès' };
   }
 
-  /**
-   * Récupère les statistiques des projets
-   */
   async getStats() {
     try {
       const total = await this.projectRepository.count();
@@ -226,11 +228,35 @@ export class ProjectsService {
       const completed = await this.projectRepository.count({ where: { status: 'completed' } });
       const planning = await this.projectRepository.count({ where: { status: 'planning' } });
       const draft = await this.projectRepository.count({ where: { status: 'draft' } });
+      const totalBudget = await this.projectRepository.sum('budget') || 0;
+      const totalSpent = await this.projectRepository.sum('spent') || 0;
+      const totalBeneficiaries = await this.projectRepository.sum('beneficiaries_count') || 0;
+      const totalJobsCreated = await this.projectRepository.sum('jobs_created') || 0;
 
-      return { total, active, completed, planning, draft };
+      return { 
+        total, 
+        active, 
+        completed, 
+        planning, 
+        draft,
+        totalBudget,
+        totalSpent,
+        totalBeneficiaries,
+        totalJobsCreated
+      };
     } catch (error) {
       this.logger.error(`Erreur getStats: ${error.message}`);
-      return { total: 0, active: 0, completed: 0, planning: 0, draft: 0 };
+      return { 
+        total: 0, 
+        active: 0, 
+        completed: 0, 
+        planning: 0, 
+        draft: 0,
+        totalBudget: 0,
+        totalSpent: 0,
+        totalBeneficiaries: 0,
+        totalJobsCreated: 0
+      };
     }
   }
 }

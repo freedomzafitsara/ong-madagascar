@@ -1,11 +1,26 @@
 ﻿// backend/src/modules/projects/dto/create-project.dto.ts
 
-import { IsString, IsOptional, IsDateString, MaxLength, MinLength, IsNotEmpty, IsIn, IsNumber, Min } from 'class-validator';
+import { 
+  IsString, 
+  IsOptional, 
+  IsDateString, 
+  MaxLength, 
+  MinLength, 
+  IsNotEmpty, 
+  IsIn, 
+  IsNumber, 
+  Min, 
+  Max,
+  IsBoolean, 
+  IsInt 
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
-// Statuts valides pour un projet
 const VALID_STATUSES = ['active', 'completed', 'planning', 'draft'] as const;
-type ValidStatus = typeof VALID_STATUSES[number];
+
+// ============================================================
+// CREATE PROJECT DTO
+// ============================================================
 
 export class CreateProjectDto {
   @IsString()
@@ -35,9 +50,60 @@ export class CreateProjectDto {
   @MaxLength(255, { message: 'La localisation ne doit pas dépasser 255 caractères' })
   location?: string;
 
+  @IsString()
+  @IsOptional()
+  @MaxLength(100, { message: 'La région ne doit pas dépasser 100 caractères' })
+  region?: string;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  budget?: number = 0;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  spent?: number = 0;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  beneficiaries_count?: number = 0;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  youth_impact?: number = 0;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  jobs_created?: number = 0;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
+  progress?: number = 0;
+
   @IsDateString({}, { message: 'La date de début doit être une date valide (YYYY-MM-DD)' })
   @IsOptional()
   start_date?: string;
+
+  @IsDateString({}, { message: 'La date de fin doit être une date valide (YYYY-MM-DD)' })
+  @IsOptional()
+  end_date?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  @Type(() => Boolean)
+  is_featured?: boolean = false;
 
   @IsString()
   @IsOptional()
@@ -47,8 +113,12 @@ export class CreateProjectDto {
   @IsString()
   @IsOptional()
   @IsIn(VALID_STATUSES, { message: 'Le statut doit être: active, completed, planning ou draft' })
-  status?: string;
+  status?: string = 'planning';
 }
+
+// ============================================================
+// UPDATE PROJECT DTO
+// ============================================================
 
 export class UpdateProjectDto {
   @IsString()
@@ -78,9 +148,60 @@ export class UpdateProjectDto {
   @MaxLength(255, { message: 'La localisation ne doit pas dépasser 255 caractères' })
   location?: string;
 
+  @IsString()
+  @IsOptional()
+  @MaxLength(100, { message: 'La région ne doit pas dépasser 100 caractères' })
+  region?: string;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  budget?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  spent?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  beneficiaries_count?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  youth_impact?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  jobs_created?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
+  progress?: number;
+
   @IsDateString({}, { message: 'La date de début doit être une date valide (YYYY-MM-DD)' })
   @IsOptional()
   start_date?: string;
+
+  @IsDateString({}, { message: 'La date de fin doit être une date valide (YYYY-MM-DD)' })
+  @IsOptional()
+  end_date?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  @Type(() => Boolean)
+  is_featured?: boolean;
 
   @IsString()
   @IsOptional()
@@ -92,6 +213,10 @@ export class UpdateProjectDto {
   @IsIn(VALID_STATUSES, { message: 'Le statut doit être: active, completed, planning ou draft' })
   status?: string;
 }
+
+// ============================================================
+// PROJECT QUERY DTO
+// ============================================================
 
 export class ProjectQueryDto {
   @IsOptional()
@@ -115,4 +240,9 @@ export class ProjectQueryDto {
   @IsString()
   @MaxLength(100, { message: 'La recherche ne doit pas dépasser 100 caractères' })
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100, { message: 'La région ne doit pas dépasser 100 caractères' })
+  region?: string;
 }

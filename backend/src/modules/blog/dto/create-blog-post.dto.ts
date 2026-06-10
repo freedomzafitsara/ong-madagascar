@@ -1,6 +1,7 @@
 // backend/src/modules/blog/dto/create-blog-post.dto.ts
 
-import { IsString, IsOptional, IsBoolean, MaxLength, IsUUID, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, MaxLength, IsUUID, IsNotEmpty, IsInt, Min, IsArray } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateBlogPostDto {
   @IsString()
@@ -23,8 +24,18 @@ export class CreateBlogPostDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(10000, { message: 'Le résumé ne doit pas dépasser 10000 caractères' })
+  summary_fr?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(10000, { message: 'Le résumé malgache ne doit pas dépasser 10000 caractères' })
+  summary_mg?: string;
+
+  @IsString()
+  @IsOptional()
   @MaxLength(500, { message: 'L\'URL de l\'image ne doit pas dépasser 500 caractères' })
-  cover_image?: string;
+  image_url?: string;
 
   @IsString()
   @IsOptional()
@@ -32,15 +43,25 @@ export class CreateBlogPostDto {
 
   @IsString()
   @IsOptional()
-  status?: string;
+  status?: string = 'draft';
 
-  @IsBoolean()
+  @IsString()
   @IsOptional()
-  is_published?: boolean;
+  type?: string = 'news';
 
-  @IsUUID()
-  @IsNotEmpty({ message: 'L\'ID de l\'auteur est requis' })
-  author_id: string;
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @IsString()
+  @IsOptional()
+  author?: string;
+
+  // SUPPRIMER author_id du DTO - on l'utilise depuis le token
+  // @IsUUID()
+  // @IsOptional()
+  // author_id?: string;
 
   @IsUUID()
   @IsOptional()
@@ -68,7 +89,15 @@ export class UpdateBlogPostDto {
 
   @IsString()
   @IsOptional()
-  cover_image?: string;
+  summary_fr?: string;
+
+  @IsString()
+  @IsOptional()
+  summary_mg?: string;
+
+  @IsString()
+  @IsOptional()
+  image_url?: string;
 
   @IsString()
   @IsOptional()
@@ -78,9 +107,18 @@ export class UpdateBlogPostDto {
   @IsOptional()
   status?: string;
 
-  @IsBoolean()
+  @IsString()
   @IsOptional()
-  is_published?: boolean;
+  type?: string;
+
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @IsString()
+  @IsOptional()
+  author?: string;
 
   @IsUUID()
   @IsOptional()
@@ -89,17 +127,30 @@ export class UpdateBlogPostDto {
 
 export class BlogPostQueryDto {
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page?: number = 1;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   limit?: number = 10;
 
   @IsOptional()
+  @IsString()
   status?: string;
 
   @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsUUID()
   category_id?: string;
 
   @IsOptional()
+  @IsString()
   search?: string;
 }

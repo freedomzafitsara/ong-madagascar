@@ -9,5 +9,6 @@ export { JobApplication } from './job-application.entity';
 export { PageContent } from './page-content.entity';
 export { PageBackground } from './page-background.entity';
 export { UploadedFile } from './uploaded-file.entity';
+export { DatabaseImage } from './database-image.entity';
 export { Translation } from '../modules/language/entities/translation.entity';
 export { Contact } from '../modules/contact/entities/contact.entity';

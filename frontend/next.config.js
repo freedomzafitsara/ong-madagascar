@@ -4,13 +4,24 @@ const nextConfig = {
   // CONFIGURATION DES IMAGES
   // ========================================
   images: {
-    //  domains est déprécié, on utilise remotePatterns uniquement
     remotePatterns: [
       {
         protocol: 'http',
         hostname: 'localhost',
         port: '4001',
-        pathname: '/uploads/**',
+        pathname: '/api/upload/image/**',  // Pour les images PostgreSQL
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '4001',
+        pathname: '/uploads/**',  // Pour les uploads locaux
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '3000',
+        pathname: '/**',  // Pour les images locales du frontend
       },
       {
         protocol: 'https',
@@ -22,11 +33,19 @@ const nextConfig = {
         hostname: '**.cloudinary.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'via.placeholder.com',
+        pathname: '/**',
+      },
     ],
+    // Desactiver le domaine pour le mode developpement (alternative)
+    domains: ['localhost'],
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 60,
+    dangerouslyAllowSVG: true,
   },
 
   // ========================================
@@ -46,7 +65,7 @@ const nextConfig = {
   trailingSlash: false,
   
   // ========================================
-  // EXPERIMENTAL (optimisations)
+  // EXPERIMENTAL
   // ========================================
   experimental: {
     outputFileTracingExcludes: {
@@ -60,7 +79,7 @@ const nextConfig = {
   },
 
   // ========================================
-  // EN-TÊTES CORS
+  // EN-TÊTES DE SECURITE
   // ========================================
   async headers() {
     return [
@@ -73,6 +92,12 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-XSS-Protection', value: '1; mode=block' },
+        ],
+      },
+      {
+        source: '/_next/image/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
     ];
@@ -102,13 +127,13 @@ const nextConfig = {
   },
 
   // ========================================
-  // REWRITES (proxy API en développement)
+  // REWRITES
   // ========================================
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:4001/api/:path*',  // ✅ Correction: ajout de /api
+        destination: 'http://localhost:4001/api/:path*',
       },
     ];
   },

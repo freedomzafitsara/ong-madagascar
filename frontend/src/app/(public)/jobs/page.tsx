@@ -1,25 +1,20 @@
-﻿'use client';
+﻿// frontend/src/app/(public)/jobs/page.tsx
+
+'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { 
   Briefcase, MapPin, Calendar, Search, 
-  ChevronRight, Building, Sparkles, X,
-  Clock, CheckCircle, Heart, Eye,
-  Users, Award, Globe, Target, ArrowRight,
-  LayoutGrid, List, FileText, GraduationCap,
-  Star, Loader2
+  Building, Sparkles, X, Clock, Users, ArrowRight,
+  LayoutGrid, List, Star, Loader2, Heart
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { pageService, PageBackground } from '@/services/page.service';
 import { jobService, JobOffer, ContractType, JobStatus } from '@/services/job.service';
 import toast from 'react-hot-toast';
 
-// ============================================================
-// CONFIGURATION
-// ============================================================
-
+// Configuration des types de contrat - Couleurs Y-MaD (Bleu et Gris)
 const CONTRACT_LABELS: Record<ContractType, { fr: string; mg: string }> = {
   [ContractType.CDI]: { fr: 'CDI', mg: 'CDI' },
   [ContractType.CDD]: { fr: 'CDD', mg: 'CDD' },
@@ -29,18 +24,15 @@ const CONTRACT_LABELS: Record<ContractType, { fr: string; mg: string }> = {
   [ContractType.TEMPORARY]: { fr: 'Temporaire', mg: 'Vonjimaika' }
 };
 
+// COULEURS Y-MaD: Uniquement Bleu (#1E3A8A) et Gris (#6B7280)
 const CONTRACT_COLORS: Record<ContractType, string> = {
-  [ContractType.CDI]: 'bg-blue-100 text-blue-700',
-  [ContractType.CDD]: 'bg-cyan-100 text-cyan-700',
-  [ContractType.STAGE]: 'bg-green-100 text-green-700',
-  [ContractType.FREELANCE]: 'bg-purple-100 text-purple-700',
-  [ContractType.ALTERNANCE]: 'bg-orange-100 text-orange-700',
-  [ContractType.TEMPORARY]: 'bg-gray-100 text-gray-700'
+  [ContractType.CDI]: 'bg-blue-800 text-white',
+  [ContractType.CDD]: 'bg-gray-600 text-white',
+  [ContractType.STAGE]: 'bg-blue-800 text-white',
+  [ContractType.FREELANCE]: 'bg-gray-600 text-white',
+  [ContractType.ALTERNANCE]: 'bg-blue-800 text-white',
+  [ContractType.TEMPORARY]: 'bg-gray-600 text-white'
 };
-
-// ============================================================
-// COMPOSANT PRINCIPAL
-// ============================================================
 
 export default function JobsPublicPage() {
   const { language } = useLanguage();
@@ -53,7 +45,7 @@ export default function JobsPublicPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [stats, setStats] = useState({ total: 0, types: 0, locations: 0 });
 
-  const t = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+  const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
 
   useEffect(() => {
     loadPageBackground();
@@ -67,29 +59,36 @@ export default function JobsPublicPage() {
         setPageBackground(background);
       }
     } catch (error) {
-      console.error('Erreur chargement fond d\'ecran:', error);
+      console.error('Erreur chargement fond:', error);
     }
   };
 
   const fetchJobs = async () => {
     setLoading(true);
     try {
-      const response = await jobService.getPublishedOffers({ page: 1, limit: 50 });
+      const response = await jobService.getPublishedOffers({ page: 1, limit: 100 });
+      
       if (response && response.data) {
-        setJobs(response.data);
-        setFilteredJobs(response.data);
+        const activeJobs = response.data.filter(job => {
+          const isPublished = job.status === JobStatus.PUBLISHED && job.is_published === true;
+          const isNotExpired = !job.deadline || new Date(job.deadline) > new Date();
+          return isPublished && isNotExpired;
+        });
         
-        const uniqueTypes = new Set(response.data.map((j: JobOffer) => j.contract_type).filter(Boolean));
-        const uniqueLocations = new Set(response.data.map((j: JobOffer) => j.location).filter(Boolean));
+        setJobs(activeJobs);
+        setFilteredJobs(activeJobs);
+        
+        const uniqueTypes = new Set(activeJobs.map((j: JobOffer) => j.contract_type).filter(Boolean));
+        const uniqueLocations = new Set(activeJobs.map((j: JobOffer) => j.location).filter(Boolean));
         setStats({
-          total: response.data.length,
+          total: activeJobs.length,
           types: uniqueTypes.size,
           locations: uniqueLocations.size,
         });
       }
     } catch (error: any) {
       console.error('Erreur:', error);
-      toast.error(error.message || t('Erreur de chargement des offres', 'Nisy hadisoana tamin\'ny fakana ny asa'));
+      toast.error(error.message || getText('Erreur de chargement', 'Nisy hadisoana'));
     } finally {
       setLoading(false);
     }
@@ -136,8 +135,8 @@ export default function JobsPublicPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">{t('Chargement...', 'Miandry...')}</p>
+          <Loader2 className="w-12 h-12 text-blue-800 animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">{getText('Chargement...', 'Miandry...')}</p>
         </div>
       </div>
     );
@@ -145,8 +144,8 @@ export default function JobsPublicPage() {
 
   return (
     <div className="min-h-screen">
-      {/* ==================== HERO SECTION PLEIN ECRAN ==================== */}
-      <div className="relative min-h-screen w-full overflow-hidden">
+      {/* Hero Section - Plein ecran */}
+      <div className="relative h-screen w-full overflow-hidden">
         <div className="absolute inset-0">
           {backgroundStyle.backgroundImage ? (
             <>
@@ -154,96 +153,75 @@ export default function JobsPublicPage() {
               <div className="absolute inset-0" style={overlayStyle} />
             </>
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-blue-900" />
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-800 to-blue-900" />
           )}
         </div>
         
-        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4 py-16 md:py-20">
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-1.5 md:px-5 md:py-2 mb-6 md:mb-8 animate-fade-in-up">
+        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-1.5 md:px-5 md:py-2 mb-6 md:mb-8">
             <Sparkles className="w-4 h-4 text-blue-200" />
             <span className="text-sm font-medium tracking-wide text-white">
-              {t('Rejoignez l\'équipe Y-Mad', 'Miaraha amin\'ny ekipa Y-Mad')}
+              {getText("Rejoignez l'equipe Y-Mad", 'Miaraha amin\'ny ekipa Y-Mad')}
             </span>
           </div>
           
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-4 md:mb-6 drop-shadow-2xl animate-fade-in-up">
-            {t('Offres d\'emploi', 'Asa')}
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-4 md:mb-6 drop-shadow-2xl">
+            {getText("Offres d'emploi", 'Asa')}
             <span className="block text-xl md:text-2xl lg:text-3xl text-blue-200 mt-3 font-light tracking-wide">
-              {t('Construisons ensemble l\'avenir', 'Miaraka manorina ny hoavy')}
+              {getText('Construisons ensemble l\'avenir', 'Miaraka manorina ny hoavy')}
             </span>
           </h1>
           
-          <p className="text-base md:text-lg lg:text-xl text-blue-100 max-w-2xl mx-auto leading-relaxed animate-fade-in-up animation-delay-200">
-            {t(
-              'Découvrez nos opportunités de carrière et rejoignez une équipe passionnée',
+          <p className="text-base md:text-lg lg:text-xl text-blue-100 max-w-2xl mx-auto leading-relaxed">
+            {getText(
+              'Decouvrez nos opportunites de carriere et rejoignez une equipe passionnee',
               'Jereo ny fahafahana asa atolotray ary miaraha amin\'ny ekipa iray mazoto'
             )}
           </p>
-          
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
-            <div className="w-7 h-11 border-2 border-white/40 rounded-full flex justify-center">
-              <div className="w-1.5 h-2.5 bg-white rounded-full mt-2 animate-pulse"></div>
-            </div>
-          </div>
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(10px); }
-        }
-        .animate-fade-in-up { animation: fadeInUp 0.6s ease-out forwards; }
-        .animation-delay-200 { animation-delay: 0.2s; opacity: 0; }
-        .animate-bounce { animation: bounce 2s infinite; }
-      `}</style>
-
-      {/* ==================== STATISTIQUES ==================== */}
+      {/* Statistiques */}
       <div className="relative z-10 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-8 md:py-10">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
             <div className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1">
-              <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-600 transition-colors">
-                <Briefcase className="w-6 h-6 md:w-7 md:h-7 text-blue-600 group-hover:text-white transition-colors" />
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-800 transition-colors">
+                <Briefcase className="w-6 h-6 md:w-7 md:h-7 text-blue-800 group-hover:text-white transition-colors" />
               </div>
               <p className="text-2xl md:text-3xl font-bold text-gray-800">{stats.total}</p>
-              <p className="text-xs md:text-sm text-gray-500">{t('Offres disponibles', 'Asa misokatra')}</p>
+              <p className="text-xs md:text-sm text-gray-500">{getText('Offres disponibles', 'Asa misokatra')}</p>
             </div>
             <div className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1">
-              <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-600 transition-colors">
-                <Users className="w-6 h-6 md:w-7 md:h-7 text-blue-600 group-hover:text-white transition-colors" />
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-gray-600 transition-colors">
+                <Users className="w-6 h-6 md:w-7 md:h-7 text-gray-600 group-hover:text-white transition-colors" />
               </div>
               <p className="text-2xl md:text-3xl font-bold text-gray-800">{stats.types}</p>
-              <p className="text-xs md:text-sm text-gray-500">{t('Types de contrat', 'Karazana fifanarahana')}</p>
+              <p className="text-xs md:text-sm text-gray-500">{getText('Types de contrat', 'Karazana fifanarahana')}</p>
             </div>
             <div className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1">
-              <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-600 transition-colors">
-                <MapPin className="w-6 h-6 md:w-7 md:h-7 text-blue-600 group-hover:text-white transition-colors" />
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-gray-600 transition-colors">
+                <MapPin className="w-6 h-6 md:w-7 md:h-7 text-gray-600 group-hover:text-white transition-colors" />
               </div>
               <p className="text-2xl md:text-3xl font-bold text-gray-800">{stats.locations}</p>
-              <p className="text-xs md:text-sm text-gray-500">{t('Lieux de travail', 'Toeram-piasana')}</p>
+              <p className="text-xs md:text-sm text-gray-500">{getText('Lieux de travail', 'Toeram-piasana')}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ==================== SECTION PRINCIPALE ==================== */}
+      {/* Section Principale */}
       <div className="relative z-10 bg-white">
         <div className="max-w-7xl mx-auto px-4 py-10 md:py-16">
           
-          {/* En-tête */}
           <div className="text-center mb-10 md:mb-12">
             <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3">
-              {t('Nos offres actuelles', 'Ny asa misokatra')}
+              {getText('Nos offres actuelles', 'Ny asa misokatra')}
             </h2>
-            <div className="w-16 h-1 bg-blue-600 mx-auto rounded-full"></div>
+            <div className="w-16 h-1 bg-blue-800 mx-auto rounded-full"></div>
             <p className="text-gray-500 mt-4 max-w-2xl mx-auto text-sm md:text-base">
-              {t(
-                'Rejoignez une équipe passionnée et contribuez au développement de Madagascar',
+              {getText(
+                'Rejoignez une equipe passionnee et contribuez au developpement de Madagascar',
                 'Miaraha amin\'ny ekipa iray manana fo ary mandray anjara amin\'ny fivoaran\'i Madagasikara'
               )}
             </p>
@@ -256,19 +234,19 @@ export default function JobsPublicPage() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
-                  placeholder={t('Rechercher une offre...', 'Karohy ny asa...')}
+                  placeholder={getText('Rechercher une offre...', 'Karohy ny asa...')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm"
+                  className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition text-sm"
                 />
               </div>
               <div className="flex gap-3">
                 <select
                   value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value as ContractType)}
-                  className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer text-sm"
+                  onChange={(e) => setSelectedType(e.target.value)}
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-800 outline-none bg-white cursor-pointer text-sm"
                 >
-                  <option value="">{t('Tous les types', 'Karazana rehetra')}</option>
+                  <option value="">{getText('Tous les types', 'Karazana rehetra')}</option>
                   {contractTypes.map(type => (
                     <option key={type.value} value={type.value}>
                       {language === 'fr' ? type.labelFr : type.labelMg}
@@ -281,10 +259,10 @@ export default function JobsPublicPage() {
                     onClick={() => setViewMode('grid')}
                     className={`p-2.5 px-3 transition-all duration-300 ${
                       viewMode === 'grid' 
-                        ? 'bg-blue-600 text-white' 
+                        ? 'bg-blue-800 text-white' 
                         : 'text-gray-500 hover:bg-gray-50'
                     }`}
-                    title={t('Vue grille', 'Fijery grid')}
+                    title={getText('Vue grille', 'Fijery grid')}
                   >
                     <LayoutGrid className="w-4 h-4" />
                   </button>
@@ -292,10 +270,10 @@ export default function JobsPublicPage() {
                     onClick={() => setViewMode('list')}
                     className={`p-2.5 px-3 transition-all duration-300 ${
                       viewMode === 'list' 
-                        ? 'bg-blue-600 text-white' 
+                        ? 'bg-blue-800 text-white' 
                         : 'text-gray-500 hover:bg-gray-50'
                     }`}
-                    title={t('Vue liste', 'Fijery lisitra')}
+                    title={getText('Vue liste', 'Fijery lisitra')}
                   >
                     <List className="w-4 h-4" />
                   </button>
@@ -326,27 +304,27 @@ export default function JobsPublicPage() {
                 )}
                 <button 
                   onClick={() => { setSearchTerm(''); setSelectedType(''); }} 
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs text-blue-800 hover:underline"
                 >
-                  {t('Tout effacer', 'Fafana daholo')}
+                  {getText('Tout effacer', 'Fafana daholo')}
                 </button>
               </div>
             )}
           </div>
 
-          {/* Résultats */}
+          {/* Resultats */}
           <div className="mb-5">
             <p className="text-sm text-gray-600">
-              <span className="font-semibold text-blue-700 text-base">{filteredJobs.length}</span> 
-              {t(' offre(s) trouvée(s)', ' asa hita')}
+              <span className="font-semibold text-blue-800 text-base">{filteredJobs.length}</span> 
+              {getText(' offre(s) trouvee(s)', ' asa hita')}
             </p>
           </div>
 
           {filteredJobs.length === 0 ? (
             <div className="bg-white rounded-xl shadow-md py-16 text-center border border-gray-200">
               <Search className="w-14 h-14 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg mb-2">{t('Aucune offre trouvée', 'Tsy misy asa hita')}</p>
-              <p className="text-gray-400 text-sm">{t('Essayez de modifier vos critères de recherche', 'Andramo hanova ny fikarohanao')}</p>
+              <p className="text-gray-500 text-lg mb-2">{getText('Aucune offre trouvee', 'Tsy misy asa hita')}</p>
+              <p className="text-gray-400 text-sm">{getText('Essayez de modifier vos criteres de recherche', 'Andramo hanova ny fikarohanao')}</p>
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -364,29 +342,29 @@ export default function JobsPublicPage() {
         </div>
       </div>
 
-      {/* ==================== CTA SECTION ==================== */}
+      {/* CTA Section */}
       <div className="relative z-10 bg-gray-800 py-16">
         <div className="max-w-4xl mx-auto text-center px-4">
           <div className="inline-flex items-center gap-2 bg-gray-700 rounded-full px-4 py-1.5 mb-6">
             <Heart className="w-4 h-4 text-blue-400" />
             <span className="text-xs text-gray-300">
-              {t('Vous ne trouvez pas votre bonheur ?', 'Tsy mahita ny tianao ve ianao?')}
+              {getText('Vous ne trouvez pas votre bonheur ?', 'Tsy mahita ny tianao ve ianao?')}
             </span>
           </div>
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
-            {t('Candidature spontanée', 'Fangatahana asa tsy misy toerana')}
+            {getText('Candidature spontanee', 'Fangatahana asa tsy misy toerana')}
           </h2>
           <p className="text-sm md:text-base text-gray-300 mb-6 max-w-2xl mx-auto">
-            {t(
-              'Envoyez-nous votre CV et votre lettre de motivation, nous étudierons votre profil',
+            {getText(
+              'Envoyez-nous votre CV et votre lettre de motivation, nous etudierons votre profil',
               'Alefaso aminay ny CV sy ny taratasy fanoloranao, hodinihinay ny momba anao'
             )}
           </p>
           <Link 
             href="/contact" 
-            className="group inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-full font-semibold hover:bg-blue-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm"
+            className="group inline-flex items-center gap-2 bg-blue-800 text-white px-6 py-2.5 rounded-full font-semibold hover:bg-blue-900 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm"
           >
-            {t('Envoyer ma candidature', 'Alefaso ny fangatahana')} 
+            {getText('Envoyer ma candidature', 'Alefaso ny fangatahana')} 
             <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </div>
@@ -395,10 +373,7 @@ export default function JobsPublicPage() {
   );
 }
 
-// ============================================================
-// COMPOSANT CARTE (VUE GRILLE)
-// ============================================================
-
+// Composant Carte (Vue Grille)
 function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
   const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
   const contractType = job.contract_type as ContractType;
@@ -406,24 +381,29 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
   const contractLabel = CONTRACT_LABELS[contractType] || CONTRACT_LABELS[ContractType.CDI];
   const title = language === 'fr' ? job.title_fr : (job.title_mg || job.title_fr);
   const description = language === 'fr' ? job.description_fr : (job.description_mg || job.description_fr);
-  const isFeatured = job.status === JobStatus.PUBLISHED && job.is_published;
+  const isFeatured = job.status === JobStatus.PUBLISHED && job.is_published === true;
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
     try {
       return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
+        day: '2-digit', month: '2-digit', year: 'numeric'
       });
     } catch { return ''; }
   };
 
   return (
     <div className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-200">
-      <div className="relative h-40 overflow-hidden bg-gradient-to-r from-blue-600 to-blue-700">
+      <div className="relative h-40 overflow-hidden bg-gradient-to-r from-blue-800 to-blue-900">
         {job.image_url ? (
-          <Image src={job.image_url} alt={title} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img 
+            src={job.image_url} 
+            alt={title} 
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/images/placeholder-job.jpg';
+            }}
+          />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <Briefcase className="w-16 h-16 text-white/20" />
@@ -436,7 +416,7 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
           </span>
           {isFeatured && (
             <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-medium shadow-sm">
-              <Star className="w-3 h-3 fill-yellow-500" /> {language === 'fr' ? 'À la une' : 'Manokana'}
+              <Star className="w-3 h-3 fill-yellow-500" /> {language === 'fr' ? 'A la une' : 'Manokana'}
             </span>
           )}
         </div>
@@ -444,7 +424,7 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
         {isExpired && (
           <div className="absolute top-3 right-3">
             <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-gray-700 text-white font-medium">
-              <Clock className="w-3 h-3" /> {language === 'fr' ? 'Expirée' : 'Lany daty'}
+              <Clock className="w-3 h-3" /> {language === 'fr' ? 'Expiree' : 'Lany daty'}
             </span>
           </div>
         )}
@@ -454,13 +434,13 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
             href={`/jobs/${job.id}`}
             className="bg-white text-gray-800 px-5 py-1.5 rounded-full text-sm font-semibold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition duration-300 shadow-md"
           >
-            {language === 'fr' ? 'Voir détails' : 'Jereo'} <ArrowRight className="w-4 h-4" />
+            {language === 'fr' ? 'Voir details' : 'Jereo'} <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>
       
       <div className="p-4">
-        <h3 className="font-bold text-gray-800 mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors text-base">
+        <h3 className="font-bold text-gray-800 mb-1 line-clamp-1 group-hover:text-blue-800 transition-colors text-base">
           {title}
         </h3>
         
@@ -491,10 +471,7 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
   );
 }
 
-// ============================================================
-// COMPOSANT LIGNE (VUE LISTE)
-// ============================================================
-
+// Composant Ligne (Vue Liste)
 function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
   const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
   const contractType = job.contract_type as ContractType;
@@ -502,15 +479,13 @@ function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }
   const contractLabel = CONTRACT_LABELS[contractType] || CONTRACT_LABELS[ContractType.CDI];
   const title = language === 'fr' ? job.title_fr : (job.title_mg || job.title_fr);
   const description = language === 'fr' ? job.description_fr : (job.description_mg || job.description_fr);
-  const isFeatured = job.status === JobStatus.PUBLISHED && job.is_published;
+  const isFeatured = job.status === JobStatus.PUBLISHED && job.is_published === true;
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
     try {
       return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
+        day: '2-digit', month: '2-digit', year: 'numeric'
       });
     } catch { return ''; }
   };
@@ -521,7 +496,7 @@ function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }
         <div className="flex flex-col md:flex-row justify-between gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <h3 className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors text-base">
+              <h3 className="font-bold text-gray-800 group-hover:text-blue-800 transition-colors text-base">
                 <Link href={`/jobs/${job.id}`}>{title}</Link>
               </h3>
               <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${contractColor}`}>
@@ -529,12 +504,12 @@ function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }
               </span>
               {isFeatured && (
                 <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
-                  <Star className="w-3 h-3 fill-yellow-500" /> {language === 'fr' ? 'À la une' : 'Manokana'}
+                  <Star className="w-3 h-3 fill-yellow-500" /> {language === 'fr' ? 'A la une' : 'Manokana'}
                 </span>
               )}
               {isExpired && (
                 <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-700 text-white">
-                  <Clock className="w-3 h-3" /> {language === 'fr' ? 'Expirée' : 'Lany daty'}
+                  <Clock className="w-3 h-3" /> {language === 'fr' ? 'Expiree' : 'Lany daty'}
                 </span>
               )}
             </div>
@@ -556,7 +531,7 @@ function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }
             {!isExpired && (
               <Link 
                 href={`/jobs/${job.id}`}
-                className="bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold text-sm text-center hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
+                className="bg-blue-800 text-white px-5 py-2 rounded-lg font-semibold text-sm text-center hover:bg-blue-900 transition-all duration-300 flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
               >
                 {language === 'fr' ? 'Postuler' : 'Mangataka'} <ArrowRight className="w-4 h-4" />
               </Link>

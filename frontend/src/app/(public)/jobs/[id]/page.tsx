@@ -1,96 +1,406 @@
+// frontend/src/app/(public)/jobs/[id]/page.tsx
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { 
   Briefcase, MapPin, Calendar, Building, Clock, ArrowLeft, 
   Mail, Phone, Send, CheckCircle, AlertCircle, Loader2,
   FileText, Award, Globe, Users, Eye, TrendingUp, Printer,
-  Share2, Bookmark
+  Share2, Bookmark, X, Upload, Trash2, User, Linkedin, 
+  Globe as GlobeIcon, Camera, Info, Check, FileCheck,
+  Bold, Italic, Underline, List, ListOrdered, AlignLeft,
+  AlignCenter, AlignRight, Link as LinkIcon, Code
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { jobService, JobOffer, CreateJobApplicationDto } from '@/services/job.service';
+import { jobService, JobOffer, CreateJobApplicationDto, JobStatus } from '@/services/job.service';
+import { uploadService, DatabaseImage } from '@/services/upload.service';
 import toast from 'react-hot-toast';
+
+// Import dynamique de l'éditeur Quill
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+import 'react-quill/dist/quill.snow.css';
+
+// Configuration de l'éditeur Quill
+const QUILL_MODULES = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'color': [] }, { 'background': [] }],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'list': 'check' }],
+    [{ 'indent': '-1'}, { 'indent': '+1' }],
+    [{ 'align': [] }],
+    ['blockquote', 'code-block'],
+    ['link', 'image'],
+    ['clean']
+  ],
+};
+
+const QUILL_FORMATS = [
+  'header', 'bold', 'italic', 'underline', 'strike',
+  'color', 'background', 'list', 'bullet', 'check',
+  'indent', 'align', 'blockquote', 'code-block',
+  'link', 'image'
+];
+
+interface ApplicationFormData {
+  full_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  experience_years: number;
+  current_position: string;
+  current_company: string;
+  cover_letter: string;
+  linkedin_url: string;
+  portfolio_url: string;
+}
+
+interface FileUploadState {
+  file: DatabaseImage | null;
+  uploading: boolean;
+  error: string;
+}
+
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
+
+// Format téléphone Madagascar: +261 32 04 856 97
+const validatePhoneNumber = (phone: string): boolean => {
+  if (!phone) return true; // Optionnel
+  // Format acceptés:
+  // +261321234567
+  // +261 32 12 345 67
+  // 0321234567
+  // 32 12 345 67
+  const cleanPhone = phone.replace(/\s/g, '');
+  const phoneRegex = /^(?:\+261|0)(?:32|33|34|37|38)\d{7}$/;
+  return phoneRegex.test(cleanPhone);
+};
+
+const formatPhoneNumber = (phone: string): string => {
+  if (!phone) return '';
+  const clean = phone.replace(/\s/g, '');
+  if (clean.length === 12 && clean.startsWith('+261')) {
+    return `${clean.slice(0, 4)} ${clean.slice(4, 6)} ${clean.slice(6, 8)} ${clean.slice(8, 11)} ${clean.slice(11)}`;
+  }
+  if (clean.length === 10 && clean.startsWith('0')) {
+    return `${clean.slice(0, 3)} ${clean.slice(3, 5)} ${clean.slice(5, 8)} ${clean.slice(8)}`;
+  }
+  return phone;
+};
 
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { language } = useLanguage();
+  const jobId = params?.id as string;
+  
   const [job, setJob] = useState<JobOffer | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [applying, setApplying] = useState(false);
-  const [showApplicationForm, setShowApplicationForm] = useState(false);
-  const [formData, setFormData] = useState<CreateJobApplicationDto>({
-    job_offer_id: '',
+  const [loading, setLoading] = useState<boolean>(true);
+  const [applying, setApplying] = useState<boolean>(false);
+  const [showApplicationForm, setShowApplicationForm] = useState<boolean>(false);
+  const [phoneError, setPhoneError] = useState<string>('');
+  
+  const [cvState, setCvState] = useState<FileUploadState>({
+    file: null,
+    uploading: false,
+    error: ''
+  });
+  
+  const [coverLetterState, setCoverLetterState] = useState<FileUploadState>({
+    file: null,
+    uploading: false,
+    error: ''
+  });
+  
+  const [photoState, setPhotoState] = useState<FileUploadState>({
+    file: null,
+    uploading: false,
+    error: ''
+  });
+  
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  
+  const [formData, setFormData] = useState<ApplicationFormData>({
     full_name: '',
     email: '',
     phone: '',
     address: '',
-    experience: '',
     experience_years: 0,
+    current_position: '',
+    current_company: '',
     cover_letter: '',
-    cv_url: ''
+    linkedin_url: '',
+    portfolio_url: ''
   });
 
-  const t = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+  const cvInputRef = useRef<HTMLInputElement>(null);
+  const coverLetterInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const getText = useCallback((fr: string, mg: string): string => {
+    return language === 'fr' ? fr : mg;
+  }, [language]);
+
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/;
+    return emailRegex.test(email);
+  };
 
   useEffect(() => {
-    if (params.id) {
+    if (jobId) {
       fetchJob();
     }
-  }, [params.id]);
+  }, [jobId]);
 
-  const fetchJob = async () => {
+  useEffect(() => {
+    return () => {
+      if (photoPreview) {
+        URL.revokeObjectURL(photoPreview);
+      }
+    };
+  }, [photoPreview]);
+
+  const fetchJob = async (): Promise<void> => {
     setLoading(true);
     try {
-      const data = await jobService.getOfferById(params.id as string);
+      const data = await jobService.getOfferById(jobId);
+      
+      if (data.status !== JobStatus.PUBLISHED || !data.is_published) {
+        toast.error(getText('Cette offre n\'est pas disponible', 'Tsy misy ity asa ity'));
+        router.push('/jobs');
+        return;
+      }
+      
       setJob(data);
-      setFormData(prev => ({ ...prev, job_offer_id: data.id }));
     } catch (error) {
       console.error('Erreur:', error);
-      toast.error(t('Offre non trouvée', 'Tsy hita ny asa'));
+      toast.error(getText('Offre non trouvee', 'Tsy hita ny asa'));
       router.push('/jobs');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const rawValue = e.target.value;
+    const formatted = formatPhoneNumber(rawValue);
+    setFormData(prev => ({ ...prev, phone: formatted }));
+    
+    if (rawValue && !validatePhoneNumber(rawValue)) {
+      setPhoneError(getText(
+        'Format invalide. Utilisez +261 XX XXX XX',
+        'Tsy mety ny format. Mampiasà +261 XX XXX XX'
+      ));
+    } else {
+      setPhoneError('');
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>): void => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setApplying(true);
+  const handleCoverLetterChange = (value: string): void => {
+    setFormData(prev => ({ ...prev, cover_letter: value }));
+  };
+
+  const handleFileUpload = async (
+    file: File,
+    type: string,
+    setState: React.Dispatch<React.SetStateAction<FileUploadState>>
+  ): Promise<string | null> => {
+    setState(prev => ({ ...prev, uploading: true, error: '' }));
+    
     try {
-      await jobService.apply(formData);
-      toast.success(t('Candidature envoyée avec succès !', 'Nalefa soa aman-tsara ny fangatahana!'));
+      const result = await uploadService.uploadImage(file, type as any, jobId);
+      setState(prev => ({ ...prev, file: result, uploading: false, error: '' }));
+      return result.url;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
+      setState(prev => ({ ...prev, file: null, uploading: false, error: errorMessage }));
+      toast.error(errorMessage);
+      return null;
+    }
+  };
+
+  const handleCvChange = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (file.type !== 'application/pdf') {
+      setCvState(prev => ({ ...prev, error: getText('Seuls les fichiers PDF sont acceptes', 'Ny rakitra PDF ihany no ekena') }));
+      return;
+    }
+    
+    if (file.size > MAX_FILE_SIZE) {
+      setCvState(prev => ({ ...prev, error: getText('Fichier trop grand (max 100 Mo)', 'Lehibe loatra ny rakitra (farany 100 Mo)') }));
+      return;
+    }
+    
+    setCvState(prev => ({ ...prev, error: '' }));
+    await handleFileUpload(file, 'cv', setCvState);
+  };
+
+  const handleCoverLetterFileChange = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (file.type !== 'application/pdf') {
+      setCoverLetterState(prev => ({ ...prev, error: getText('Seuls les fichiers PDF sont acceptes', 'Ny rakitra PDF ihany no ekena') }));
+      return;
+    }
+    
+    if (file.size > MAX_FILE_SIZE) {
+      setCoverLetterState(prev => ({ ...prev, error: getText('Fichier trop grand (max 100 Mo)', 'Lehibe loatra ny rakitra (farany 100 Mo)') }));
+      return;
+    }
+    
+    setCoverLetterState(prev => ({ ...prev, error: '' }));
+    await handleFileUpload(file, 'cover_letter', setCoverLetterState);
+  };
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setPhotoState(prev => ({ ...prev, error: getText('Formats acceptes: JPG, PNG, WEBP', 'Endrika azo: JPG, PNG, WEBP') }));
+      return;
+    }
+    
+    if (file.size > MAX_PHOTO_SIZE) {
+      setPhotoState(prev => ({ ...prev, error: getText('Photo trop grande (max 5 Mo)', 'Lehibe loatra ny sary (farany 5 Mo)') }));
+      return;
+    }
+    
+    if (photoPreview) {
+      URL.revokeObjectURL(photoPreview);
+    }
+    setPhotoPreview(URL.createObjectURL(file));
+    setPhotoState(prev => ({ ...prev, error: '' }));
+    await handleFileUpload(file, 'profile', setPhotoState);
+  };
+
+  const removeCv = (): void => {
+    setCvState({ file: null, uploading: false, error: '' });
+    if (cvInputRef.current) cvInputRef.current.value = '';
+  };
+
+  const removeCoverLetterFile = (): void => {
+    setCoverLetterState({ file: null, uploading: false, error: '' });
+    if (coverLetterInputRef.current) coverLetterInputRef.current.value = '';
+  };
+
+  const removePhoto = (): void => {
+    if (photoPreview) {
+      URL.revokeObjectURL(photoPreview);
+    }
+    setPhotoState({ file: null, uploading: false, error: '' });
+    setPhotoPreview(null);
+    if (photoInputRef.current) photoInputRef.current.value = '';
+  };
+
+  const validateForm = (): boolean => {
+    if (!formData.full_name.trim()) {
+      toast.error(getText('Veuillez entrer votre nom complet', 'Ampidiro ny anaranao feno'));
+      return false;
+    }
+    
+    if (!validateEmail(formData.email)) {
+      toast.error(getText('Veuillez entrer un email valide', 'Ampidiro ny adiresy mailaka marina'));
+      return false;
+    }
+    
+    if (formData.phone && !validatePhoneNumber(formData.phone)) {
+      toast.error(getText('Numéro de téléphone invalide', 'Tsy mety ny laharana telefaonina'));
+      return false;
+    }
+    
+    if (!cvState.file) {
+      toast.error(getText('Veuillez uploader votre CV (PDF)', 'Alefaso ny CV anao (PDF)'));
+      return false;
+    }
+    
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    setApplying(true);
+    
+    if (!cvState.file) {
+      toast.error(getText('Veuillez uploader votre CV (PDF)', 'Alefaso ny CV anao (PDF)'));
+      setApplying(false);
+      return;
+    }
+    
+    try {
+      const cleanPhone = formData.phone ? formData.phone.replace(/\s/g, '') : undefined;
+      
+      const applicationData: CreateJobApplicationDto = {
+        job_offer_id: jobId,
+        full_name: formData.full_name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: cleanPhone,
+        address: formData.address?.trim() || undefined,
+        experience_years: formData.experience_years || 0,
+        current_position: formData.current_position?.trim() || undefined,
+        current_company: formData.current_company?.trim() || undefined,
+        cv_url: cvState.file.url,
+        cover_letter: formData.cover_letter?.trim() || undefined,
+        cover_letter_url: coverLetterState.file?.url,
+        photo_url: photoState.file?.url,
+        linkedin_url: formData.linkedin_url?.trim() || undefined,
+        portfolio_url: formData.portfolio_url?.trim() || undefined,
+      };
+      
+      await jobService.apply(applicationData);
+      toast.success(getText('Candidature envoyee avec succes !', 'Vita soa aman-tsara ny fandefasana!'));
       setShowApplicationForm(false);
-      setFormData({
-        job_offer_id: job?.id || '',
-        full_name: '',
-        email: '',
-        phone: '',
-        address: '',
-        experience: '',
-        experience_years: 0,
-        cover_letter: '',
-        cv_url: ''
-      });
+      resetForm();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || t('Erreur lors de l\'envoi', 'Nisy olana tamin\'ny fandefasana'));
+      const errorMessage = error.response?.data?.message || error.message;
+      toast.error(errorMessage || getText('Erreur lors de l\'envoi', 'Nisy olana tamin\'ny fandefasana'));
     } finally {
       setApplying(false);
     }
   };
 
+  const resetForm = (): void => {
+    setFormData({
+      full_name: '',
+      email: '',
+      phone: '',
+      address: '',
+      experience_years: 0,
+      current_position: '',
+      current_company: '',
+      cover_letter: '',
+      linkedin_url: '',
+      portfolio_url: ''
+    });
+    setPhoneError('');
+    removeCv();
+    removeCoverLetterFile();
+    removePhoto();
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+        <Loader2 className="w-12 h-12 text-blue-800 animate-spin" />
       </div>
     );
   }
@@ -99,10 +409,10 @@ export default function JobDetailPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800">{t('Offre non trouvée', 'Tsy hita ny asa')}</h2>
-          <Link href="/jobs" className="mt-4 inline-block text-blue-600 hover:underline">
-            {t('Retour aux offres', 'Hiverina any amin\'ny asa')}
+          <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800">{getText('Offre non trouvee', 'Tsy hita ny asa')}</h2>
+          <Link href="/jobs" className="mt-4 inline-block text-blue-800 hover:underline">
+            {getText('Retour aux offres', 'Hiverina any amin\'ny asa')}
           </Link>
         </div>
       </div>
@@ -110,182 +420,502 @@ export default function JobDetailPage() {
   }
 
   const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
+  const isAvailable = job.status === JobStatus.PUBLISHED && job.is_published && !isExpired;
+  
   const title = language === 'fr' ? job.title_fr : (job.title_mg || job.title_fr);
   const description = language === 'fr' ? job.description_fr : (job.description_mg || job.description_fr);
+  const imageUrl = job.image_url;
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <Link href="/jobs" className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-600 transition">
-            <ArrowLeft className="w-4 h-4" /> {t('Retour aux offres', 'Hiverina any amin\'ny asa')}
+      <div className="bg-white border-b sticky top-0 z-10 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <Link href="/jobs" className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-800 transition">
+            <ArrowLeft className="w-4 h-4" /> {getText('Retour aux offres', 'Hiverina any amin\'ny asa')}
           </Link>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* En-tête de l'offre */}
-        <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6">
-          {job.image_url && (
-            <div className="relative h-64 w-full">
-              <Image src={job.image_url} alt={title} fill className="object-cover" />
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+          {imageUrl && (
+            <div className="relative h-72 w-full bg-gradient-to-r from-blue-800 to-blue-900">
+              <img 
+                src={imageUrl} 
+                alt={title} 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             </div>
           )}
-          <div className="p-6">
-            <h1 className="text-3xl font-bold text-gray-800 mb-4">{title}</h1>
+          <div className="p-8">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">{title}</h1>
             
             <div className="flex flex-wrap gap-4 mb-6">
               {job.company && (
-                <span className="flex items-center gap-2 text-gray-600">
+                <span className="flex items-center gap-2 text-gray-600 text-sm bg-gray-100 px-3 py-1.5 rounded-full">
                   <Building className="w-4 h-4" /> {job.company}
                 </span>
               )}
               {job.location && (
-                <span className="flex items-center gap-2 text-gray-600">
+                <span className="flex items-center gap-2 text-gray-600 text-sm bg-gray-100 px-3 py-1.5 rounded-full">
                   <MapPin className="w-4 h-4" /> {job.location}
                 </span>
               )}
               {job.contract_type && (
-                <span className="flex items-center gap-2 text-gray-600">
+                <span className="flex items-center gap-2 text-sm bg-blue-100 text-blue-800 px-3 py-1.5 rounded-full">
                   <Briefcase className="w-4 h-4" /> {job.contract_type}
                 </span>
               )}
               {job.deadline && (
-                <span className={`flex items-center gap-2 ${isExpired ? 'text-red-500' : 'text-gray-600'}`}>
+                <span className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full ${isExpired ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-800'}`}>
                   <Calendar className="w-4 h-4" /> 
-                  {t('Date limite:', 'Faritra:')} {new Date(job.deadline).toLocaleDateString()}
+                  {getText('Date limite:', 'Farany:')} {new Date(job.deadline).toLocaleDateString('fr-FR')}
                 </span>
               )}
             </div>
 
-            {!isExpired && job.is_published && (
+            {isAvailable ? (
               <button
                 onClick={() => setShowApplicationForm(true)}
-                className="w-full md:w-auto bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition flex items-center justify-center gap-2"
+                className="w-full md:w-auto bg-blue-800 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-900 transition flex items-center justify-center gap-2 shadow-md"
               >
-                <Send className="w-4 h-4" /> {t('Postuler maintenant', 'Mangataka izao')}
+                <Send className="w-5 h-5" /> {getText('Postuler maintenant', 'Mangataka izao')}
               </button>
-            )}
-            
-            {isExpired && (
-              <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
+            ) : (
+              <div className="bg-gray-100 text-gray-600 p-4 rounded-xl flex items-center gap-2">
                 <AlertCircle className="w-5 h-5" />
-                {t('Cette offre est expirée', 'Efa lany daty ity asa ity')}
+                {isExpired 
+                  ? getText('Cette offre est expiree', 'Efa lany daty ity asa ity')
+                  : getText('Cette offre n\'est plus disponible', 'Tsy misy intsony ity asa ity')}
               </div>
             )}
           </div>
         </div>
 
-        {/* Description */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">{t('Description du poste', 'Famaritana ny asa')}</h2>
-          <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: description.replace(/\n/g, '<br/>') }} />
+        <div className="bg-white rounded-2xl shadow-lg p-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <FileText className="w-6 h-6 text-blue-800" />
+            {getText('Description du poste', 'Famaritana ny asa')}
+          </h2>
+          <div className="prose max-w-none text-gray-600 whitespace-pre-wrap leading-relaxed">
+            {description}
+          </div>
         </div>
 
-        {/* Formulaire de candidature */}
-        {showApplicationForm && !isExpired && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-                <h2 className="text-xl font-bold">{t('Postuler à', 'Mangataka ho an\'ny')} {title}</h2>
-                <button onClick={() => setShowApplicationForm(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+        {showApplicationForm && isAvailable && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowApplicationForm(false)}>
+            <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white border-b p-5 flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">{getText('Candidature', 'Fangatahana')}</h2>
+                  <p className="text-sm text-gray-500">{title}</p>
+                </div>
+                <button 
+                  onClick={() => setShowApplicationForm(false)} 
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
               
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('Nom complet', 'Anarana feno')} *
-                  </label>
-                  <input
-                    type="text"
-                    name="full_name"
-                    required
-                    value={formData.full_name}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+              <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                {/* Photo de profil */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <Camera className="w-5 h-5 text-blue-800" />
+                    {getText('Photo de profil', 'Sary momba anao')}
+                  </h3>
+                  <div className="flex items-center gap-6">
+                    <div className="relative">
+                      <div className="w-24 h-24 rounded-full bg-gray-100 border-2 border-gray-200 overflow-hidden flex items-center justify-center">
+                        {photoPreview ? (
+                          <img src={photoPreview} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                          <User className="w-10 h-10 text-gray-400" />
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => photoInputRef.current?.click()}
+                        className="absolute bottom-0 right-0 p-1.5 bg-blue-800 text-white rounded-full hover:bg-blue-900 transition shadow-md"
+                      >
+                        <Camera className="w-3 h-3" />
+                      </button>
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        onChange={handlePhotoChange}
+                        className="hidden"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-500">
+                        {getText('Photo de profil (optionnelle)', 'Sary momba anao (tsy voatery)')}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {getText('Formats: JPG, PNG, WEBP. Max 5 Mo', 'Endrika: JPG, PNG, WEBP. Farany 5 Mo')}
+                      </p>
+                      {photoState.file && (
+                        <div className="mt-2 flex items-center gap-2 text-green-600 text-sm">
+                          <Check className="w-4 h-4" />
+                          <span>{getText('Photo uploadee', 'Nahomana ny fampidirana sary')}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {photoState.error && <p className="text-xs text-red-500 mt-2">{photoState.error}</p>}
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                  <input
-                    type="email"
-                    name="email"
-                    required
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+
+                {/* Informations personnelles */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <User className="w-5 h-5 text-blue-800" />
+                    {getText('Informations personnelles', 'Fampahalalana manokana')}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {getText('Nom complet', 'Anarana feno')} <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="full_name"
+                        required
+                        value={formData.full_name}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                        placeholder={getText('Votre nom complet', 'Anaranao feno')}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        required
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                        placeholder="votre@email.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {getText('Telephone', 'Telefaonina')}
+                      </label>
+                      <div>
+                        <input
+                          type="tel"
+                          name="phone"
+                          value={formData.phone}
+                          onChange={handlePhoneChange}
+                          className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition ${phoneError ? 'border-red-500' : 'border-gray-300'}`}
+                          placeholder="+261 XX XXX XX"
+                        />
+                        {phoneError && (
+                          <p className="text-xs text-red-500 mt-1">{phoneError}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">
+                          {getText('Format: +261 XX XXX XX', 'Format: +261 XX XXX XX')}
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {getText('Adresse', 'Adiresy')}
+                      </label>
+                      <input
+                        type="text"
+                        name="address"
+                        value={formData.address}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                        placeholder={getText('Antananarivo, Madagascar', 'Antananarivo, Madagasikara')}
+                      />
+                    </div>
+                  </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('Téléphone', 'Telefaona')}</label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+
+                {/* Expérience professionnelle */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <Briefcase className="w-5 h-5 text-blue-800" />
+                    {getText('Experience professionnelle', 'Traza')}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {getText('Annees d\'experience', 'Taona fahaizana')}
+                      </label>
+                      <select
+                        name="experience_years"
+                        value={formData.experience_years}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none bg-white"
+                      >
+                        <option value="0">0 - {getText('Debutant', 'Vao manomboka')}</option>
+                        <option value="1">1 {getText('an', 'taona')}</option>
+                        <option value="2">2 {getText('ans', 'taona')}</option>
+                        <option value="3">3 {getText('ans', 'taona')}</option>
+                        <option value="5">5 {getText('ans', 'taona')}</option>
+                        <option value="10">10+ {getText('ans', 'taona')}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {getText('Poste actuel', 'Toerana misy anao')}
+                      </label>
+                      <input
+                        type="text"
+                        name="current_position"
+                        value={formData.current_position}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                        placeholder={getText('Developpeur Web', 'Mpamorona tranokala')}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {getText('Entreprise actuelle', 'Orinasa misy anao')}
+                      </label>
+                      <input
+                        type="text"
+                        name="current_company"
+                        value={formData.current_company}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                        placeholder={getText('Tech Company', 'Orinasa teknolojia')}
+                      />
+                    </div>
+                  </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('Années d\'expérience', 'Taona fahaizana')}</label>
-                  <input
-                    type="number"
-                    name="experience_years"
-                    value={formData.experience_years || 0}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+
+                {/* CV Upload */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-blue-800" />
+                    {getText('Curriculum Vitae (CV)', 'Curriculum Vitae (CV)')} <span className="text-red-500">*</span>
+                    <span className="text-xs text-gray-400 ml-2">(PDF max 100 Mo)</span>
+                  </h3>
+                  
+                  {cvState.file ? (
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <FileCheck className="w-8 h-8 text-green-600" />
+                        <div>
+                          <p className="font-medium text-gray-800">{cvState.file.fileName}</p>
+                          <p className="text-xs text-gray-500">
+                            PDF - {(cvState.file.fileSize / 1024 / 1024).toFixed(2)} Mo
+                          </p>
+                        </div>
+                      </div>
+                      <button type="button" onClick={removeCv} className="text-red-500 hover:text-red-700 p-2">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => cvInputRef.current?.click()}
+                      className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition ${
+                        cvState.error ? 'border-red-400 bg-red-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                      }`}
+                    >
+                      <input
+                        ref={cvInputRef}
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleCvChange}
+                        className="hidden"
+                      />
+                      {cvState.uploading ? (
+                        <Loader2 className="w-10 h-10 text-blue-800 animate-spin mx-auto mb-2" />
+                      ) : (
+                        <>
+                          <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">
+                            {getText('Cliquez pour uploader votre CV', 'Tsindrio raha handefa ny CV anao')}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {getText('Format PDF uniquement, max 100 Mo', 'Endrika PDF ihany, farany 100 Mo')}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {cvState.error && <p className="text-xs text-red-500 mt-2">{cvState.error}</p>}
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('Lettre de motivation', 'Taratarasa')}</label>
-                  <textarea
-                    name="cover_letter"
-                    rows={4}
-                    value={formData.cover_letter}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+
+                {/* Lettre de motivation avec éditeur Word */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <Mail className="w-5 h-5 text-blue-800" />
+                    {getText('Lettre de motivation', 'Taraty fanekena')}
+                  </h3>
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {getText('Rédigez votre lettre', 'Soraty ny taratasy')}
+                    </label>
+                    <div className="quill-editor">
+                      <ReactQuill
+                        theme="snow"
+                        value={formData.cover_letter}
+                        onChange={handleCoverLetterChange}
+                        modules={QUILL_MODULES}
+                        formats={QUILL_FORMATS}
+                        placeholder={getText(
+                          'Pourquoi postulez-vous ? Qu\'est-ce qui vous motive à rejoindre notre équipe ?\n\nDécrivez vos compétences, votre expérience et votre motivation...',
+                          'Fa maninona no mangataka? Inona no manosika anao hanatevin-daharana ny ekipanay?\n\nHazavao ny fahaizanao, ny traikefanao ary ny antony manosika anao...'
+                        )}
+                        className="bg-white"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-500 mb-2">{getText('Ou uploader un fichier PDF', 'Na alefaso ny rakitra PDF')}</p>
+                    <div
+                      onClick={() => coverLetterInputRef.current?.click()}
+                      className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition"
+                    >
+                      <input
+                        ref={coverLetterInputRef}
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleCoverLetterFileChange}
+                        className="hidden"
+                      />
+                      {coverLetterState.uploading ? (
+                        <Loader2 className="w-8 h-8 text-blue-800 animate-spin mx-auto" />
+                      ) : coverLetterState.file ? (
+                        <div className="flex items-center justify-center gap-2 text-green-600">
+                          <FileCheck className="w-5 h-5" />
+                          <span className="text-sm">{coverLetterState.file.fileName}</span>
+                          <span className="text-xs text-gray-500 ml-1">
+                            ({(coverLetterState.file.fileSize / 1024 / 1024).toFixed(2)} Mo)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); removeCoverLetterFile(); }}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-8 h-8 text-gray-400 mx-auto mb-1" />
+                          <p className="text-xs text-gray-500">{getText('PDF max 100 Mo', 'PDF farany 100 Mo')}</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {coverLetterState.error && <p className="text-xs text-red-500 mt-2">{coverLetterState.error}</p>}
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('URL du CV (Google Drive, Dropbox...)', 'URL CV')}</label>
-                  <input
-                    type="url"
-                    name="cv_url"
-                    value={formData.cv_url}
-                    onChange={handleInputChange}
-                    placeholder="https://..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+
+                {/* Liens professionnels */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <GlobeIcon className="w-5 h-5 text-blue-800" />
+                    {getText('Liens professionnels', 'Rohy momba ny asa')}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        LinkedIn
+                      </label>
+                      <div className="relative">
+                        <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="url"
+                          name="linkedin_url"
+                          value={formData.linkedin_url}
+                          onChange={handleInputChange}
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                          placeholder="https://linkedin.com/in/..."
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {getText('Portfolio / Site web', 'Portfolio / Tranokala')}
+                      </label>
+                      <div className="relative">
+                        <GlobeIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="url"
+                          name="portfolio_url"
+                          value={formData.portfolio_url}
+                          onChange={handleInputChange}
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                          placeholder="https://..."
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                
+
+                {/* Boutons d'action */}
                 <div className="flex gap-3 pt-4">
                   <button
                     type="button"
                     onClick={() => setShowApplicationForm(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition font-medium"
                   >
-                    {t('Annuler', 'Aoka')}
+                    {getText('Annuler', 'Aoka')}
                   </button>
                   <button
                     type="submit"
                     disabled={applying}
-                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="flex-1 bg-blue-800 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-blue-900 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
                   >
-                    {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    {applying ? t('Envoi...', 'Fandefasana...') : t('Envoyer', 'Alefa')}
+                    {applying ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                    {applying ? getText('Envoi...', 'Fandefasana...') : getText('Envoyer ma candidature', 'Alefaso ny fangatahana')}
                   </button>
                 </div>
+
+                <p className="text-xs text-gray-400 text-center">
+                  {getText(
+                    'En soumettant ce formulaire, vous acceptez que vos donnees soient utilisees pour le traitement de votre candidature.',
+                    'Amin\'ny fandefasana ity formulaire ity, ianao dia manaiky ny fampiasana ny angonao amin\'ny fanodinana ny fangatahanao.'
+                  )}
+                </p>
               </form>
             </div>
           </div>
         )}
       </div>
+
+      <style jsx global>{`
+        .quill-editor .ql-container {
+          min-height: 250px;
+          font-size: 14px;
+        }
+        .quill-editor .ql-editor {
+          min-height: 250px;
+        }
+        .quill-editor .ql-toolbar {
+          border-top-left-radius: 8px;
+          border-top-right-radius: 8px;
+          border-color: #e5e7eb;
+          background-color: #f9fafb;
+        }
+        .quill-editor .ql-container {
+          border-bottom-left-radius: 8px;
+          border-bottom-right-radius: 8px;
+          border-color: #e5e7eb;
+        }
+        .quill-editor .ql-editor p {
+          margin-bottom: 0.5rem;
+        }
+      `}</style>
     </div>
   );
 }

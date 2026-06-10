@@ -11,13 +11,10 @@ import {
 } from 'typeorm';
 import { JobApplication } from './job-application.entity';
 
-// Types simples (pas d'enums PostgreSQL pour éviter les erreurs)
-export type ContractType = 'CDI' | 'CDD' | 'STAGE' | 'BENEVOLE' | 'FREELANCE';
-export type JobStatusType = 'draft' | 'published' | 'expired' | 'closed' | 'archived';
-
 @Entity('job_offers')
 @Index(['status'])
 @Index(['deadline'])
+@Index(['is_published'])
 @Index(['contract_type'])
 export class JobOffer {
   @PrimaryGeneratedColumn('uuid')
@@ -35,10 +32,10 @@ export class JobOffer {
   @Column({ name: 'description_mg', type: 'text', nullable: true })
   description_mg: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ length: 255, nullable: true, default: 'Y-Mad Madagascar' })
   company: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ length: 255, nullable: true, default: 'Antananarivo' })
   location: string;
 
   @Column({ name: 'contract_type', length: 50, default: 'CDI' })
@@ -47,7 +44,7 @@ export class JobOffer {
   @Column({ type: 'date', nullable: true })
   deadline: Date;
 
-  @Column({ default: 'draft' })
+  @Column({ length: 50, default: 'draft' })
   status: string;
 
   @Column({ name: 'is_published', default: false })
@@ -55,6 +52,10 @@ export class JobOffer {
 
   @Column({ name: 'image_url', nullable: true })
   image_url: string;
+
+  // NOUVEAU: ID de l'image principale stockee dans database_images
+  @Column({ name: 'main_image_id', type: 'uuid', nullable: true })
+  main_image_id: string;
 
   @Column({ name: 'views_count', default: 0 })
   views_count: number;
@@ -68,13 +69,10 @@ export class JobOffer {
   @UpdateDateColumn({ name: 'updated_at' })
   updated_at: Date;
 
-  @OneToMany(() => JobApplication, (application) => application.jobOffer)
+  @OneToMany(() => JobApplication, (application) => application.jobOffer, { cascade: true })
   applications: JobApplication[];
 
-  // ============================================================
-  // MÉTHODES UTILITAIRES
-  // ============================================================
-
+  // Methodes utilitaires
   isPublished(): boolean {
     return this.is_published === true && this.status === 'published';
   }
@@ -88,13 +86,21 @@ export class JobOffer {
     return this.status === 'draft';
   }
 
+  getDaysRemaining(): number | null {
+    if (!this.deadline) return null;
+    const today = new Date();
+    const deadline = new Date(this.deadline);
+    const diff = deadline.getTime() - today.getTime();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }
+
   getStatusLabel(): string {
     const labels: Record<string, string> = {
       draft: 'Brouillon',
-      published: 'Publiée',
-      expired: 'Expirée',
-      closed: 'Fermée',
-      archived: 'Archivée'
+      published: 'Publiee',
+      expired: 'Expiree',
+      closed: 'Fermee',
+      archived: 'Archivee'
     };
     return labels[this.status] || this.status;
   }
@@ -105,33 +111,9 @@ export class JobOffer {
       CDD: 'CDD',
       STAGE: 'Stage',
       FREELANCE: 'Freelance',
-      BENEVOLE: 'Bénévolat'
+      ALTERNANCE: 'Alternance',
+      TEMPORARY: 'Temporaire'
     };
     return labels[this.contract_type] || this.contract_type;
-  }
-
-  incrementViews(): void {
-    this.views_count += 1;
-  }
-
-  incrementApplications(): void {
-    this.applications_count += 1;
-  }
-
-  publish(): void {
-    if (this.deadline && new Date(this.deadline) > new Date()) {
-      this.is_published = true;
-      this.status = 'published';
-    }
-  }
-
-  unpublish(): void {
-    this.is_published = false;
-    this.status = 'draft';
-  }
-
-  close(): void {
-    this.is_published = false;
-    this.status = 'closed';
   }
 }

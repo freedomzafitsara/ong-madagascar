@@ -1,14 +1,15 @@
-// frontend/src/components/admin/ImageUploadSection.tsx
+// frontend/src/components/admin/DatabaseImageUpload.tsx
 
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { uploadService, DatabaseImage, EntityType } from '@/services/upload.service';
-import { Loader2, Upload, Eye, Trash2 } from 'lucide-react';
+import { Loader2, Upload, Eye, Trash2, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-interface ImageUploadSectionProps {
+interface DatabaseImageUploadProps {
   onImageUpload: (image: DatabaseImage | null) => void;
+  onImageRemove?: (imageId: string) => void;
   currentImageId?: string;
   entityType: EntityType;
   entityId?: string;
@@ -17,22 +18,24 @@ interface ImageUploadSectionProps {
   label?: string;
 }
 
-export default function ImageUploadSection({ 
+export default function DatabaseImageUpload({
   onImageUpload,
+  onImageRemove,
   currentImageId,
   entityType,
   entityId,
   isMain = false,
   language = 'fr',
-  label
-}: ImageUploadSectionProps) {
+  label = 'Image'
+}: DatabaseImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [image, setImage] = useState<DatabaseImage | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [uploadSuccess, setUploadSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMounted = useRef(true);
+
+  const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
 
   useEffect(() => {
     return () => {
@@ -40,11 +43,10 @@ export default function ImageUploadSection({
     };
   }, []);
 
-  // Charger l'image si un ID est fourni
   useEffect(() => {
     if (currentImageId && !image) {
       loadImage(currentImageId);
-    } else if (entityId && isMain && !currentImageId && !image) {
+    } else if (entityId && isMain && !currentImageId) {
       loadMainImage();
     }
   }, [currentImageId, entityId, isMain]);
@@ -58,7 +60,6 @@ export default function ImageUploadSection({
         const foundImage = images.find(img => img.id === id);
         if (foundImage) {
           setImage(foundImage);
-          onImageUpload(foundImage);
         }
       }
     } catch (err) {
@@ -88,42 +89,26 @@ export default function ImageUploadSection({
     }
   };
 
-  const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
-
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setError('');
     setUploading(true);
-    setUploadSuccess(false);
 
     try {
-      const result = await uploadService.uploadImage(
-        file, 
-        entityType, 
-        entityId, 
-        isMain
-      );
-      
-      if (!isMounted.current) return;
-      
-      setImage(result);
-      onImageUpload(result);
-      setUploadSuccess(true);
-      toast.success(getText('Image uploadee avec succes', 'Nahomana ny fampidirana sary'));
-      
-      setTimeout(() => {
-        if (isMounted.current) {
-          setUploadSuccess(false);
-        }
-      }, 2000);
-      
+      const result = await uploadService.uploadImage(file, entityType, entityId, isMain);
+      if (isMounted.current) {
+        setImage(result);
+        onImageUpload(result);
+        toast.success(getText('Image uploadee avec succes', 'Nahomana ny fampidirana sary'));
+      }
     } catch (err) {
-      if (!isMounted.current) return;
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      if (isMounted.current) {
+        const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
+        setError(errorMessage);
+        toast.error(errorMessage);
+      }
     } finally {
       if (isMounted.current) {
         setUploading(false);
@@ -141,6 +126,9 @@ export default function ImageUploadSection({
       await uploadService.deleteImage(image.id);
       if (isMounted.current) {
         setImage(null);
+        if (onImageRemove) {
+          onImageRemove(image.id);
+        }
         onImageUpload(null);
         toast.success(getText('Image supprimee', 'Voafafa ny sary'));
       }
@@ -153,20 +141,29 @@ export default function ImageUploadSection({
     }
   };
 
-  const defaultLabel = isMain 
-    ? getText('Image de couverture (principale)', 'Sary fonony (lehibe)')
-    : getText('Image', 'Sary');
+  const handleSetMain = async () => {
+    if (!image || !entityId) return;
+    
+    try {
+      await uploadService.setMainImage(image.id, entityType, entityId);
+      if (isMounted.current) {
+        toast.success(getText('Image principale mise a jour', 'Sary lehibe nohavaozina'));
+        // Recharger l'image principale
+        await loadMainImage();
+      }
+    } catch (err) {
+      if (isMounted.current) {
+        const errorMessage = err instanceof Error ? err.message : 'Erreur';
+        toast.error(errorMessage);
+      }
+    }
+  };
 
   if (loading) {
     return (
-      <div className="border-b border-gray-200 pb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          {label || defaultLabel}
-        </label>
-        <div className="border rounded-xl p-4 text-center bg-gray-50">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
-          <p className="text-sm text-gray-500 mt-2">{getText('Chargement...', 'Mampiditra...')}</p>
-        </div>
+      <div className="border rounded-xl p-4 text-center">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+        <p className="text-sm text-gray-500 mt-2">{getText('Chargement...', 'Mampiditra...')}</p>
       </div>
     );
   }
@@ -176,15 +173,14 @@ export default function ImageUploadSection({
   return (
     <div className="border-b border-gray-200 pb-6">
       <label className="block text-sm font-medium text-gray-700 mb-2">
-        {label || defaultLabel}
-        {isMain && !label && <span className="ml-2 text-xs text-blue-600">({getText('Principale', 'Lehibe')})</span>}
+        {label}
+        {isMain && <span className="ml-2 text-xs text-blue-600">({getText('Principale', 'Lehibe')})</span>}
       </label>
       
       {imageUrl ? (
         <div className="relative">
           <div className="relative w-full h-48 bg-gray-100 rounded-xl border border-gray-200 overflow-hidden">
             <img 
-              key={imageUrl}
               src={imageUrl} 
               alt={image?.fileName || 'Image'} 
               className="w-full h-full object-cover"
@@ -192,7 +188,6 @@ export default function ImageUploadSection({
                 console.error('Erreur chargement image:', imageUrl);
                 e.currentTarget.src = '/images/placeholder.jpg';
               }}
-              loading="eager"
             />
           </div>
           <div className="absolute top-2 right-2 flex gap-2">
@@ -204,6 +199,16 @@ export default function ImageUploadSection({
             >
               <Eye className="w-4 h-4" />
             </button>
+            {!isMain && entityId && (
+              <button
+                type="button"
+                onClick={handleSetMain}
+                className="p-2 bg-yellow-500/80 text-white rounded-lg hover:bg-yellow-600 transition shadow-md"
+                title={getText('Definir comme principale', 'Ataovy sary lehibe')}
+              >
+                <Star className="w-4 h-4" />
+              </button>
+            )}
             <button
               type="button"
               onClick={handleRemove}
@@ -213,11 +218,6 @@ export default function ImageUploadSection({
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
-          {uploadSuccess && (
-            <div className="absolute bottom-2 right-2 px-2 py-1 bg-green-500 text-white text-xs rounded-lg">
-              {getText('Upload reussi !', 'Vita ny fampidirana !')}
-            </div>
-          )}
         </div>
       ) : (
         <label className="flex flex-col items-center justify-center w-full h-48 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 cursor-pointer hover:border-blue-400 hover:bg-gray-100 transition group">

@@ -24,9 +24,6 @@ import { Public } from '../auth/decorators/public.decorator';
 export class BlogController {
   constructor(private readonly blogService: BlogService) {}
 
-  // ============================================================
-  // CRÉER UN ARTICLE (Admin uniquement)
-  // ============================================================
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin', 'admin')
@@ -34,9 +31,6 @@ export class BlogController {
     return this.blogService.create(createDto, req.user.id);
   }
 
-  // ============================================================
-  // LISTER TOUS LES ARTICLES (Admin)
-  // ============================================================
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin', 'admin')
@@ -44,6 +38,7 @@ export class BlogController {
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
     @Query('status') status?: string,
+    @Query('type') type?: string,
     @Query('category_id') category_id?: string,
     @Query('search') search?: string,
   ) {
@@ -52,15 +47,13 @@ export class BlogController {
       parseInt(limit), 
       {
         status,
+        type,
         category_id,
         search,
       }
     );
   }
 
-  // ============================================================
-  // LISTER LES ARTICLES PUBLIÉS (Public)
-  // ============================================================
   @Get('public')
   @Public()
   async findPublic(
@@ -70,9 +63,6 @@ export class BlogController {
     return this.blogService.findPublic(parseInt(page), parseInt(limit));
   }
 
-  // ============================================================
-  // STATISTIQUES (Admin)
-  // ============================================================
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin', 'admin')
@@ -80,9 +70,6 @@ export class BlogController {
     return this.blogService.getStats();
   }
 
-  // ============================================================
-  // TROUVER UN ARTICLE PAR ID (Admin)
-  // ============================================================
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin', 'admin')
@@ -90,27 +77,18 @@ export class BlogController {
     return this.blogService.findOne(id);
   }
 
-  // ============================================================
-  // TROUVER UN ARTICLE PAR SLUG (Public)
-  // ============================================================
   @Get('public/slug/:slug')
   @Public()
   async findBySlug(@Param('slug') slug: string) {
     return this.blogService.findBySlug(slug);
   }
 
-  // ============================================================
-  // TROUVER UN ARTICLE PUBLIC PAR ID (Public)
-  // ============================================================
   @Get('public/:id')
   @Public()
   async findOnePublic(@Param('id') id: string) {
     return this.blogService.findOne(id);
   }
 
-  // ============================================================
-  // METTRE À JOUR UN ARTICLE (Admin)
-  // ============================================================
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin', 'admin')
@@ -126,9 +104,13 @@ export class BlogController {
     return this.blogService.update(id, cleanedDto as UpdateBlogPostDto, req.user.id);
   }
 
-  // ============================================================
-  // PUBLIER UN ARTICLE (Admin)
-  // ============================================================
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('super_admin', 'admin')
+  async updateStatus(@Param('id') id: string, @Body('status') status: string) {
+    return this.blogService.updateStatus(id, status);
+  }
+
   @Patch(':id/publish')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin', 'admin')
@@ -136,9 +118,6 @@ export class BlogController {
     return this.blogService.publish(id);
   }
 
-  // ============================================================
-  // DÉPUBLIER UN ARTICLE (Admin)
-  // ============================================================
   @Patch(':id/unpublish')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin', 'admin')
@@ -146,9 +125,6 @@ export class BlogController {
     return this.blogService.unpublish(id);
   }
 
-  // ============================================================
-  // SUPPRIMER UN ARTICLE (Super Admin uniquement)
-  // ============================================================
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin')

@@ -1,39 +1,31 @@
-﻿import api from "@/lib/axios";
+﻿// frontend/src/services/job.service.ts
 
-// ============================================================
-// TYPES ET ÉNUMÉRATIONS
-// ============================================================
+import api from '@/lib/api';
 
 export enum JobStatus {
-  DRAFT = "draft",
-  PUBLISHED = "published",
-  CLOSED = "closed",
-  EXPIRED = "expired",
-  ARCHIVED = "archived"
+  DRAFT = 'draft',
+  PUBLISHED = 'published',
+  CLOSED = 'closed',
+  EXPIRED = 'expired',
+  ARCHIVED = 'archived'
 }
 
 export enum ContractType {
-  CDI = "CDI",
-  CDD = "CDD",
-  STAGE = "STAGE",
-  FREELANCE = "FREELANCE",
-  ALTERNANCE = "ALTERNANCE",
-  TEMPORARY = "TEMPORARY"
+  CDI = 'CDI',
+  CDD = 'CDD',
+  STAGE = 'STAGE',
+  FREELANCE = 'FREELANCE',
+  ALTERNANCE = 'ALTERNANCE',
+  TEMPORARY = 'TEMPORARY'
 }
 
 export enum ApplicationStatus {
-  SUBMITTED = "submitted",
-  REVIEWING = "reviewing",
-  SHORTLISTED = "shortlisted",
-  INTERVIEW = "interview",
-  ACCEPTED = "accepted",
-  REJECTED = "rejected",
-  WITHDRAWN = "withdrawn"
+  SUBMITTED = 'submitted',
+  REVIEWING = 'reviewing',
+  SHORTLISTED = 'shortlisted',
+  ACCEPTED = 'accepted',
+  REJECTED = 'rejected'
 }
-
-// ============================================================
-// INTERFACES PRINCIPALES
-// ============================================================
 
 export interface JobOffer {
   id: string;
@@ -52,19 +44,55 @@ export interface JobOffer {
   applications_count: number;
   created_at: string;
   updated_at: string;
+  main_image_id?: string;
 }
 
-export interface CreateJobOfferDto {
-  title_fr: string;
-  title_mg?: string;
-  description_fr: string;
-  description_mg?: string;
-  company?: string;
-  location?: string;
-  contract_type?: ContractType;
-  deadline?: string;
-  is_published?: boolean;
-  image_url?: string;
+export interface JobApplication {
+  id: string;
+  job_offer_id: string;
+  user_id?: string;
+  full_name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  experience_years?: number;
+  current_position?: string;
+  current_company?: string;
+  cv_url?: string;
+  cover_letter?: string;
+  cover_letter_url?: string;
+  photo_url?: string;
+  linkedin_url?: string;
+  portfolio_url?: string;
+  status: string;
+  notes?: string;
+  created_at: string;
+  jobOffer?: JobOffer;
+}
+
+export interface CreateJobApplicationDto {
+  job_offer_id: string;
+  full_name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  experience_years?: number;
+  current_position?: string;
+  current_company?: string;
+  cv_url?: string;
+  cover_letter?: string;
+  cover_letter_url?: string;
+  photo_url?: string;
+  linkedin_url?: string;
+  portfolio_url?: string;
+  diploma_url?: string;
+  attestation_url?: string;
+  experience?: string;
+}
+
+export interface UpdateApplicationStatusDto {
+  status: ApplicationStatus;
+  notes?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -75,10 +103,6 @@ export interface PaginatedResponse<T> {
   limit: number;
 }
 
-// ============================================================
-// STATISTIQUES (VERSION COMPLÈTE)
-// ============================================================
-
 export interface JobOfferStats {
   total: number;
   published: number;
@@ -88,19 +112,10 @@ export interface JobOfferStats {
   archived: number;
   total_applications: number;
   pending_applications: number;
-  totalApplications: number;
-  pendingApplications: number;
 }
 
-// ============================================================
-// SERVICE
-// ============================================================
-
 export const jobService = {
-  // ============================================================
-  // OFFRES PUBLIQUES
-  // ============================================================
-
+  // Routes publiques
   async getPublishedOffers(params?: { page?: number; limit?: number; contract_type?: ContractType; search?: string }): Promise<PaginatedResponse<JobOffer>> {
     const response = await api.get("/jobs/offers/public", { params });
     return response.data;
@@ -116,21 +131,18 @@ export const jobService = {
     return response.data;
   },
 
-  // ============================================================
-  // ADMINISTRATION
-  // ============================================================
-
+  // Routes Admin
   async getAllOffers(params?: { page?: number; limit?: number; status?: string; contract_type?: string; search?: string }): Promise<PaginatedResponse<JobOffer>> {
     const response = await api.get("/jobs/offers", { params });
     return response.data;
   },
 
-  async createOffer(data: CreateJobOfferDto): Promise<JobOffer> {
+  async createOffer(data: Partial<JobOffer>): Promise<JobOffer> {
     const response = await api.post("/jobs/offers", data);
     return response.data;
   },
 
-  async updateOffer(id: string, data: Partial<CreateJobOfferDto>): Promise<JobOffer> {
+  async updateOffer(id: string, data: Partial<JobOffer>): Promise<JobOffer> {
     const response = await api.patch(`/jobs/offers/${id}`, data);
     return response.data;
   },
@@ -145,15 +157,10 @@ export const jobService = {
     return response.data;
   },
 
-  // ============================================================
-  // STATISTIQUES (VERSION COMPLÈTE AVEC NORMALISATION)
-  // ============================================================
-
+  // Statistiques
   async getJobStats(): Promise<JobOfferStats> {
     const response = await api.get("/jobs/offers/stats");
     const data = response.data;
-    
-    // Normalisation des données pour gérer les deux formats
     return {
       total: data.total || 0,
       published: data.published || 0,
@@ -163,26 +170,21 @@ export const jobService = {
       archived: data.archived || 0,
       total_applications: data.total_applications || data.totalApplications || 0,
       pending_applications: data.pending_applications || data.pendingApplications || 0,
-      totalApplications: data.total_applications || data.totalApplications || 0,
-      pendingApplications: data.pending_applications || data.pendingApplications || 0,
     };
   },
 
-  // ============================================================
-  // CANDIDATURES
-  // ============================================================
-
+  // Candidatures
   async apply(data: CreateJobApplicationDto): Promise<JobApplication> {
     const response = await api.post("/jobs/apply", data);
     return response.data;
   },
 
-  async getAllApplications(params?: { page?: number; limit?: number; status?: ApplicationStatus; job_offer_id?: string }): Promise<PaginatedResponse<JobApplication>> {
+  async getAllApplications(params?: { page?: number; limit?: number; status?: string; job_offer_id?: string }): Promise<PaginatedResponse<JobApplication>> {
     const response = await api.get("/jobs/applications", { params });
     return response.data;
   },
 
-  async getApplicationsByJob(jobId: string, params?: { page?: number; limit?: number; status?: ApplicationStatus }): Promise<PaginatedResponse<JobApplication>> {
+  async getApplicationsByJob(jobId: string, params?: { page?: number; limit?: number; status?: string }): Promise<PaginatedResponse<JobApplication>> {
     const response = await api.get(`/jobs/offers/${jobId}/applications`, { params });
     return response.data;
   },
@@ -197,80 +199,16 @@ export const jobService = {
     return response.data;
   },
 
-  async getApplicationStats(): Promise<ApplicationStats> {
+  async getApplicationStats(): Promise<any> {
     const response = await api.get("/jobs/applications/stats");
     return response.data;
   },
 
-  // ============================================================
-  // EXPORT
-  // ============================================================
-
+  // Export
   async exportApplications(jobId?: string): Promise<string> {
     const response = await api.get("/jobs/applications/export", { params: { jobId } });
     return response.data;
   }
 };
-
-// ============================================================
-// INTERFACES SUPPLÉMENTAIRES
-// ============================================================
-
-export interface JobApplication {
-  id: string;
-  job_offer_id: string;
-  user_id?: string;
-  full_name: string;
-  email: string;
-  phone?: string;
-  address?: string;
-  experience?: string;
-  experience_years?: number;
-  cover_letter?: string;
-  cv_url?: string;
-  diploma_url?: string;
-  attestation_url?: string;
-  photo_url?: string;
-  status: ApplicationStatus;
-  notes?: string;
-  applied_at: string;
-  created_at: string;
-  updated_at: string;
-  jobOffer?: JobOffer;
-}
-
-export interface CreateJobApplicationDto {
-  job_offer_id: string;
-  full_name: string;
-  email: string;
-  phone?: string;
-  address?: string;
-  experience?: string;
-  experience_years?: number;
-  cover_letter?: string;
-  cv_url: string;
-  diploma_url?: string;
-  attestation_url?: string;
-  photo_url?: string;
-}
-
-export interface UpdateApplicationStatusDto {
-  status: ApplicationStatus;
-  notes?: string;
-  rejection_reason?: string;
-  interview_date?: string;
-  score?: number;
-}
-
-export interface ApplicationStats {
-  total: number;
-  submitted: number;
-  reviewing: number;
-  shortlisted: number;
-  interview: number;
-  accepted: number;
-  rejected: number;
-  withdrawn: number;
-}
 
 export default jobService;

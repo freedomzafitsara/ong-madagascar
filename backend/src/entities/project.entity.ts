@@ -13,6 +13,7 @@ export type ProjectStatus = 'active' | 'completed' | 'planning' | 'draft';
 
 @Entity('projects')
 @Index(['status'])
+@Index(['region'])
 export class Project {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -32,11 +33,39 @@ export class Project {
   @Column({ nullable: true })
   location: string;
 
+  // AJOUTER CETTE COLONNE
+  @Column({ nullable: true })
+  region: string;
+
   @Column({ default: 'planning' })
   status: string;
 
+  @Column({ type: 'int', default: 0 })
+  budget: number;
+
+  @Column({ type: 'int', default: 0 })
+  spent: number;
+
+  @Column({ name: 'beneficiaries_count', type: 'int', default: 0 })
+  beneficiaries_count: number;
+
+  @Column({ name: 'youth_impact', type: 'int', default: 0 })
+  youth_impact: number;
+
+  @Column({ name: 'jobs_created', type: 'int', default: 0 })
+  jobs_created: number;
+
+  @Column({ type: 'int', default: 0 })
+  progress: number;
+
   @Column({ name: 'start_date', type: 'date', nullable: true })
   start_date: Date;
+
+  @Column({ name: 'end_date', type: 'date', nullable: true })
+  end_date: Date;
+
+  @Column({ name: 'is_featured', type: 'boolean', default: false })
+  is_featured: boolean;
 
   @Column({ name: 'image_url', nullable: true })
   image_url: string;

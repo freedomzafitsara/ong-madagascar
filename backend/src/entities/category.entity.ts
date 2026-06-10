@@ -4,10 +4,9 @@ import {
   Entity, 
   Column, 
   PrimaryGeneratedColumn, 
-  CreateDateColumn, 
+  CreateDateColumn,
   OneToMany 
 } from 'typeorm';
-import { BlogPost } from './blog-post.entity';
 
 @Entity('categories')
 export class Category {
@@ -26,6 +25,7 @@ export class Category {
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 
-  @OneToMany(() => BlogPost, (post) => post.category)
-  posts: BlogPost[];
+  // Utiliser une fonction fléchée pour éviter l'import circulaire
+  @OneToMany('BlogPost', (post: any) => post.category)
+  posts: any[];
 }

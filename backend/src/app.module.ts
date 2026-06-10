@@ -23,6 +23,8 @@ import { Contact } from './modules/contact/entities/contact.entity';
 import { Translation } from './modules/language/entities/translation.entity';
 import { UploadedFile } from './entities/uploaded-file.entity';
 import { Category } from './entities/category.entity';
+import { DatabaseImage } from './entities/database-image.entity';
+
 
 @Module({
   imports: [
@@ -51,6 +53,7 @@ import { Category } from './entities/category.entity';
           Translation,
           UploadedFile,
           Category,
+          DatabaseImage,
         ],
         synchronize: false,
         logging: process.env.NODE_ENV !== 'production',

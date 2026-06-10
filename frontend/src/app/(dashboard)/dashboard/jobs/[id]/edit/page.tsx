@@ -1,201 +1,185 @@
+// frontend/src/app/(dashboard)/dashboard/jobs/[id]/edit/page.tsx
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { jobService, JobOffer, ContractType, JobStatus } from '@/services/job.service';
-import { uploadService } from '@/services/upload.service';
+import { uploadService, DatabaseImage } from '@/services/upload.service';
+import dynamic from 'next/dynamic';
 import { 
   ArrowLeft, Save, Loader2, AlertCircle, CheckCircle,
   Building, MapPin, Briefcase, Calendar,
-  FileText, Users, Eye, XCircle, Clock, Star, X,
-  Upload, Trash2, Globe
+  FileText, Eye, XCircle, Clock, X,
+  Upload, Trash2, Globe, 
+  GraduationCap, Target
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// ============================================================
-// CONFIGURATION
-// ============================================================
+// Chargement dynamique de l'editeur
+const RichTextEditor = dynamic(
+  () => import('@/components/admin/RichTextEditor').then(mod => mod.RichTextEditor),
+  { ssr: false, loading: () => <div className="h-64 bg-gray-100 animate-pulse rounded-lg" /> }
+);
 
-const CONTRACT_TYPES: { value: ContractType; label: string }[] = [
-  { value: ContractType.CDI, label: 'CDI' },
-  { value: ContractType.CDD, label: 'CDD' },
-  { value: ContractType.STAGE, label: 'Stage' },
-  { value: ContractType.FREELANCE, label: 'Freelance' },
-  { value: ContractType.ALTERNANCE, label: 'Alternance' },
-  { value: ContractType.TEMPORARY, label: 'Temporaire' },
+// Types
+type StatusColor = 'green' | 'red' | 'orange' | 'purple' | 'gray' | 'blue';
+
+// Configuration des couleurs pour les statuts
+const STATUS_COLORS: Record<StatusColor, string> = {
+  green: 'bg-green-50 border-green-200 text-green-700',
+  red: 'bg-red-50 border-red-200 text-red-700',
+  orange: 'bg-orange-50 border-orange-200 text-orange-700',
+  purple: 'bg-purple-50 border-purple-200 text-purple-700',
+  gray: 'bg-gray-50 border-gray-200 text-gray-700',
+  blue: 'bg-blue-50 border-blue-200 text-blue-700',
+};
+
+// Configuration des types de contrat
+const CONTRACT_TYPES: { value: ContractType; label: string; color: StatusColor }[] = [
+  { value: ContractType.CDI, label: 'CDI', color: 'blue' },
+  { value: ContractType.CDD, label: 'CDD', color: 'cyan' as StatusColor },
+  { value: ContractType.STAGE, label: 'Stage', color: 'green' },
+  { value: ContractType.FREELANCE, label: 'Freelance', color: 'purple' },
+  { value: ContractType.ALTERNANCE, label: 'Alternance', color: 'orange' },
+  { value: ContractType.TEMPORARY, label: 'Temporaire', color: 'gray' },
 ];
 
+// Configuration des statuts
 const STATUS_OPTIONS = [
-  { value: JobStatus.DRAFT, label: 'Brouillon' },
-  { value: JobStatus.PUBLISHED, label: 'Publié' },
-  { value: JobStatus.CLOSED, label: 'Fermé' },
-  { value: JobStatus.EXPIRED, label: 'Expiré' },
-  { value: JobStatus.ARCHIVED, label: 'Archivé' },
+  { value: JobStatus.PUBLISHED, label: 'Publie', labelMg: 'Navoaka', color: 'green' as StatusColor, icon: CheckCircle },
+  { value: JobStatus.DRAFT, label: 'Brouillon', labelMg: 'Volavola', color: 'gray' as StatusColor, icon: FileText },
+  { value: JobStatus.CLOSED, label: 'Ferme', labelMg: 'Nakatona', color: 'red' as StatusColor, icon: XCircle },
+  { value: JobStatus.EXPIRED, label: 'Expire', labelMg: 'Lany daty', color: 'orange' as StatusColor, icon: Clock },
+  { value: JobStatus.ARCHIVED, label: 'Archive', labelMg: 'Voatahiry', color: 'purple' as StatusColor, icon: ArchiveIcon },
 ];
 
-// ============================================================
-// COMPOSANT D'UPLOAD D'IMAGE
-// ============================================================
-
-function ImageUploadSection({ onImageUpload, currentImageUrl }: { 
-  onImageUpload: (url: string) => void; 
-  currentImageUrl: string;
-}) {
-  const [uploading, setUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState(currentImageUrl);
-  const [error, setError] = useState('');
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setError('');
-    setUploading(true);
-    
-    const localPreview = URL.createObjectURL(file);
-    setPreviewUrl(localPreview);
-
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-    if (!validTypes.includes(file.type)) {
-      setError('Format non supporte (JPG, PNG, WEBP, GIF)');
-      setPreviewUrl(currentImageUrl);
-      setUploading(false);
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image trop grande (max 5 Mo)');
-      setPreviewUrl(currentImageUrl);
-      setUploading(false);
-      return;
-    }
-
-    try {
-      const url = await uploadService.uploadImage(file);
-      setPreviewUrl(url);
-      onImageUpload(url);
-      toast.success('Image uploadee avec succes');
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'upload');
-      setPreviewUrl(currentImageUrl);
-      toast.error(err.message || 'Erreur lors de l\'upload');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleRemove = () => {
-    setPreviewUrl('');
-    onImageUpload('');
-    toast.success('Image supprimee');
-  };
-
+// Composant icone archive
+function ArchiveIcon(props: any) {
   return (
-    <div className="border-b border-gray-200 pb-6 mb-6">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        Image de couverture
-      </label>
-      
-      {previewUrl ? (
-        <div className="relative">
-          <div className="w-full h-48 bg-gray-100 rounded-xl border border-gray-200 overflow-hidden relative">
-            <Image src={previewUrl} alt="Apercu" fill className="object-cover" />
-          </div>
-          <div className="absolute top-2 right-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => window.open(previewUrl, '_blank')}
-              className="p-2 bg-white/90 text-gray-700 rounded-lg hover:bg-white transition shadow-md"
-              title="Voir l'image"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleRemove}
-              className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-md"
-              title="Supprimer l'image"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="5" x="2" y="3" rx="1" />
+      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+      <path d="M10 12h4" />
+    </svg>
+  );
+}
+
+// Composant carte de statut
+interface StatusCardProps {
+  status: string;
+  count: number;
+  icon: React.ElementType;
+  color: StatusColor;
+  onClick?: () => void;
+}
+
+function StatusCard({ status, count, icon: Icon, color, onClick }: StatusCardProps) {
+  const colorClass = STATUS_COLORS[color] || STATUS_COLORS.gray;
+  
+  return (
+    <div 
+      onClick={onClick}
+      className={`rounded-xl border p-4 transition-all hover:shadow-md cursor-pointer ${colorClass}`}
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-2xl font-bold">{count}</p>
+          <p className="text-xs font-medium mt-0.5">{status}</p>
         </div>
-      ) : (
-        <label className="flex flex-col items-center justify-center w-full h-48 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 cursor-pointer hover:border-blue-400 hover:bg-gray-100 transition group">
-          <div className="flex flex-col items-center justify-center">
-            {uploading ? (
-              <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-2" />
-            ) : (
-              <>
-                <Upload className="w-10 h-10 text-gray-400 group-hover:text-blue-500 transition mb-2" />
-                <p className="text-sm text-gray-500">Cliquez pour uploader une image</p>
-                <p className="text-xs text-gray-400 mt-1">JPG, PNG, WEBP, GIF (max 5 Mo)</p>
-              </>
-            )}
-          </div>
-          <input 
-            type="file" 
-            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" 
-            onChange={handleFileSelect} 
-            className="hidden" 
-            disabled={uploading} 
-          />
-        </label>
-      )}
-      
-      {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+        <div className="w-10 h-10 bg-white/50 rounded-lg flex items-center justify-center">
+          <Icon className="w-5 h-5" />
+        </div>
+      </div>
     </div>
   );
 }
 
-// ============================================================
-// COMPOSANT PRINCIPAL
-// ============================================================
+// Section de formulaire
+interface FormSectionProps {
+  title: string;
+  icon: React.ElementType;
+  children: React.ReactNode;
+  className?: string;
+}
 
+function FormSection({ title, icon: Icon, children, className = '' }: FormSectionProps) {
+  return (
+    <div className={`border-b border-gray-200 pb-6 mb-6 last:border-b-0 ${className}`}>
+      <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+          <Icon className="w-4 h-4 text-blue-600" />
+        </div>
+        {title}
+      </h2>
+      <div className="pl-0 md:pl-10">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Composant principal
 export default function EditJobPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, token, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { language } = useLanguage();
   const [job, setJob] = useState<JobOffer | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-
+  const [uploadedImage, setUploadedImage] = useState<DatabaseImage | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'description' | 'publication'>('general');
+  
+  const hasFetched = useRef(false);
   const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin';
   const isSuperAdmin = user?.role === 'super_admin';
+  const jobId = params.id as string;
 
-  const t = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+  const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+
+  const fetchJob = useCallback(async () => {
+    if (!jobId) return;
+    setLoading(true);
+    try {
+      const response = await jobService.getOfferById(jobId);
+      setJob(response);
+      if (response.main_image_id) {
+        try {
+          const images = await uploadService.getImages('job', jobId);
+          const mainImage = images.find(img => img.id === response.main_image_id);
+          if (mainImage) setUploadedImage(mainImage);
+        } catch (err) {
+          console.error('Erreur chargement image:', err);
+        }
+      }
+      setError('');
+    } catch (err) {
+      const errorObj = err as { response?: { data?: { message?: string } }; message?: string };
+      const errorMsg = errorObj.response?.data?.message || errorObj.message || getText('Offre non trouvee', 'Tsy hita ny asa');
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  }, [jobId, getText]);
 
   useEffect(() => {
     if (!isAuthenticated || !hasEditRights) {
       router.push('/dashboard/jobs');
       return;
     }
-    fetchJob();
-  }, [params.id, isAuthenticated]);
-
-  const fetchJob = async () => {
-    setLoading(true);
-    try {
-      const response = await jobService.getOfferById(params.id as string);
-      setJob(response);
-      setImageUrl(response.image_url || '');
-      setError('');
-    } catch (error: any) {
-      console.error('Erreur:', error);
-      setError(error.message || t('Offre non trouvée', 'Tsy hita ny asa'));
-      toast.error(error.message || t('Erreur de chargement', 'Nisy hadisoana'));
-    } finally {
-      setLoading(false);
+    if (!hasFetched.current && jobId) {
+      hasFetched.current = true;
+      fetchJob();
     }
-  };
+  }, [isAuthenticated, hasEditRights, router, jobId, fetchJob]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     if (!job) return;
@@ -208,81 +192,99 @@ export default function EditJobPage() {
     }
   };
 
+  const handleImageUpload = async (file: File) => {
+    if (!job) return;
+    setUploadingImage(true);
+    try {
+      const image = await uploadService.uploadImage(file, 'job', job.id, true);
+      setUploadedImage(image);
+      await jobService.updateOffer(job.id, { image_url: image.url });
+      toast.success(getText('Image uploadee avec succes', 'Nahomana ny fampidirana sary'));
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
+      toast.error(errorMessage);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    if (!uploadedImage || !job) return;
+    try {
+      await uploadService.deleteImage(uploadedImage.id);
+      setUploadedImage(null);
+      await jobService.updateOffer(job.id, { image_url: undefined });
+      toast.success(getText('Image supprimee', 'Voafafa ny sary'));
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la suppression';
+      toast.error(errorMessage);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!job) return;
-    
     setSaving(true);
     setError('');
     setSuccess('');
 
     try {
-      const updateData = {
+      const updateData: Partial<JobOffer> = {
         title_fr: job.title_fr,
-        title_mg: job.title_mg,
         description_fr: job.description_fr,
-        description_mg: job.description_mg,
-        company: job.company,
-        location: job.location,
-        contract_type: job.contract_type,
-        deadline: job.deadline,
-        is_published: job.is_published,
-        image_url: imageUrl || undefined,
       };
+      if (job.title_mg) updateData.title_mg = job.title_mg;
+      if (job.description_mg) updateData.description_mg = job.description_mg;
+      if (job.company) updateData.company = job.company;
+      if (job.location) updateData.location = job.location;
+      if (job.contract_type) updateData.contract_type = job.contract_type;
+      if (job.deadline) updateData.deadline = job.deadline;
+      if (uploadedImage) updateData.image_url = uploadedImage.url;
+      updateData.is_published = job.is_published;
 
       await jobService.updateOffer(job.id, updateData);
-      
-      setSuccess(t('Offre mise à jour avec succès !', 'Vita ny fanovana ny asa!'));
-      toast.success(t('Offre mise à jour', 'Vita ny fanovana'));
-      setTimeout(() => {
-        router.push(`/dashboard/jobs/${job.id}`);
-      }, 1500);
-    } catch (error: any) {
-      console.error('Erreur:', error);
-      setError(error.response?.data?.message || t('Erreur lors de la mise à jour', 'Nisy hadisoana tamin\'ny fanovana'));
-      toast.error(error.response?.data?.message || t('Erreur', 'Nisy hadisoana'));
+      setSuccess(getText('Offre mise a jour avec succes !', 'Vita ny fanovana ny asa!'));
+      toast.success(getText('Offre mise a jour', 'Vita ny fanovana'));
+      setTimeout(() => router.push(`/dashboard/jobs/${job.id}`), 1500);
+    } catch (err) {
+      const errorObj = err as { response?: { data?: { message?: string } }; message?: string };
+      const errorMsg = errorObj.response?.data?.message || errorObj.message || getText('Erreur lors de la mise a jour', 'Nisy hadisoana');
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setSaving(false);
     }
   };
 
   const getStatusBadge = (status: JobStatus) => {
-    const config: Record<JobStatus, { fr: string; mg: string; className: string }> = {
-      [JobStatus.PUBLISHED]: { fr: 'Publiée', mg: 'Navoaka', className: 'bg-green-100 text-green-700' },
-      [JobStatus.DRAFT]: { fr: 'Brouillon', mg: 'Volavola', className: 'bg-gray-100 text-gray-600' },
-      [JobStatus.CLOSED]: { fr: 'Fermée', mg: 'Nakatona', className: 'bg-red-100 text-red-700' },
-      [JobStatus.EXPIRED]: { fr: 'Expirée', mg: 'Lany daty', className: 'bg-orange-100 text-orange-700' },
-      [JobStatus.ARCHIVED]: { fr: 'Archivée', mg: 'Voatahiry', className: 'bg-purple-100 text-purple-700' }
+    const config: Record<JobStatus, { fr: string; mg: string; className: string; icon: React.ElementType }> = {
+      [JobStatus.PUBLISHED]: { fr: 'Publiee', mg: 'Navoaka', className: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle },
+      [JobStatus.DRAFT]: { fr: 'Brouillon', mg: 'Volavola', className: 'bg-gray-100 text-gray-600 border-gray-200', icon: FileText },
+      [JobStatus.CLOSED]: { fr: 'Fermee', mg: 'Nakatona', className: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
+      [JobStatus.EXPIRED]: { fr: 'Expiree', mg: 'Lany daty', className: 'bg-orange-100 text-orange-700 border-orange-200', icon: Clock },
+      [JobStatus.ARCHIVED]: { fr: 'Archivee', mg: 'Voatahiry', className: 'bg-purple-100 text-purple-700 border-purple-200', icon: ArchiveIcon }
     };
     const badge = config[status];
     if (!badge) return <span className="px-2 py-1 text-xs rounded-full bg-gray-100">{status}</span>;
+    const Icon = badge.icon;
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${badge.className}`}>
+      <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border ${badge.className}`}>
+        <Icon className="w-3 h-3" />
         {language === 'fr' ? badge.fr : badge.mg}
       </span>
     );
   };
 
-  const getContractLabel = (type?: ContractType): string => {
-    const labels: Record<ContractType, string> = {
-      [ContractType.CDI]: 'CDI',
-      [ContractType.CDD]: 'CDD',
-      [ContractType.STAGE]: t('Stage', 'Fiofanana'),
-      [ContractType.FREELANCE]: 'Freelance',
-      [ContractType.ALTERNANCE]: t('Alternance', 'Fiofanana mifandimby'),
-      [ContractType.TEMPORARY]: t('Temporaire', 'Vonjimaika')
-    };
-    return type ? labels[type] : '';
-  };
+  const imageUrl = uploadedImage ? uploadService.getImageUrl(uploadedImage.id) : null;
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-gray-200 rounded-full"></div>
-          <div className="absolute top-0 left-0 w-16 h-16 border-4 border-blue-600 rounded-full animate-spin border-t-transparent"></div>
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
+          <div className="absolute inset-0 border-4 border-blue-600 rounded-full animate-spin border-t-transparent"></div>
         </div>
-        <p className="text-gray-500 font-medium">{t('Chargement...', 'Mampiditra...')}</p>
+        <p className="text-gray-500 font-medium">{getText('Chargement...', 'Mampiditra...')}</p>
       </div>
     );
   }
@@ -293,10 +295,10 @@ export default function EditJobPage() {
         <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-12 h-12 text-gray-400" />
         </div>
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">{t('Offre non trouvée', 'Tsy hita ny asa')}</h3>
+        <h3 className="text-xl font-semibold text-gray-700 mb-2">{getText('Offre non trouvee', 'Tsy hita ny asa')}</h3>
         <p className="text-gray-500 mb-6">{error}</p>
         <Link href="/dashboard/jobs" className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm">
-          {t('Retour aux offres', 'Hiverina any amin\'ny asa')}
+          {getText('Retour aux offres', 'Hiverina any amin\'ny asa')}
         </Link>
       </div>
     );
@@ -305,28 +307,35 @@ export default function EditJobPage() {
   if (!job) return null;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* En-tête */}
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* En-tete */}
       <div>
-        <Link href={`/dashboard/jobs/${params.id}`} className="inline-flex items-center text-gray-500 hover:text-blue-600 transition mb-2">
-          <ArrowLeft className="w-4 h-4 mr-1" /> {t('Retour', 'Hiverina')}
+        <Link href={`/dashboard/jobs/${jobId}`} className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-blue-600 transition mb-3">
+          <ArrowLeft className="w-4 h-4" /> {getText('Retour au detail', 'Hiverina any amin\'ny antsipirihany')}
         </Link>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm">
-                <Briefcase className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">{t('Modifier l\'offre', 'Hanova ny asa')}</h1>
-                <p className="text-gray-500 text-sm">{t('Modifiez les informations de l\'offre', 'Hanova ny fampahalalana momba ny asa')}</p>
-              </div>
-              {isSuperAdmin && (
-                <span className="ml-2 px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">Super Admin</span>
-              )}
+        
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-md">
+              <Briefcase className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
+                {getText('Modifier l\'offre', 'Hanova ny asa')}
+              </h1>
+              <p className="text-gray-500 text-sm">
+                {getText('Modifiez les informations de l\'offre d\'emploi', 'Hanova ny fampahalalana momba ny asa')}
+              </p>
             </div>
           </div>
-          <div>{getStatusBadge(job.status)}</div>
+          <div className="flex items-center gap-3">
+            {getStatusBadge(job.status)}
+            {isSuperAdmin && (
+              <span className="px-2 py-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs rounded-full shadow-sm">
+                Super Admin
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -344,225 +353,390 @@ export default function EditJobPage() {
         </div>
       )}
 
+      {/* Onglets */}
+      <div className="flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('general')}
+          className={`px-5 py-2.5 text-sm font-medium transition-all rounded-t-lg flex items-center gap-2 ${
+            activeTab === 'general' 
+              ? 'bg-white text-blue-600 border-b-2 border-blue-600' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          {getText('General', 'Ankapobeny')}
+        </button>
+        <button
+          onClick={() => setActiveTab('description')}
+          className={`px-5 py-2.5 text-sm font-medium transition-all rounded-t-lg flex items-center gap-2 ${
+            activeTab === 'description' 
+              ? 'bg-white text-blue-600 border-b-2 border-blue-600' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          {getText('Description', 'Famaritana')}
+        </button>
+        <button
+          onClick={() => setActiveTab('publication')}
+          className={`px-5 py-2.5 text-sm font-medium transition-all rounded-t-lg flex items-center gap-2 ${
+            activeTab === 'publication' 
+              ? 'bg-white text-blue-600 border-b-2 border-blue-600' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Globe className="w-4 h-4" />
+          {getText('Publication', 'Famoahana')}
+        </button>
+      </div>
+
       {/* Formulaire */}
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 space-y-6">
           
           {/* Upload Image */}
-          <ImageUploadSection onImageUpload={setImageUrl} currentImageUrl={imageUrl} />
+          <div className="border-b border-gray-200 pb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getText('Image de couverture', 'Sary fonony')}
+              <span className="text-xs text-gray-400 ml-2">
+                {getText('(Format recommande 1200x630px)', '(Endrika atolotra 1200x630px)')}
+              </span>
+            </label>
+            
+            {imageUrl ? (
+              <div className="relative">
+                <div className="relative w-full h-56 bg-gray-100 rounded-xl border border-gray-200 overflow-hidden">
+                  <img 
+                    src={imageUrl} 
+                    alt="Apercu" 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.error('Erreur chargement image:', imageUrl);
+                      e.currentTarget.src = '/images/placeholder-job.jpg';
+                    }}
+                  />
+                </div>
+                <div className="absolute top-3 right-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.open(imageUrl, '_blank')}
+                    className="p-2 bg-white/90 text-gray-700 rounded-lg hover:bg-white transition shadow-md"
+                    title={getText('Voir', 'Hijery')}
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-md"
+                    title={getText('Supprimer', 'Hamafa')}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center w-full h-56 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 cursor-pointer hover:border-blue-400 hover:bg-gray-100 transition group">
+                <div className="flex flex-col items-center justify-center p-4">
+                  {uploadingImage ? (
+                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-3" />
+                  ) : (
+                    <>
+                      <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-3 group-hover:bg-blue-100 transition">
+                        <Upload className="w-8 h-8 text-blue-500" />
+                      </div>
+                      <p className="text-base font-medium text-gray-600 text-center">
+                        {getText('Glissez ou cliquez pour uploader', 'Tsindrio na alefaso ny sary')}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1 text-center">
+                        {getText('JPG, PNG, WEBP, GIF (max 5 Mo)', 'JPG, PNG, WEBP, GIF (farany 5 Mo)')}
+                      </p>
+                    </>
+                  )}
+                </div>
+                <input 
+                  type="file" 
+                  accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" 
+                  onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
+                  className="hidden" 
+                  disabled={uploadingImage} 
+                />
+              </label>
+            )}
+          </div>
           
-          {/* Section Informations générales */}
-          <div className="border-b border-gray-200 pb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" /> {t('Informations générales', 'Fampahalalana ankapobeny')}
-            </h2>
-            <div className="grid grid-cols-1 gap-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('Titre du poste (français)', 'Lohateny (frantsay)')} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="title_fr"
-                  required
-                  value={job.title_fr || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  placeholder="Ex: Coordinateur de projet"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('Titre (malagasy)', 'Lohateny (malagasy)')}
-                </label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    name="title_mg"
-                    value={job.title_mg || ''}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                    placeholder="Ex: Mpanandrindra tetikasa"
-                  />
+          {/* Onglet General */}
+          {activeTab === 'general' && (
+            <div className="space-y-6">
+              <FormSection title={getText('Informations generales', 'Fampahalalana ankapobeny')} icon={FileText}>
+                <div className="grid grid-cols-1 gap-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {getText('Titre du poste (francais)', 'Lohateny (frantsay)')} 
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="title_fr"
+                      required
+                      value={job.title_fr || ''}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                      placeholder="Ex: Coordinateur de projet"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {getText('Titre (malagasy)', 'Lohateny (malagasy)')}
+                      <span className="text-xs text-gray-400 ml-2">{getText('(Optionnel)', '(Tsy voatery)')}</span>
+                    </label>
+                    <div className="relative">
+                      <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        name="title_mg"
+                        value={job.title_mg || ''}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        placeholder="Ex: Mpanandrindra tetikasa"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('Description (français)', 'Famaritana (frantsay)')} <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  name="description_fr"
-                  rows={5}
-                  required
-                  value={job.description_fr || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-                  placeholder="Description detaillee du poste..."
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('Description (malagasy)', 'Famaritana (malagasy)')}
-                </label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <textarea
-                    name="description_mg"
-                    rows={4}
+              </FormSection>
+
+              <FormSection title={getText('Informations entreprise', 'Fampahalalana orinasa')} icon={Building}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {getText('Nom de l\'entreprise', 'Anaran\'ny orinasa')}
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <div className="relative">
+                      <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        name="company"
+                        required
+                        value={job.company || ''}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        placeholder="Ex: Y-Mad Madagascar"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {getText('Lieu', 'Toerana')}
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        name="location"
+                        value={job.location || ''}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        placeholder="Antananarivo"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </FormSection>
+
+              <FormSection title={getText('Details du contrat', 'Antsipirihan\'ny fifanarahana')} icon={Briefcase}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {getText('Type de contrat', 'Karazana fifanarahana')}
+                    </label>
+                    <select
+                      name="contract_type"
+                      value={job.contract_type || ContractType.CDI}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    >
+                      {CONTRACT_TYPES.map(type => (
+                        <option key={type.value} value={type.value}>{type.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {getText('Date limite de candidature', 'Daty farany hamalian\'ny asa')}
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="date"
+                        name="deadline"
+                        value={job.deadline ? job.deadline.split('T')[0] : ''}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {getText('Laissez vide si pas de date limite', 'Avela banga raha tsy misy daty farany')}
+                    </p>
+                  </div>
+                </div>
+              </FormSection>
+            </div>
+          )}
+
+          {/* Onglet Description */}
+          {activeTab === 'description' && (
+            <div className="space-y-6">
+              <FormSection title={getText('Description du poste (francais)', 'Famaritana ny asa (frantsay)')} icon={FileText}>
+                <div>
+                  <p className="text-sm text-gray-500 mb-3">
+                    {getText('Utilisez les outils de mise en forme pour enrichir votre description', 'Ampiasao ny fitaovana fanoratana mba hanatsarana ny famaritanao')}
+                  </p>
+                  <RichTextEditor
+                    value={job.description_fr}
+                    onChange={(value) => {
+                      if (job) setJob({ ...job, description_fr: value });
+                    }}
+                    placeholder={getText('Description detaillee du poste...', 'Famaritana feno momba ny asa...')}
+                    language={language}
+                    minHeight="400px"
+                  />
+                  <p className="text-xs text-gray-400 mt-2">
+                    {getText('Minimum 20 caracteres. Utilisez les outils de formatage (gras, italique, listes, etc.)', 'Litera 20 farafahakeliny. Ampiasao ny fitaovana fanoratana (maitso, lisitra, sns)')}
+                  </p>
+                </div>
+              </FormSection>
+
+              <FormSection title={getText('Description du poste (malagasy)', 'Famaritana ny asa (malagasy)')} icon={Globe}>
+                <div>
+                  <p className="text-sm text-gray-500 mb-3">
+                    {getText('Version en malgache (optionnelle mais recommandee)', 'Dikan-teny amin\'ny malagasy (tsy voatery fa asaina)')}
+                  </p>
+                  <RichTextEditor
                     value={job.description_mg || ''}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-y"
-                    placeholder="Famaritana amin'ny malagasy..."
+                    onChange={(value) => {
+                      if (job) setJob({ ...job, description_mg: value });
+                    }}
+                    placeholder="Famaritana amin'ny teny malagasy..."
+                    language={language}
+                    minHeight="300px"
                   />
                 </div>
-              </div>
+              </FormSection>
             </div>
-          </div>
+          )}
 
-          {/* Section Entreprise */}
-          <div className="border-b border-gray-200 pb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Building className="w-5 h-5 text-blue-600" /> {t('Entreprise', 'Orinasa')}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('Nom de l\'entreprise', 'Anaran\'ny orinasa')} <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    name="company"
-                    required
-                    value={job.company || ''}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                    placeholder="Ex: Y-Mad Madagascar"
-                  />
+          {/* Onglet Publication */}
+          {activeTab === 'publication' && (
+            <div className="space-y-6">
+              <FormSection title={getText('Statut de publication', 'Satan\'ny famoahana')} icon={Globe}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {getText('Statut actuel', 'Sata ankehitriny')}
+                    </label>
+                    <select
+                      name="status"
+                      value={job.status || JobStatus.DRAFT}
+                      onChange={handleChange}
+                      className="w-full md:w-64 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    >
+                      {STATUS_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {language === 'fr' ? option.label : option.labelMg}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-400 mt-2">
+                      {getText(
+                        'Les offres publiees sont visibles par les candidats sur le site public',
+                        'Ny asa navoaka dia hitan\'ny mpangataka eo amin\'ny tranokala'
+                      )}
+                    </p>
+                  </div>
+                  
+                  <div className="pt-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="is_published"
+                        checked={job.is_published || false}
+                        onChange={handleChange}
+                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 flex items-center gap-1">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        {getText('Rendre visible sur le site public', 'Ataovy hita eo amin\'ny tranokala')}
+                      </span>
+                    </label>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('Lieu', 'Toerana')}
-                </label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    name="location"
-                    value={job.location || ''}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                    placeholder="Antananarivo"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+              </FormSection>
 
-          {/* Section Contrat */}
-          <div className="border-b border-gray-200 pb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-blue-600" /> {t('Contrat', 'Fifanarahana')}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('Type de contrat', 'Karazana fifanarahana')}
-                </label>
-                <select
-                  name="contract_type"
-                  value={job.contract_type || ContractType.CDI}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                >
-                  {CONTRACT_TYPES.map(type => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('Date limite', 'Farany')}
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="date"
-                    name="deadline"
-                    value={job.deadline ? job.deadline.split('T')[0] : ''}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  />
+              <FormSection title={getText('Apercu de l\'offre', 'Topi-mason\'ny asa')} icon={Eye}>
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-start gap-3">
+                    {imageUrl ? (
+                      <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                        <img src={imageUrl} alt={job.title_fr} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Briefcase className="w-8 h-8 text-gray-400" />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-800">{job.title_fr}</h3>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        <span className="text-xs text-gray-500 flex items-center gap-1">
+                          <Building className="w-3 h-3" /> {job.company || 'Y-MaD'}
+                        </span>
+                        {job.location && (
+                          <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> {job.location}
+                          </span>
+                        )}
+                        {job.contract_type && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            {job.contract_type}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-xs text-gray-600 line-clamp-2">
+                      {job.description_fr.substring(0, 150)}...
+                    </p>
+                  </div>
                 </div>
-              </div>
+              </FormSection>
             </div>
-          </div>
-
-          {/* Section Statut */}
-          <div className="border-b border-gray-200 pb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-blue-600" /> {t('Statut', 'Sata')}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('Statut de publication', 'Satan\'ny famoahana')}
-                </label>
-                <select
-                  name="status"
-                  value={job.status || JobStatus.DRAFT}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                >
-                  {STATUS_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center pt-6">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="is_published"
-                    checked={job.is_published || false}
-                    onChange={handleChange}
-                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700 flex items-center gap-1">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    {t('Publier directement', 'Avoaka avy hatrany')}
-                  </span>
-                </label>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Boutons d'action */}
-        <div className="flex justify-end gap-3 p-6 bg-gray-50 border-t border-gray-200 rounded-b-xl">
+        <div className="sticky bottom-0 flex justify-end gap-3 p-6 bg-gray-50 border-t border-gray-200 rounded-b-xl">
           <Link
-            href={`/dashboard/jobs/${params.id}`}
+            href={`/dashboard/jobs/${jobId}`}
             className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition flex items-center gap-2 font-medium"
           >
-            <X className="w-4 h-4" /> {t('Annuler', 'Aoka')}
+            <X className="w-4 h-4" /> {getText('Annuler', 'Aoka')}
           </Link>
           <button
             type="submit"
             disabled={saving}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm font-medium"
+            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm font-medium"
           >
             {saving ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {t('Enregistrement...', 'Fanovana...')}
+                {getText('Enregistrement...', 'Fanovana...')}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                {t('Enregistrer', 'Tehirizo')}
+                {getText('Enregistrer les modifications', 'Tehirizo ny fanovana')}
               </>
             )}
           </button>

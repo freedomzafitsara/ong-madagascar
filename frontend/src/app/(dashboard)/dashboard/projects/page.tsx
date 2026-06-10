@@ -1,9 +1,8 @@
 ﻿// frontend/src/app/(dashboard)/dashboard/projects/page.tsx
-// VERSION FINALE - COULEURS UNIQUEMENT BLEU ET GRIS
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link';
@@ -11,9 +10,10 @@ import {
   FolderOpen, Search, Plus, Download, RefreshCw, Loader2,
   Eye, Edit, Trash2, MapPin, Users, DollarSign, TrendingUp,
   CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight,
-  Award, Calendar, Target, X, Filter
+  Award, Calendar, Target, X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '@/lib/api';
 
 // ============================================================
 // TYPES
@@ -21,23 +21,23 @@ import toast from 'react-hot-toast';
 
 interface Project {
   id: string;
-  title: string;
-  title_mg: string;
-  description: string;
-  description_mg: string;
-  location: string;
-  region: string;
+  title_fr: string;
+  title_mg?: string;
+  description_fr: string;
+  description_mg?: string;
+  location?: string;
+  region?: string;
   status: 'active' | 'completed' | 'paused' | 'draft';
-  budget: number;
-  spent: number;
-  beneficiaries_count: number;
-  youth_impact: number;
-  jobs_created: number;
-  progress: number;
-  start_date: string;
-  end_date: string;
-  image_url: string;
-  is_featured: boolean;
+  budget?: number;
+  spent?: number;
+  beneficiaries_count?: number;
+  youth_impact?: number;
+  jobs_created?: number;
+  progress?: number;
+  start_date?: string;
+  end_date?: string;
+  image_url?: string;
+  is_featured?: boolean;
   created_at: string;
 }
 
@@ -56,7 +56,6 @@ interface ProjectStats {
 // CONSTANTES
 // ============================================================
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 const ITEMS_PER_PAGE = 9;
 
 const REGIONS = [
@@ -67,9 +66,8 @@ const REGIONS = [
   'Menabe', 'Atsimo-Andrefana', 'Androy', 'Anosy'
 ];
 
-// STATUTS - UNIQUEMENT BLEU ET GRIS
 const STATUS_LABELS: Record<string, { label: string; bg: string; text: string; icon: any }> = {
-  active: { label: 'En cours', bg: 'bg-blue-100', text: 'text-blue-700', icon: CheckCircle },
+  active: { label: 'En cours', bg: 'bg-blue-100', text: 'text-blue-800', icon: CheckCircle },
   completed: { label: 'Terminé', bg: 'bg-gray-100', text: 'text-gray-600', icon: CheckCircle },
   paused: { label: 'En pause', bg: 'bg-gray-100', text: 'text-gray-600', icon: Clock },
   draft: { label: 'Brouillon', bg: 'bg-gray-100', text: 'text-gray-500', icon: AlertCircle }
@@ -79,28 +77,28 @@ const STATUS_LABELS: Record<string, { label: string; bg: string; text: string; i
 // COMPOSANTS
 // ============================================================
 
-function StatCard({ label, value, icon: Icon }: { label: string; value: number | string; icon: any }) {
+function StatCard({ label, value, icon: Icon, isBlue = false }: { label: string; value: number | string; icon: any; isBlue?: boolean }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500">{label}</p>
-          <p className="text-xl font-bold text-gray-800">{typeof value === 'number' ? value.toLocaleString() : value}</p>
-        </div>
-        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600">
-          <Icon className="w-5 h-5" />
+    <div className={`rounded-xl p-4 transition-all duration-200 hover:shadow-md ${isBlue ? 'bg-blue-800 text-white' : 'bg-white border border-gray-200'}`}>
+      <div className="flex items-center justify-between mb-2">
+        <p className={`text-sm font-medium ${isBlue ? 'text-white/70' : 'text-gray-500'}`}>{label}</p>
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isBlue ? 'bg-white/20' : 'bg-gray-100'}`}>
+          <Icon className={`w-4 h-4 ${isBlue ? 'text-white' : 'text-gray-600'}`} />
         </div>
       </div>
+      <p className={`text-xl font-bold ${isBlue ? 'text-white' : 'text-gray-800'}`}>
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </p>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
   const config = STATUS_LABELS[status] || STATUS_LABELS.draft;
-  const Icon = config.icon;
+  const IconComponent = config.icon;
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full ${config.bg} ${config.text}`}>
-      <Icon className="w-3 h-3" /> {config.label}
+      <IconComponent className="w-3 h-3" /> {config.label}
     </span>
   );
 }
@@ -126,34 +124,36 @@ export default function ProjectsPage() {
   });
   const [exporting, setExporting] = useState(false);
 
-  const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'staff';
+  const isMounted = useRef(true);
+  const initialFetchDone = useRef(false);
 
-  if (!isAuthenticated) return null;
+  const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin';
+  const isSuperAdmin = user?.role === 'super_admin';
+
+  const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
 
   // Chargement des projets
   const fetchProjects = useCallback(async () => {
+    if (!token || !isMounted.current) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: ITEMS_PER_PAGE.toString(),
-        ...(filterStatus !== 'all' && { status: filterStatus }),
-        ...(filterRegion !== 'all' && { region: filterRegion }),
-        ...(searchTerm && { search: searchTerm }),
-      });
+      const params: any = {
+        page: currentPage,
+        limit: ITEMS_PER_PAGE
+      };
+      if (filterStatus !== 'all') params.status = filterStatus;
+      if (filterRegion !== 'all') params.region = filterRegion;
+      if (searchTerm) params.search = searchTerm;
 
-      const response = await fetch(`${API_URL}/projects?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/projects', { params });
       
-      if (response.ok) {
-        const data = await response.json();
-        setProjects(data.data || []);
-        setTotalPages(data.totalPages || 1);
+      if (response.data && isMounted.current) {
+        setProjects(response.data.data || []);
+        setTotalPages(response.data.totalPages || 1);
       }
     } catch (error) {
       console.error('Erreur chargement projets:', error);
-      toast.error('Erreur de chargement');
+      toast.error('Erreur de chargement des projets');
     } finally {
       setLoading(false);
     }
@@ -161,44 +161,48 @@ export default function ProjectsPage() {
 
   // Chargement des statistiques
   const fetchStats = useCallback(async () => {
+    if (!token || !isMounted.current) return;
     try {
-      const response = await fetch(`${API_URL}/projects/stats`);
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
+      const response = await api.get('/projects/stats');
+      if (response.data && isMounted.current) {
+        setStats(response.data);
       }
     } catch (error) {
       console.error('Erreur stats:', error);
     }
+  }, [token]);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
   }, []);
 
   useEffect(() => {
-    if (token) {
-      fetchProjects();
+    if (token && !initialFetchDone.current) {
+      initialFetchDone.current = true;
       fetchStats();
+      fetchProjects();
     }
-  }, [token, fetchProjects, fetchStats]);
+  }, [token, fetchStats, fetchProjects]);
+
+  useEffect(() => {
+    if (initialFetchDone.current && token) {
+      fetchProjects();
+    }
+  }, [currentPage, filterStatus, filterRegion, searchTerm, fetchProjects, token]);
 
   // Suppression d'un projet
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`Supprimer le projet "${title}" ? Cette action est irréversible.`)) return;
+    if (!confirm(getText(`Supprimer le projet "${title}" ? Cette action est irréversible.`, `Hofafana ny tetikasa "${title}" ? Tsy azo averina izany.`))) return;
     
     try {
-      const response = await fetch(`${API_URL}/projects/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      
-      if (response.ok) {
-        toast.success('Projet supprimé avec succès');
-        fetchProjects();
-        fetchStats();
-      } else {
-        toast.error('Erreur lors de la suppression');
-      }
+      await api.delete(`/projects/${id}`);
+      toast.success(getText('Projet supprimé avec succès', 'Vita ny fanafoanana ny tetikasa'));
+      fetchProjects();
+      fetchStats();
     } catch (error) {
       console.error('Erreur suppression:', error);
-      toast.error('Erreur de connexion');
+      toast.error(getText('Erreur lors de la suppression', 'Nisy hadisoana tamin\'ny fanafoanana'));
     }
   };
 
@@ -206,136 +210,151 @@ export default function ProjectsPage() {
   const exportToCSV = async () => {
     setExporting(true);
     try {
-      const response = await fetch(`${API_URL}/projects`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await response.json();
-      const allProjects = data.data || [];
+      const response = await api.get('/projects', { params: { limit: 1000 } });
+      const allProjects = response.data?.data || [];
 
-      const rows = [
-        ['Titre', 'Région', 'Statut', 'Budget (Ar)', 'Dépenses (Ar)', 'Bénéficiaires', 'Emplois créés', 'Progression', 'Date début', 'Date fin']
-      ];
+      const headers = ['Titre FR', 'Titre MG', 'Région', 'Statut', 'Budget (Ar)', 'Bénéficiaires', 'Emplois créés', 'Progression', 'Date création'];
+      const rows = allProjects.map((p: Project) => [
+        p.title_fr,
+        p.title_mg || '',
+        p.region || '',
+        STATUS_LABELS[p.status]?.label || p.status,
+        p.budget?.toString() || '0',
+        p.beneficiaries_count?.toString() || '0',
+        p.jobs_created?.toString() || '0',
+        `${p.progress || 0}%`,
+        new Date(p.created_at).toLocaleDateString('fr-FR')
+      ]);
       
-      allProjects.forEach((p: Project) => {
-        rows.push([
-          p.title,
-          p.region,
-          STATUS_LABELS[p.status]?.label || p.status,
-          p.budget?.toString() || '0',
-          p.spent?.toString() || '0',
-          p.beneficiaries_count?.toString() || '0',
-          p.jobs_created?.toString() || '0',
-          `${p.progress || 0}%`,
-          new Date(p.start_date).toLocaleDateString('fr-FR'),
-          new Date(p.end_date).toLocaleDateString('fr-FR')
-        ]);
-      });
-      
-      const csvContent = rows.map(row => row.join(',')).join('\n');
+      const csvContent = [headers, ...rows].map(row => row.join(';')).join('\n');
       const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `projets_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
       URL.revokeObjectURL(link.href);
-      toast.success('Export CSV réussi');
+      toast.success(getText('Export CSV réussi', 'Vita ny fanondrana CSV'));
     } catch (error) {
       console.error('Erreur export:', error);
-      toast.error('Erreur lors de l\'export');
+      toast.error(getText('Erreur lors de l\'export', 'Nisy hadisoana tamin\'ny fanondrana'));
     } finally {
       setExporting(false);
     }
   };
 
+  const handleRefresh = () => {
+    fetchProjects();
+    fetchStats();
+    toast.success(getText('Données actualisées', 'Havaozina ny angona'));
+  };
+
+  const formatCurrency = (amount?: number) => {
+    if (!amount) return '0 Ar';
+    if (amount >= 1000000) return `${(amount / 1000000).toFixed(1)}M Ar`;
+    if (amount >= 1000) return `${(amount / 1000).toFixed(0)}k Ar`;
+    return `${amount.toLocaleString()} Ar`;
+  };
+
+  if (!isAuthenticated) return null;
+
   if (loading && projects.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <Loader2 className="w-12 h-12 text-blue-800 animate-spin" />
+        <p className="text-gray-500">{getText('Chargement des projets...', 'Fandefasana ny tetikasa...')}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
+      
       {/* EN-TETE */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <FolderOpen className="w-4 h-4 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-800">Projets</h1>
-            {user?.role === 'super_admin' && (
-              <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full">Super Admin</span>
-            )}
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-blue-800 rounded-xl flex items-center justify-center shadow-sm">
+            <FolderOpen className="w-6 h-6 text-white" />
           </div>
-          <p className="text-gray-500 text-sm mt-1">Gérez les projets et activités de l'association</p>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">{getText('Projets', 'Tetikasa')}</h1>
+            <p className="text-gray-500 text-sm">{getText('Gérez les projets et activités de l\'association', 'Fitantanana ny tetikasa sy ny asan\'ny fikambanana')}</p>
+          </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={fetchProjects} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-            <RefreshCw className="w-4 h-4 text-gray-600" /> Actualiser
+          <button 
+            onClick={handleRefresh} 
+            className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+          >
+            <RefreshCw className="w-4 h-4 text-gray-600" />
+            <span className="text-sm text-gray-600">{getText('Actualiser', 'Havaozina')}</span>
           </button>
-          <button onClick={exportToCSV} disabled={exporting} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
-            <Download className="w-4 h-4 text-gray-600" /> {exporting ? 'Export...' : 'Exporter CSV'}
+          <button 
+            onClick={exportToCSV} 
+            disabled={exporting} 
+            className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+          >
+            <Download className="w-4 h-4 text-gray-600" />
+            <span className="text-sm text-gray-600">{exporting ? getText('Export...', 'Fanondrana...') : getText('Exporter CSV', 'Hanondrana CSV')}</span>
           </button>
           {hasEditRights && (
-            <Link href="/dashboard/projects/new" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-              <Plus className="w-4 h-4" /> Nouveau projet
+            <Link href="/dashboard/projects/new" className="flex items-center gap-2 px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition shadow-sm">
+              <Plus className="w-4 h-4" />
+              {getText('Nouveau projet', 'Tetikasa vaovao')}
             </Link>
           )}
         </div>
       </div>
 
       {/* STATISTIQUES */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-        <StatCard label="Total projets" value={stats.total} icon={FolderOpen} />
-        <StatCard label="En cours" value={stats.active} icon={TrendingUp} />
-        <StatCard label="Terminés" value={stats.completed} icon={CheckCircle} />
-        <StatCard label="Budget total" value={`${(stats.totalBudget / 1000000).toFixed(1)}M Ar`} icon={DollarSign} />
-        <StatCard label="Dépenses" value={`${(stats.totalSpent / 1000000).toFixed(1)}M Ar`} icon={TrendingUp} />
-        <StatCard label="Bénéficiaires" value={stats.totalBeneficiaries} icon={Users} />
-        <StatCard label="Emplois créés" value={stats.totalJobsCreated} icon={Target} />
-        <StatCard label="Taux réalisation" value={stats.totalBudget ? `${Math.round((stats.totalSpent / stats.totalBudget) * 100)}%` : '0%'} icon={TrendingUp} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard label={getText('Total projets', 'Tetikasa rehetra')} value={stats.total} icon={FolderOpen} isBlue={true} />
+        <StatCard label={getText('En cours', 'Mandeha')} value={stats.active} icon={TrendingUp} />
+        <StatCard label={getText('Terminés', 'Vita')} value={stats.completed} icon={CheckCircle} />
+        <StatCard label={getText('En pause', 'Mijanona')} value={stats.paused} icon={Clock} />
+        <StatCard label={getText('Budget total', 'Tetibola')} value={formatCurrency(stats.totalBudget)} icon={DollarSign} />
+        <StatCard label={getText('Bénéficiaires', 'Mpandray anjara')} value={stats.totalBeneficiaries} icon={Users} />
+        <StatCard label={getText('Emplois créés', 'Asa noforonina')} value={stats.totalJobsCreated} icon={Target} />
+        <StatCard label={getText('Taux réalisation', 'Tahan\'ny fahavitana')} value={`${stats.totalBudget ? Math.round((stats.totalSpent / stats.totalBudget) * 100) : 0}%`} icon={TrendingUp} />
       </div>
 
       {/* FILTRES */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+        <div className="flex flex-col lg:flex-row gap-3">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Rechercher un projet..."
+              placeholder={getText('Rechercher un projet...', 'Karohy ny tetikasa...')}
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none"
             />
           </div>
           <select
             value={filterStatus}
             onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none bg-white min-w-[140px]"
           >
-            <option value="all">Tous statuts</option>
-            <option value="active">En cours</option>
-            <option value="completed">Terminés</option>
-            <option value="paused">En pause</option>
-            <option value="draft">Brouillons</option>
+            <option value="all">{getText('Tous statuts', 'Sata rehetra')}</option>
+            <option value="active">{getText('En cours', 'Mandeha')}</option>
+            <option value="completed">{getText('Terminés', 'Vita')}</option>
+            <option value="paused">{getText('En pause', 'Mijanona')}</option>
+            <option value="draft">{getText('Brouillons', 'Volavola')}</option>
           </select>
           <select
             value={filterRegion}
             onChange={(e) => { setFilterRegion(e.target.value); setCurrentPage(1); }}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none bg-white min-w-[160px]"
           >
-            <option value="all">Toutes régions</option>
+            <option value="all">{getText('Toutes régions', 'Faritra rehetra')}</option>
             {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           {(searchTerm || filterStatus !== 'all' || filterRegion !== 'all') && (
             <button
               onClick={() => { setSearchTerm(''); setFilterStatus('all'); setFilterRegion('all'); setCurrentPage(1); }}
-              className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+              className="flex items-center gap-2 px-3 py-2.5 text-gray-500 hover:text-gray-700 text-sm"
             >
-              <X className="w-4 h-4" /> Réinitialiser
+              <X className="w-4 h-4" /> {getText('Effacer', 'Fafao')}
             </button>
           )}
         </div>
@@ -346,28 +365,29 @@ export default function ProjectsPage() {
         {projects.length === 0 ? (
           <div className="col-span-3 text-center py-12 bg-white rounded-xl border border-gray-200">
             <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">Aucun projet trouvé</p>
+            <p className="text-gray-500 font-medium">{getText('Aucun projet trouvé', 'Tsy misy tetikasa hita')}</p>
+            <p className="text-sm text-gray-400 mt-1">{getText('Modifiez vos filtres ou créez un nouveau projet', 'Hanova ny filtrao na mamorona tetikasa vaovao')}</p>
             {hasEditRights && (
-              <Link href="/dashboard/projects/new" className="mt-4 inline-flex items-center gap-2 text-blue-600 hover:underline">
-                <Plus className="w-4 h-4" /> Créer un projet
+              <Link href="/dashboard/projects/new" className="mt-4 inline-flex items-center gap-2 text-blue-800 hover:underline">
+                <Plus className="w-4 h-4" /> {getText('Créer un projet', 'Mamorona tetikasa')}
               </Link>
             )}
           </div>
         ) : (
           projects.map((project) => (
-            <div key={project.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition">
+            <div key={project.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow group">
               {/* Image */}
               <div className="relative h-48 bg-gray-100">
                 {project.image_url ? (
-                  <img src={project.image_url} alt={project.title} className="w-full h-full object-cover" />
+                  <img src={project.image_url} alt={project.title_fr} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <FolderOpen className="w-16 h-16 text-gray-300" />
                   </div>
                 )}
                 {project.is_featured && (
-                  <div className="absolute top-3 right-3 bg-blue-600 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                    <Award className="w-3 h-3" /> À la une
+                  <div className="absolute top-3 right-3 bg-blue-800 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                    <Award className="w-3 h-3" /> {getText('À la une', 'Voasongadina')}
                   </div>
                 )}
                 <div className="absolute bottom-3 left-3">
@@ -378,51 +398,42 @@ export default function ProjectsPage() {
               {/* Contenu */}
               <div className="p-4">
                 <h3 className="text-lg font-bold text-gray-800 mb-2 line-clamp-1">
-                  {language === 'fr' ? project.title : (project.title_mg || project.title)}
+                  {language === 'fr' ? project.title_fr : (project.title_mg || project.title_fr)}
                 </h3>
                 <p className="text-sm text-gray-500 mb-3 line-clamp-2">
-                  {language === 'fr' ? project.description : (project.description_mg || project.description)}
+                  {language === 'fr' ? project.description_fr : (project.description_mg || project.description_fr)}
                 </p>
                 
-                <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
-                  <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{project.location || project.region}</span>
-                  <span className="flex items-center gap-1"><Users className="w-3 h-3" />{project.beneficiaries_count || 0} bénéf.</span>
-                  <span className="flex items-center gap-1"><Target className="w-3 h-3" />{project.jobs_created || 0} emplois</span>
+                <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
+                  {project.location && (
+                    <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{project.location}</span>
+                  )}
+                  <span className="flex items-center gap-1"><Users className="w-3 h-3" />{project.beneficiaries_count || 0} {getText('bénéf.', 'mpandray')}</span>
+                  <span className="flex items-center gap-1"><Target className="w-3 h-3" />{project.jobs_created || 0} {getText('emplois', 'asa')}</span>
                 </div>
                 
-                {/* Barre de progression */}
+                {/* Budget */}
                 <div className="mb-3">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>Progression</span>
-                    <span>{project.progress || 0}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full rounded-full bg-blue-600 transition-all" 
-                      style={{ width: `${project.progress || 0}%` }} 
-                    />
+                    <span>{getText('Budget', 'Tetibola')}</span>
+                    <span className="font-semibold text-blue-800">{formatCurrency(project.budget)}</span>
                   </div>
                 </div>
                 
-                {/* Budget et actions */}
-                <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                  <div className="text-sm font-semibold text-blue-600">
-                    {(project.budget || 0).toLocaleString()} Ar
-                  </div>
+                {/* Actions */}
+                <div className="flex justify-end items-center gap-2 pt-2 border-t border-gray-100">
+                  <Link href={`/dashboard/projects/${project.id}`} className="p-1.5 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" title={getText('Voir', 'Jereo')}>
+                    <Eye className="w-4 h-4" />
+                  </Link>
                   {hasEditRights && (
-                    <div className="flex gap-2">
-                      <Link href={`/dashboard/projects/${project.id}`} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Voir">
-                        <Eye className="w-4 h-4" />
-                      </Link>
-                      <Link href={`/dashboard/projects/${project.id}/edit`} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Modifier">
-                        <Edit className="w-4 h-4" />
-                      </Link>
-                      {user?.role === 'super_admin' && (
-                        <button onClick={() => handleDelete(project.id, project.title)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Supprimer">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+                    <Link href={`/dashboard/projects/${project.id}/edit`} className="p-1.5 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" title={getText('Modifier', 'Hanova')}>
+                      <Edit className="w-4 h-4" />
+                    </Link>
+                  )}
+                  {isSuperAdmin && (
+                    <button onClick={() => handleDelete(project.id, project.title_fr)} className="p-1.5 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition" title={getText('Supprimer', 'Hamafa')}>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   )}
                 </div>
               </div>
@@ -433,7 +444,7 @@ export default function ProjectsPage() {
 
       {/* PAGINATION */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4 mt-4">
+        <div className="flex justify-center items-center gap-4 pt-4">
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
@@ -441,9 +452,25 @@ export default function ProjectsPage() {
           >
             <ChevronLeft className="w-4 h-4 text-gray-600" />
           </button>
-          <span className="text-sm text-gray-600">
-            Page {currentPage} sur {totalPages}
-          </span>
+          <div className="flex gap-2">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum = currentPage;
+              if (totalPages <= 5) pageNum = i + 1;
+              else if (currentPage <= 3) pageNum = i + 1;
+              else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+              else pageNum = currentPage - 2 + i;
+              
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`w-8 h-8 rounded-lg transition ${currentPage === pageNum ? 'bg-blue-800 text-white' : 'border border-gray-300 hover:bg-gray-50'}`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+          </div>
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}

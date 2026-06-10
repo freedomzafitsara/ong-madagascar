@@ -2,13 +2,12 @@
 
 import { IsString, IsNotEmpty, IsIn } from 'class-validator';
 
-export type JobStatus = 'draft' | 'published' | 'closed' | 'expired' | 'archived';
-
-const VALID_STATUSES: JobStatus[] = ['draft', 'published', 'closed', 'expired', 'archived'];
+export const JOB_STATUSES = ['draft', 'published', 'closed', 'expired', 'archived'] as const;
+export type JobStatus = typeof JOB_STATUSES[number];
 
 export class UpdateJobStatusDto {
   @IsString({ message: 'Le statut doit être une chaîne de caractères' })
-  @IsIn(VALID_STATUSES, { 
+  @IsIn(JOB_STATUSES, { 
     message: 'Le statut doit être: draft, published, closed, expired ou archived' 
   })
   @IsNotEmpty({ message: 'Le statut est requis' })

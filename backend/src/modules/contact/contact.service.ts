@@ -2,9 +2,9 @@
 
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere, ILike } from 'typeorm';
+import { Repository, Like } from 'typeorm';
 import { Contact } from './entities/contact.entity';
-import { CreateContactDto, UpdateContactStatusDto, ReplyContactDto, ContactQueryDto } from './dto/create-contact.dto';
+import { CreateContactDto, UpdateContactStatusDto, ContactQueryDto } from './dto/create-contact.dto';
 
 @Injectable()
 export class ContactService {
@@ -15,23 +15,12 @@ export class ContactService {
     private contactRepository: Repository<Contact>,
   ) {}
 
-  // ============================================================
-  // ENVOYER UN MESSAGE (Public)
-  // ============================================================
   async create(createDto: CreateContactDto, ipAddress: string): Promise<Contact> {
     try {
-      // Vérifier le rate limiting (max 3 messages par IP par heure)
-      const recentMessages = await this.contactRepository.count({
-        where: { ip_address: ipAddress },
-      });
-
-      if (recentMessages >= 3) {
-        throw new BadRequestException('Vous avez atteint la limite de 3 messages par heure');
-      }
-
       const contact = this.contactRepository.create({
-        full_name: createDto.full_name,
+        name: createDto.name,  // Changé: full_name -> name
         email: createDto.email,
+        phone: createDto.phone || null,
         subject: createDto.subject,
         message: createDto.message,
         ip_address: ipAddress,
@@ -42,14 +31,11 @@ export class ContactService {
       this.logger.log(`Nouveau message de contact: ${saved.email} - ${saved.subject}`);
       return saved;
     } catch (error) {
-      this.logger.error(`Erreur lors de la création: ${error.message}`);
+      this.logger.error(`Erreur lors de la creation: ${error.message}`);
       throw new BadRequestException(`Erreur lors de l'envoi: ${error.message}`);
     }
   }
 
-  // ============================================================
-  // LISTER TOUS LES MESSAGES (Admin)
-  // ============================================================
   async findAll(queryDto: ContactQueryDto): Promise<{
     data: Contact[];
     total: number;
@@ -61,104 +47,77 @@ export class ContactService {
     const limit = queryDto.limit || 10;
     const skip = (page - 1) * limit;
 
-    const where: FindOptionsWhere<Contact> = {};
+    const where: any = {};
 
-    if (queryDto.status) where.status = queryDto.status;
-
-    const queryBuilder = this.contactRepository.createQueryBuilder('c');
-
-    if (queryDto.status) {
-      queryBuilder.andWhere('c.status = :status', { status: queryDto.status });
+    if (queryDto.status && queryDto.status !== 'all') {
+      where.status = queryDto.status;
     }
 
     if (queryDto.search) {
-      queryBuilder.andWhere(
-        '(c.full_name ILIKE :search OR c.email ILIKE :search OR c.subject ILIKE :search OR c.message ILIKE :search)',
-        { search: `%${queryDto.search}%` }
-      );
+      const [data, total] = await this.contactRepository.findAndCount({
+        where: [
+          { name: Like(`%${queryDto.search}%`) },
+          { email: Like(`%${queryDto.search}%`) },
+          { subject: Like(`%${queryDto.search}%`) },
+        ],
+        order: { created_at: 'DESC' },
+        skip,
+        take: limit,
+      });
+
+      return {
+        data,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+        limit,
+      };
     }
 
-    const [data, total] = await queryBuilder
-      .orderBy('c.created_at', 'DESC')
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
+    const [data, total] = await this.contactRepository.findAndCount({
+      where,
+      order: { created_at: 'DESC' },
+      skip,
+      take: limit,
+    });
 
-    return { data, total, page, totalPages: Math.ceil(total / limit), limit };
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      limit,
+    };
   }
 
-  // ============================================================
-  // TROUVER UN MESSAGE PAR ID (Admin)
-  // ============================================================
   async findOne(id: string): Promise<Contact> {
     const contact = await this.contactRepository.findOne({ where: { id } });
-    
     if (!contact) {
-      throw new NotFoundException(`Message ${id} non trouvé`);
+      throw new NotFoundException(`Message ${id} non trouve`);
     }
-    
     return contact;
   }
 
-  // ============================================================
-  // METTRE À JOUR LE STATUT (Admin)
-  // ============================================================
-  async updateStatus(id: string, updateDto: UpdateContactStatusDto, userId: string): Promise<Contact> {
+  async updateStatus(id: string, status: string, userId?: string): Promise<Contact> {
     const contact = await this.findOne(id);
+    contact.status = status;
     
-    contact.status = updateDto.status;
-    if (updateDto.admin_notes) {
-      contact.admin_notes = updateDto.admin_notes;
+    if (status === 'replied' && userId) {
+      contact.replied_at = new Date();
+      contact.replied_by_id = userId;
     }
     
     const updated = await this.contactRepository.save(contact);
-    this.logger.log(`Statut du message mis à jour: ${id} -> ${updateDto.status}`);
-    
+    this.logger.log(`Statut du message mis a jour: ${id} -> ${status}`);
     return updated;
   }
 
-  // ============================================================
-  // MARQUER COMME LU (Admin)
-  // ============================================================
-  async markAsRead(id: string, userId: string): Promise<Contact> {
-    return this.updateStatus(id, { status: 'read' }, userId);
-  }
-
-  // ============================================================
-  // MARQUER COMME RÉPONDU (Admin)
-  // ============================================================
-  async markAsReplied(id: string, userId: string): Promise<Contact> {
-    const contact = await this.findOne(id);
-    
-    contact.status = 'replied';
-    contact.replied_at = new Date();
-    contact.replied_by = userId;
-    
-    const updated = await this.contactRepository.save(contact);
-    this.logger.log(`Message marqué comme répondu: ${id}`);
-    
-    return updated;
-  }
-
-  // ============================================================
-  // ARCHIVER UN MESSAGE (Admin)
-  // ============================================================
-  async archive(id: string, userId: string): Promise<Contact> {
-    return this.updateStatus(id, { status: 'archived' }, userId);
-  }
-
-  // ============================================================
-  // SUPPRIMER UN MESSAGE (Super Admin)
-  // ============================================================
   async remove(id: string): Promise<void> {
     const contact = await this.findOne(id);
     await this.contactRepository.remove(contact);
-    this.logger.log(`Message supprimé: ${id}`);
+    this.logger.log(`Message supprime: ${id}`);
   }
 
-  // ============================================================
-  // STATISTIQUES (Admin)
-  // ============================================================
   async getStats(): Promise<{
     total: number;
     unread: number;

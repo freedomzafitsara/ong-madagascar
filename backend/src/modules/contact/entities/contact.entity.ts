@@ -9,8 +9,6 @@ import {
   Index 
 } from 'typeorm';
 
-export type MessageStatus = 'unread' | 'read' | 'archived' | 'replied';
-
 @Entity('contact_messages')
 @Index(['status'])
 @Index(['created_at'])
@@ -19,13 +17,16 @@ export class Contact {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'full_name', length: 255 })
-  full_name: string;
+  @Column({ name: 'name', length: 255 })  // Changé: full_name -> name
+  name: string;
 
   @Column({ length: 255 })
   email: string;
 
-  @Column({ length: 255 })
+  @Column({ length: 50, nullable: true })
+  phone: string;
+
+  @Column({ length: 500 })
   subject: string;
 
   @Column({ type: 'text' })
@@ -37,14 +38,14 @@ export class Contact {
   @Column({ name: 'ip_address', length: 45, nullable: true })
   ip_address: string;
 
+  @Column({ name: 'admin_notes', type: 'text', nullable: true })
+  admin_notes: string;
+
   @Column({ name: 'replied_at', nullable: true })
   replied_at: Date;
 
-  @Column({ name: 'replied_by', nullable: true })
-  replied_by: string;
-
-  @Column({ name: 'admin_notes', type: 'text', nullable: true })
-  admin_notes: string;
+  @Column({ name: 'replied_by_id', nullable: true })  // Changé: replied_by -> replied_by_id
+  replied_by_id: string;
 
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;

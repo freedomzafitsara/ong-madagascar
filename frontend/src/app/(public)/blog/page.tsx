@@ -1,18 +1,21 @@
-﻿'use client';
+﻿// frontend/src/app/(public)/blog/page.tsx
+
+'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
-  Calendar, User, Search, Tag, Sparkles, X, ChevronLeft, ChevronRight, 
-  Eye, BookOpen, FolderOpen, GraduationCap, Leaf, 
-  Calendar as CalendarIcon, Briefcase, Heart, Newspaper,
-  Loader2, AlertCircle, Clock, Facebook, Twitter,
-  Linkedin, Link as LinkIcon, Check, ArrowLeft
+  Search, Calendar, User, Heart, X, Image as ImageIcon, 
+  ChevronRight, Grid3x3, LayoutList, Sparkles, TrendingUp, 
+  Globe, ArrowRight, Target, BookOpen, Leaf, 
+  Briefcase, UsersRound, Palette, GraduationCap, 
+  Stethoscope, Sprout, Handshake, Loader2, Eye, Clock,
+  Facebook, Twitter, Linkedin, Link as LinkIcon, Check, Send, Award
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { pageService, PageBackground } from '@/services/page.service';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+import { api } from '@/lib/api';
 
 interface BlogPost {
   id: string;
@@ -27,7 +30,8 @@ interface BlogPost {
   image_url: string | null;
   status: string;
   author_id: string;
-  author?: { first_name: string; last_name: string };
+  authorUser?: { first_name: string; last_name: string };
+  author?: string;
   tags: string[];
   views: number;
   is_published: boolean;
@@ -35,65 +39,60 @@ interface BlogPost {
   created_at: string;
 }
 
-// Categories disponibles
-const categoriesFr = ["Tous", "Actualites", "Environnement", "Evenements", "Agriculture", "Education", "Sante", "Social"];
-const categoriesMg = ["Rehetra", "Vaovao", "Tontolo iainana", "Hetsika", "Fambolena", "Fampianarana", "Fahasalamana", "Sosialy"];
+// Categories avec icones - comme page projets
+const categories = [
+  { value: 'news', labelFr: 'Actualites', labelMg: 'Vaovao', icon: Newspaper },
+  { value: 'success_story', labelFr: 'Success story', labelMg: 'Fahombiazana', icon: Heart },
+  { value: 'testimonial', labelFr: 'Temoignages', labelMg: 'Fijoroana vavolombelona', icon: UsersRound },
+  { value: 'report', labelFr: 'Rapports', labelMg: 'Tatitra', icon: BookOpen },
+  { value: 'event_recap', labelFr: 'Evenements', labelMg: 'Hetsika', icon: CalendarIcon },
+];
 
-// Mapping des types d'articles vers categories
-const typeToCategory: Record<string, string> = {
-  'news': 'Actualites',
-  'success_story': 'Social',
-  'report': 'Actualites',
-};
+// Import manquant
+function Newspaper(props: any) {
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+      <path d="M18 14h-8" />
+      <path d="M15 18h-5" />
+      <path d="M10 6h8v4h-8V6Z" />
+    </svg>
+  );
+}
 
-// Mapping des icones par categorie
-const getCategoryIcon = (category: string) => {
-  const icons: Record<string, any> = {
-    'Actualites': Newspaper,
-    'Environnement': Leaf,
-    'Evenements': CalendarIcon,
-    'Agriculture': Briefcase,
-    'Education': GraduationCap,
-    'Sante': Heart,
-    'Social': Heart,
-  };
-  const Icon = icons[category];
-  return Icon ? <Icon className="w-3 h-3" /> : <FolderOpen className="w-3 h-3" />;
-};
+function CalendarIcon(props: any) {
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
 
 export default function BlogPage() {
+  const router = useRouter();
   const { language } = useLanguage();
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [filteredPosts, setFilteredPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState(language === 'fr' ? "Tous" : "Rehetra");
-  const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   const [copied, setCopied] = useState(false);
-  const itemsPerPage = 6;
-
-  const categories = language === 'fr' ? categoriesFr : categoriesMg;
-
-  const getCategoryFr = (categoryMg: string): string => {
-    const mapping: Record<string, string> = {
-      'Rehetra': 'Tous', 'Vaovao': 'Actualites', 'Tontolo iainana': 'Environnement',
-      'Hetsika': 'Evenements', 'Fambolena': 'Agriculture', 'Fampianarana': 'Education',
-      'Fahasalamana': 'Sante', 'Sosialy': 'Social'
-    };
-    return mapping[categoryMg] || categoryMg;
-  };
 
   const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
 
-  const openPostDetails = (post: BlogPost) => {
-    setSelectedPost(post);
-    setShowModal(true);
-  };
+  useEffect(() => {
+    loadPageBackground();
+    loadPosts();
+  }, []);
 
-  const loadPageBackground = useCallback(async () => {
+  const loadPageBackground = async () => {
     try {
       const background = await pageService.getPageBackground('blog');
       if (background && background.is_active && background.image_url) {
@@ -102,104 +101,110 @@ export default function BlogPage() {
     } catch (error) {
       console.error('Erreur chargement fond d ecran:', error);
     }
-  }, []);
+  };
 
-  const loadPosts = useCallback(async () => {
+  const loadPosts = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/blog/public?page=1&limit=100`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.data && data.data.length > 0) {
-          const formatted = data.data.map((p: any) => ({
-            id: p.id,
-            title_fr: p.title_fr,
-            title_mg: p.title_mg,
-            slug: p.slug,
-            summary_fr: p.summary_fr,
-            summary_mg: p.summary_mg,
-            content_fr: p.content_fr,
-            content_mg: p.content_mg,
-            type: p.type,
-            image_url: p.image_url,
-            status: p.status,
-            author_id: p.author_id,
-            author: p.author,
-            tags: p.tags || [],
-            views: p.views || 0,
-            is_published: p.is_published,
-            published_at: p.published_at,
-            created_at: p.created_at
-          }));
-          setPosts(formatted);
-          setFilteredPosts(formatted);
-        } else {
-          setPosts([]);
-          setFilteredPosts([]);
-        }
-      } else {
-        console.error('Erreur chargement API');
-        setPosts([]);
-        setFilteredPosts([]);
-      }
+      const response = await api.get('/blog/public');
+      let allPosts = response.data.data || response.data || [];
+      const publishedPosts = allPosts.filter((p: BlogPost) => p.status === 'published');
+      setPosts(publishedPosts);
+      setFilteredPosts(publishedPosts);
     } catch (error) {
       console.error('Erreur chargement articles:', error);
-      setPosts([]);
-      setFilteredPosts([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    loadPageBackground();
-    loadPosts();
-  }, [loadPageBackground, loadPosts]);
+  const openPostDetails = (post: BlogPost) => {
+    setSelectedPost(post);
+    setShowModal(true);
+  };
 
-  useEffect(() => {
-    setSelectedCategory(language === 'fr' ? "Tous" : "Rehetra");
-  }, [language]);
+  const handleReadMore = (slug: string) => {
+    router.push(`/blog/${slug}`);
+  };
 
   useEffect(() => {
     let filtered = [...posts];
     
     if (searchTerm) {
+      const term = searchTerm.toLowerCase();
       filtered = filtered.filter(p => 
-        (language === 'fr' ? p.title_fr : (p.title_mg || p.title_fr)).toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (language === 'fr' ? p.summary_fr : (p.summary_mg || p.summary_fr)).toLowerCase().includes(searchTerm.toLowerCase())
+        p.title_fr.toLowerCase().includes(term) ||
+        (p.title_mg && p.title_mg.toLowerCase().includes(term)) ||
+        p.summary_fr.toLowerCase().includes(term) ||
+        (p.summary_mg && p.summary_mg.toLowerCase().includes(term))
       );
     }
     
-    if (selectedCategory !== (language === 'fr' ? "Tous" : "Rehetra")) {
-      const categoryToFilter = language === 'fr' ? selectedCategory : getCategoryFr(selectedCategory);
-      filtered = filtered.filter(p => {
-        const postCategory = typeToCategory[p.type] || 'Actualites';
-        return postCategory === categoryToFilter;
-      });
+    if (selectedCategory) {
+      filtered = filtered.filter(p => p.type === selectedCategory);
     }
     
     setFilteredPosts(filtered);
-    setCurrentPage(1);
-  }, [searchTerm, selectedCategory, posts, language]);
+  }, [searchTerm, selectedCategory, posts]);
+
+  const getMainImageUrl = (post: BlogPost): string => {
+    return post.image_url || '/images/placeholder-blog.jpg';
+  };
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return getText('Date non disponible', 'Tsy misy daty');
-    return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    try {
+      return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+    } catch {
+      return '';
+    }
   };
 
   const formatReadingTime = (content: string) => {
     const wordsPerMinute = 200;
-    const wordCount = content.split(/\s/g).length;
+    const wordCount = content?.split(/\s/g).length || 0;
     const minutes = Math.ceil(wordCount / wordsPerMinute);
     return getText(`${minutes} min de lecture`, `${minutes} min famakiana`);
   };
 
+  const getCategoryIcon = (categoryValue: string) => {
+    const cat = categories.find(c => c.value === categoryValue);
+    if (!cat) return BookOpen;
+    return cat.icon;
+  };
+
+  const getCategoryLabel = (categoryValue: string) => {
+    const cat = categories.find(c => c.value === categoryValue);
+    if (!cat) return categoryValue;
+    return language === 'fr' ? cat.labelFr : cat.labelMg;
+  };
+
+  const getPostTitle = (post: BlogPost) => {
+    return language === 'fr' ? post.title_fr : (post.title_mg || post.title_fr);
+  };
+
+  const getPostSummary = (post: BlogPost) => {
+    return language === 'fr' ? post.summary_fr : (post.summary_mg || post.summary_fr);
+  };
+
+  const getAuthorName = (post: BlogPost): string => {
+    if (post.authorUser?.first_name) {
+      return `${post.authorUser.first_name} ${post.authorUser.last_name || ''}`.trim();
+    }
+    if (post.author) return post.author;
+    return 'Y-MaD';
+  };
+
+  const stats = {
+    total: posts.length,
+    categories: new Set(posts.map(p => p.type)).size,
+    totalViews: posts.reduce((sum, p) => sum + (p.views || 0), 0),
+  };
+
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const shareTitle = selectedPost ? (language === 'fr' ? selectedPost.title_fr : (selectedPost.title_mg || selectedPost.title_fr)) : '';
+  const shareTitle = selectedPost ? getPostTitle(selectedPost) : '';
 
   const handleShare = async (platform: string) => {
     let url = '';
@@ -222,16 +227,7 @@ export default function BlogPage() {
     if (url) window.open(url, '_blank', 'width=600,height=400');
   };
 
-  const totalPages = Math.ceil(filteredPosts.length / itemsPerPage);
-  const paginatedPosts = filteredPosts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  const stats = useMemo(() => ({
-    total: posts.length,
-    categories: new Set(posts.map(p => typeToCategory[p.type] || 'Actualites')).size,
-    totalViews: posts.reduce((sum, p) => sum + (p.views || 0), 0)
-  }), [posts]);
-
-  // Style fond d ecran PLEIN ECRAN avec effet parallaxe
+  // Style fond d'ecran PLEIN ECRAN - identique à la page projets
   const heroBackgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundImage: `url(${pageBackground.image_url})`,
     backgroundPosition: pageBackground.position || 'center',
@@ -248,7 +244,7 @@ export default function BlogPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <Loader2 className="w-12 h-12 text-blue-800 animate-spin mx-auto mb-4" />
           <p className="text-gray-500">{getText('Chargement...', 'Miandry...')}</p>
         </div>
       </div>
@@ -282,8 +278,8 @@ export default function BlogPage() {
           
           <p className="text-lg md:text-xl lg:text-2xl text-blue-100 max-w-2xl mx-auto">
             {getText(
-              'Suivez nos actions et decouvrez nos dernieres actualites',
-              'Araho ny asantsika ary jereo ny vaovao farany'
+              'Decouvrez nos dernieres actualites et histoires inspirantes',
+              'Jereo ny vaovao farany sy ny tantara manentana fanahy'
             )}
           </p>
           
@@ -300,38 +296,38 @@ export default function BlogPage() {
         <div className="max-w-7xl mx-auto px-4 py-12">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <BookOpen className="w-7 h-7 text-blue-600" />
+              <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <BookOpen className="w-8 h-8 text-blue-800" />
               </div>
               <p className="text-3xl font-bold text-gray-800">{stats.total}</p>
-              <p className="text-sm text-gray-500">{getText('Articles', 'Lahatsoratra')}</p>
+              <p className="text-gray-500">{getText('Articles publies', 'Lahatsoratra navoaka')}</p>
             </div>
             <div className="text-center">
-              <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <FolderOpen className="w-7 h-7 text-blue-600" />
+              <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Target className="w-8 h-8 text-blue-800" />
               </div>
               <p className="text-3xl font-bold text-gray-800">{stats.categories}</p>
-              <p className="text-sm text-gray-500">{getText('Categories', 'Sokajy')}</p>
+              <p className="text-gray-500">{getText('Categories', 'Sokajy')}</p>
             </div>
             <div className="text-center">
-              <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <Eye className="w-7 h-7 text-blue-600" />
+              <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Eye className="w-8 h-8 text-blue-800" />
               </div>
-              <p className="text-3xl font-bold text-gray-800">{stats.totalViews}</p>
-              <p className="text-sm text-gray-500">{getText('Vues totales', 'Fijeriana rehetra')}</p>
+              <p className="text-3xl font-bold text-gray-800">{stats.totalViews.toLocaleString()}</p>
+              <p className="text-gray-500">{getText('Vues totales', 'Fijeriana rehetra')}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ==================== SECTION FILTRES ==================== */}
-      <div className="max-w-7xl mx-auto px-4 py-10">
+      {/* ==================== FILTRES ET LISTE ==================== */}
+      <div className="max-w-7xl mx-auto px-4 py-12">
         
-        <div className="text-center mb-8">
+        <div className="text-center mb-10">
           <h2 className="text-3xl font-bold text-gray-800 mb-2">
             {getText('Derniers articles', 'Lahatsoratra farany')}
           </h2>
-          <div className="w-20 h-1 bg-blue-600 mx-auto rounded-full"></div>
+          <div className="w-20 h-1 bg-blue-800 mx-auto rounded-full"></div>
         </div>
 
         {/* Barre de recherche et filtres */}
@@ -344,26 +340,41 @@ export default function BlogPage() {
                 placeholder={getText('Rechercher un article...', 'Karohy lahatsoratra...')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none"
               />
             </div>
             <div className="flex gap-3">
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer"
+                className="px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none bg-white cursor-pointer"
               >
                 <option value="">{getText('Toutes les categories', 'Sokajy rehetra')}</option>
                 {categories.map(cat => (
-                  <option key={cat} value={cat}>
-                    {cat}
+                  <option key={cat.value} value={cat.value}>
+                    {language === 'fr' ? cat.labelFr : cat.labelMg}
                   </option>
                 ))}
               </select>
+              
+              <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-2.5 px-3 ${viewMode === 'grid' ? 'bg-blue-800 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                  <Grid3x3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-2.5 px-3 ${viewMode === 'list' ? 'bg-blue-800 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                  <LayoutList className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
           
-          {(searchTerm || selectedCategory !== (language === 'fr' ? "Tous" : "Rehetra")) && (
+          {(searchTerm || selectedCategory) && (
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
               {searchTerm && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-full text-xs">
@@ -371,71 +382,110 @@ export default function BlogPage() {
                   <button onClick={() => setSearchTerm('')} className="hover:text-red-500">✕</button>
                 </span>
               )}
-              {selectedCategory !== (language === 'fr' ? "Tous" : "Rehetra") && (
+              {selectedCategory && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-full text-xs">
-                  {selectedCategory}
-                  <button onClick={() => setSelectedCategory(language === 'fr' ? "Tous" : "Rehetra")} className="hover:text-red-500">✕</button>
+                  {getCategoryLabel(selectedCategory)}
+                  <button onClick={() => setSelectedCategory('')} className="hover:text-red-500">✕</button>
                 </span>
               )}
-              <button onClick={() => { setSearchTerm(''); setSelectedCategory(language === 'fr' ? "Tous" : "Rehetra"); }} className="text-xs text-blue-600 hover:underline">
+              <button onClick={() => { setSearchTerm(''); setSelectedCategory(''); }} className="text-xs text-blue-800 hover:underline">
                 {getText('Tout effacer', 'Fafana daholo')}
               </button>
             </div>
           )}
         </div>
 
-        {/* Liste des articles */}
+        {/* Resultats */}
+        <div className="mb-4">
+          <p className="text-sm text-gray-600">
+            <span className="font-semibold text-blue-800">{filteredPosts.length}</span> {getText(' article(s) trouve(s)', ' lahatsoratra hita')}
+          </p>
+        </div>
+
         {filteredPosts.length === 0 ? (
           <div className="bg-white rounded-xl shadow-md py-16 text-center">
-            <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 text-lg">{getText('Aucun article trouve', 'Tsy misy lahatsoratra hita')}</p>
           </div>
-        ) : (
-          <div className="space-y-6">
-            {paginatedPosts.map((post) => {
-              const displayTitle = language === 'fr' ? post.title_fr : (post.title_mg || post.title_fr);
-              const displaySummary = language === 'fr' ? post.summary_fr : (post.summary_mg || post.summary_fr);
-              const postCategory = typeToCategory[post.type] || 'Actualites';
-              const CategoryIcon = getCategoryIcon(postCategory);
-              const authorName = post.author ? `${post.author.first_name} ${post.author.last_name}` : 'Y-MaD';
-              
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredPosts.map((post) => {
+              const CategoryIcon = getCategoryIcon(post.type);
               return (
                 <div 
                   key={post.id}
-                  className="bg-white rounded-xl shadow-md hover:shadow-xl transition border border-gray-100 overflow-hidden cursor-pointer group"
+                  className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl cursor-pointer border border-gray-100 transition-all duration-300 hover:-translate-y-1"
                   onClick={() => openPostDetails(post)}
                 >
-                  <div className="flex flex-col md:flex-row gap-5 p-5">
-                    <div className="flex-shrink-0 md:w-48 h-32 md:h-auto rounded-lg overflow-hidden bg-gray-100">
-                      {post.image_url ? (
-                        <img src={post.image_url} alt={displayTitle} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200">
-                          <BookOpen className="w-8 h-8 text-blue-400" />
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-2">
-                        <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {formatDate(post.published_at)}</span>
-                        <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" /> {authorName}</span>
-                        <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                          {CategoryIcon} {postCategory}
-                        </span>
-                        <span className="flex items-center gap-1"><Eye className="w-3 h-3" /> {post.views} {getText('vues', 'fijeriana')}</span>
+                  <div className="relative h-48 overflow-hidden bg-gray-100">
+                    {getMainImageUrl(post) !== '/images/placeholder-blog.jpg' ? (
+                      <img src={getMainImageUrl(post)} alt={getPostTitle(post)} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+                        <ImageIcon className="w-12 h-12 text-blue-300" />
                       </div>
-                      
-                      <h2 className="text-lg md:text-xl font-bold text-gray-800 mb-2 group-hover:text-blue-600 line-clamp-1">
-                        {displayTitle}
-                      </h2>
-                      
-                      <p className="text-gray-600 text-sm mb-3 leading-relaxed line-clamp-2">
-                        {displaySummary}
-                      </p>
-                      
-                      <span className="text-blue-600 font-medium text-sm inline-flex items-center gap-1 hover:gap-2 transition-all">
-                        {getText('Lire la suite', 'Hamaky bebe kokoa')} <ChevronRight className="w-4 h-4" />
+                    )}
+                    <div className="absolute top-3 left-3">
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-800 text-white">
+                        <CategoryIcon className="w-3 h-3" /> {getCategoryLabel(post.type)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
+                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {formatDate(post.published_at || post.created_at)}</span>
+                      <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {post.views}</span>
+                    </div>
+                    <h3 className="font-bold text-lg text-gray-800 mb-2 line-clamp-1 group-hover:text-blue-800 transition">
+                      {getPostTitle(post)}
+                    </h3>
+                    <p className="text-gray-600 text-sm line-clamp-2">{getPostSummary(post)}</p>
+                    <div className="mt-4 flex items-center justify-between">
+                      <span className="text-blue-800 font-medium text-sm flex items-center gap-1">
+                        {getText('Lire la suite', 'Hamaky bebe kokoa')} <ChevronRight className="w-3 h-3" />
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredPosts.map((post) => {
+              const CategoryIcon = getCategoryIcon(post.type);
+              return (
+                <div 
+                  key={post.id}
+                  className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg cursor-pointer flex flex-col md:flex-row border border-gray-100"
+                  onClick={() => openPostDetails(post)}
+                >
+                  <div className="md:w-48 h-32 bg-gray-100 relative">
+                    {getMainImageUrl(post) !== '/images/placeholder-blog.jpg' ? (
+                      <img src={getMainImageUrl(post)} alt={getPostTitle(post)} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-blue-50">
+                        <ImageIcon className="w-8 h-8 text-blue-300" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 left-2">
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-800 text-white">
+                        <CategoryIcon className="w-3 h-3" /> {getCategoryLabel(post.type)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex-1 p-5">
+                    <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
+                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {formatDate(post.published_at || post.created_at)}</span>
+                      <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {post.views}</span>
+                    </div>
+                    <h3 className="font-bold text-lg text-gray-800 mb-1 group-hover:text-blue-800 transition">
+                      {getPostTitle(post)}
+                    </h3>
+                    <p className="text-gray-600 text-sm line-clamp-2">{getPostSummary(post)}</p>
+                    <div className="mt-2">
+                      <span className="text-blue-800 font-medium text-sm flex items-center gap-1">
+                        {getText('Lire la suite', 'Hamaky bebe kokoa')} <ChevronRight className="w-3 h-3" />
                       </span>
                     </div>
                   </div>
@@ -444,71 +494,146 @@ export default function BlogPage() {
             })}
           </div>
         )}
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex justify-center gap-2 mt-10">
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              let pageNum: number;
-              if (totalPages <= 5) {
-                pageNum = i + 1;
-              } else if (currentPage <= 3) {
-                pageNum = i + 1;
-              } else if (currentPage >= totalPages - 2) {
-                pageNum = totalPages - 4 + i;
-              } else {
-                pageNum = currentPage - 2 + i;
-              }
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`px-3 py-1 rounded-lg transition ${
-                    currentPage === pageNum
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'border border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* ==================== CTA SECTION ==================== */}
       <div className="bg-gradient-to-r from-blue-800 to-blue-900 py-16 mt-10">
         <div className="max-w-4xl mx-auto text-center px-4">
-          <Heart className="w-12 h-12 text-blue-300 mx-auto mb-4" />
+          <Award className="w-12 h-12 text-blue-300 mx-auto mb-4" />
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
-            {getText('Suivez notre actualite', 'Araho ny vaovao ataonay')}
+            {getText('Restez informes', 'Mijanona ho voa vaovao')}
           </h2>
           <p className="text-blue-100 mb-6 max-w-lg mx-auto">
             {getText(
-              'Ne manquez aucune de nos actions et decouvertes',
-              'Aza adino ny hetsika sy zava-baovao ataonay'
+              'Abonnez-vous pour recevoir nos dernieres actualites',
+              'Misoratra anarana hahazo ny vaovao farany'
             )}
           </p>
-          <Link href="/contact" className="inline-flex items-center gap-2 bg-white text-blue-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition">
-            {getText('Nous contacter', 'Mifandraisa aminay')} <ArrowLeft className="w-4 h-4" />
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <input
+              type="email"
+              placeholder={getText('Votre email', 'Ny mailakao')}
+              className="flex-1 px-4 py-3 rounded-lg focus:ring-2 focus:ring-white outline-none bg-white"
+            />
+            <button className="bg-white text-blue-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition flex items-center justify-center gap-2">
+              <Send className="w-4 h-4" /> {getText("S'abonner", 'Misoratra')}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* ==================== MODAL ARTICLE ==================== */}
+      {showModal && selectedPost && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            
+            <div className="sticky top-0 bg-white p-5 border-b flex justify-between items-center rounded-t-2xl">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">{getPostTitle(selectedPost)}</h2>
+                <p className="text-sm text-gray-500">
+                  {formatDate(selectedPost.published_at || selectedPost.created_at)} • {getAuthorName(selectedPost)}
+                </p>
+              </div>
+              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {selectedPost.image_url && (
+              <div className="p-6">
+                <img src={selectedPost.image_url} alt={getPostTitle(selectedPost)} className="w-full h-[350px] object-cover rounded-xl shadow-lg" />
+              </div>
+            )}
+
+            <div className="p-6 border-t bg-gray-50">
+              <div className="flex flex-wrap gap-4 text-sm text-gray-500 mb-4 pb-4 border-b border-gray-200">
+                <span className="flex items-center gap-1.5"><Eye className="w-4 h-4" /> {selectedPost.views} {getText('vues', 'fijeriana')}</span>
+                <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> {formatReadingTime(selectedPost.content_fr)}</span>
+              </div>
+              <div className="bg-blue-50 rounded-xl p-4 mb-6 border-l-4 border-blue-800">
+                <p className="text-gray-700 italic">{getPostSummary(selectedPost)}</p>
+              </div>
+              <div className="prose prose-lg max-w-none text-gray-700">
+                <div dangerouslySetInnerHTML={{ __html: selectedPost.content_fr }} />
+              </div>
+            </div>
+
+            <div className="p-6 border-t flex flex-wrap gap-3 justify-center">
+              <button
+                onClick={() => handleReadMore(selectedPost.slug)}
+                className="bg-blue-800 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-900 transition"
+              >
+                {getText('Lire la suite', 'Hamaky bebe kokoa')}
+              </button>
+              <button
+                onClick={() => setShowModal(false)}
+                className="bg-white border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-50 transition"
+              >
+                {getText('Fermer', 'Hidy')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{`
+        @keyframes bounce {
+          0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-20px); }
+          60% { transform: translateY(-10px); }
+        }
+        .animate-bounce {
+          animation: bounce 2s infinite;
+        }
+        .line-clamp-1 {
+          display: -webkit-box;
+          -webkit-line-clamp: 1;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .line-clamp-3 {
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .prose {
+          max-width: none;
+        }
+        .prose h1, .prose h2, .prose h3, .prose h4 {
+          color: #1f2937;
+          font-weight: bold;
+          margin-top: 1.5rem;
+          margin-bottom: 0.75rem;
+        }
+        .prose p {
+          margin-bottom: 1rem;
+          line-height: 1.6;
+        }
+        .prose ul, .prose ol {
+          margin: 1rem 0 1rem 1.5rem;
+        }
+        .prose li {
+          margin: 0.25rem 0;
+        }
+        .prose blockquote {
+          border-left: 4px solid #1E3A8A;
+          padding-left: 1rem;
+          margin: 1rem 0;
+          color: #4b5563;
+          font-style: italic;
+        }
+        .prose a {
+          color: #1E3A8A;
+          text-decoration: underline;
+        }
+      `}</style>
     </div>
   );
 }

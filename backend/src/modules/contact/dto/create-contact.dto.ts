@@ -7,17 +7,22 @@ export class CreateContactDto {
   @IsNotEmpty({ message: 'Le nom complet est requis' })
   @MinLength(2, { message: 'Le nom doit contenir au moins 2 caractères' })
   @MaxLength(255, { message: 'Le nom ne doit pas dépasser 255 caractères' })
-  full_name: string;
+  name: string;  // Changé: full_name -> name
 
   @IsEmail({}, { message: 'Veuillez fournir une adresse email valide' })
   @IsNotEmpty({ message: 'L\'email est requis' })
   @MaxLength(255, { message: 'L\'email ne doit pas dépasser 255 caractères' })
   email: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'L\'objet est requis' })
-  @MinLength(3, { message: 'L\'objet doit contenir au moins 3 caractères' })
-  @MaxLength(255, { message: 'L\'objet ne doit pas dépasser 255 caractères' })
+  @MaxLength(50, { message: 'Le téléphone ne doit pas dépasser 50 caractères' })
+  phone?: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Le sujet est requis' })
+  @MinLength(3, { message: 'Le sujet doit contenir au moins 3 caractères' })
+  @MaxLength(500, { message: 'Le sujet ne doit pas dépasser 500 caractères' })
   subject: string;
 
   @IsString()
@@ -31,17 +36,6 @@ export class UpdateContactStatusDto {
   @IsString()
   @IsNotEmpty({ message: 'Le statut est requis' })
   status: string;
-
-  @IsOptional()
-  @IsString()
-  admin_notes?: string;
-}
-
-export class ReplyContactDto {
-  @IsString()
-  @IsNotEmpty({ message: 'La réponse est requise' })
-  @MinLength(10, { message: 'La réponse doit contenir au moins 10 caractères' })
-  reply_message: string;
 }
 
 export class ContactQueryDto {
