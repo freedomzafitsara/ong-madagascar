@@ -6,13 +6,13 @@ import axios from 'axios';
 // 1. CONFIGURATION DE BASE
 // ============================================================
 
-// L'URL de base de l'API NestJS
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+// ✅ FORCER l'URL sans /api
+// La variable d'environnement ne doit PAS contenir /api
+const API_BASE_URL = 'http://localhost:4001';
 
-// CORRECTION: Ajouter /api dans le baseURL
-// Le backend utilise setGlobalPrefix('api') dans main.ts
+// ✅ baseURL avec /api
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/api`,  // ← CORRECTION: /api ajoute ici
+  baseURL: `${API_BASE_URL}/api`,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -28,17 +28,14 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('access_token') || 
-                    localStorage.getItem('token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
     
     // Debug: Afficher l'URL complete
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
-    }
+    console.log(`[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     
     return config;
   },
@@ -54,13 +51,10 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[API] ${response.status} ${response.config.url}`);
-    }
+    console.log(`[API] ${response.status} ${response.config.url}`);
     return response;
   },
   (error) => {
-    // Erreur reseau (serveur indisponible)
     if (!error.response) {
       console.error('[API] Erreur reseau:', error.message);
       return Promise.reject(new Error('Impossible de contacter le serveur. Verifiez votre connexion.'));
@@ -70,7 +64,6 @@ api.interceptors.response.use(
     const url = error.config?.url || 'inconnu';
     const message = error.response?.data?.message || error.message;
     
-    // Gestion des erreurs HTTP
     if (status === 400) {
       console.warn(`[API] 400 Requete invalide: ${url}`, message);
     } 
@@ -82,7 +75,6 @@ api.interceptors.response.use(
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
         
-        // Redirection vers login si pas deja sur une page publique
         const isPublicPage = window.location.pathname.includes('/login') || 
                             window.location.pathname === '/' ||
                             window.location.pathname.includes('/public');

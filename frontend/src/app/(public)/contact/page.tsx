@@ -14,13 +14,36 @@ import { pageService, PageBackground } from '@/services/page.service';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
+// ============================================================
+// CONSTANTES
+// ============================================================
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+
+// ============================================================
+// COMPOSANT INFO (ICONE PERSONNALISEE)
+// ============================================================
+
+function Info(props: any) {
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+  );
+}
+
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
 
 export default function ContactPage() {
   const { language } = useLanguage();
+  
+  // État du formulaire
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
@@ -29,8 +52,15 @@ export default function ContactPage() {
     message: ""
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // État du fond d'écran
+  const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
 
   const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+
+  // ============================================================
+  // CHARGEMENT DU FOND D'ECRAN
+  // ============================================================
 
   useEffect(() => {
     const loadPageBackground = async () => {
@@ -40,11 +70,15 @@ export default function ContactPage() {
           setPageBackground(background);
         }
       } catch (error) {
-        console.error('Erreur chargement fond d ecran:', error);
+        console.error('Erreur chargement du fond d\'ecran:', error);
       }
     };
     loadPageBackground();
   }, []);
+
+  // ============================================================
+  // VALIDATION DU FORMULAIRE
+  // ============================================================
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -66,12 +100,16 @@ export default function ContactPage() {
     if (!formData.message.trim()) {
       newErrors.message = getText('Le message est requis', 'Ilaina ny hafatra');
     } else if (formData.message.length < 10) {
-      newErrors.message = getText('Le message doit contenir au moins 10 caractères', 'Ny hafatra dia tsy maintsy 10 soratra farafahakeliny');
+      newErrors.message = getText('Le message doit contenir au moins 10 caracteres', 'Ny hafatra dia tsy maintsy 10 soratra farafahakeliny');
     }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+  // ============================================================
+  // GESTION DU FORMULAIRE
+  // ============================================================
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -114,11 +152,15 @@ export default function ContactPage() {
         throw new Error(error.message || 'Erreur');
       }
     } catch (err) {
-      toast.error(getText('Erreur lors de l envoi du message', 'Nisy hadisoana tamin\'ny fandefasana'));
+      toast.error(getText('Erreur lors de l\'envoi du message', 'Nisy hadisoana tamin\'ny fandefasana'));
     } finally {
       setLoading(false);
     }
   };
+
+  // ============================================================
+  // RESEAUX SOCIAUX
+  // ============================================================
 
   const socialLinks = [
     { name: 'Facebook', url: 'https://facebook.com/ymad.mg', icon: FaFacebook, bg: '#1877F2' },
@@ -127,7 +169,10 @@ export default function ContactPage() {
     { name: 'LinkedIn', url: 'https://linkedin.com/company/ymad-mg', icon: FaLinkedin, bg: '#0A66C2' },
   ];
 
-  // Style fond d'ecran PLEIN ECRAN
+  // ============================================================
+  // STYLES DU FOND D'ECRAN - PLEIN ECRAN
+  // ============================================================
+
   const heroBackgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundImage: `url(${pageBackground.image_url})`,
     backgroundPosition: pageBackground.position || 'center',
@@ -140,10 +185,17 @@ export default function ContactPage() {
     backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 40) / 100})`,
   } : {};
 
+  // ============================================================
+  // RENDU
+  // ============================================================
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Section - Plein ecran */}
-      <section className="relative min-h-[85vh] w-full flex items-center justify-center overflow-hidden">
+      
+      {/* ============================================================
+      SECTION HERO - PLEIN ECRAN (100vh) AVEC FOND D'ECRAN DYNAMIQUE
+      ============================================================ */}
+      <section className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
           {pageBackground?.image_url && pageBackground.is_active ? (
             <>
@@ -156,22 +208,27 @@ export default function ContactPage() {
         </div>
 
         <div className="relative z-10 text-center px-4 max-w-4xl mx-auto animate-fadeInUp">
+          
+          {/* Badge de reconnaissance */}
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-6">
             <Heart className="w-4 h-4 text-blue-200" />
             <span className="text-sm font-medium text-white">Y-MaD Madagascar</span>
           </div>
           
+          {/* Titre principal */}
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 drop-shadow-2xl">
             {getText('Contactez-nous', 'Mifandraisa aminay')}
           </h1>
           
+          {/* Sous-titre */}
           <p className="text-lg md:text-xl lg:text-2xl text-blue-100 max-w-2xl mx-auto">
             {getText(
-              'Une question ? N hesitez pas a nous contacter',
+              'Une question ? N\'hesitez pas a nous contacter',
               'Manana fanontaniana? Aza misalasala mifandraisa aminay'
             )}
           </p>
           
+          {/* Indicateur de défilement */}
           <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
             <div className="w-7 h-11 border-2 border-white/40 rounded-full flex justify-center">
               <div className="w-1.5 h-2.5 bg-white rounded-full mt-2 animate-pulse"></div>
@@ -180,7 +237,9 @@ export default function ContactPage() {
         </div>
       </section>
 
-      {/* Section principale */}
+      {/* ============================================================
+      SECTION PRINCIPALE - FORMULAIRE ET INFORMATIONS
+      ============================================================ */}
       <div className="bg-white rounded-t-3xl shadow-2xl -mt-10 relative z-20">
         <div className="py-16">
           <div className="max-w-7xl mx-auto px-4">
@@ -199,23 +258,33 @@ export default function ContactPage() {
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Formulaire de contact */}
+              
+              {/* ============================================================
+              FORMULAIRE DE CONTACT
+              ============================================================ */}
               <div className="lg:col-span-2">
                 <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 border border-gray-200">
                   
+                  {/* Message de succès */}
                   {submitted && (
                     <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
                       <div className="flex items-center gap-3">
                         <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
                         <div>
-                          <p className="font-medium text-green-800">{getText('Message envoye !', 'Voaefa ny hafatra !')}</p>
-                          <p className="text-sm text-green-600">{getText('Nous vous repondrons rapidement.', 'Hamaly anao haingana izahay.')}</p>
+                          <p className="font-medium text-green-800">
+                            {getText('Message envoye !', 'Voaefa ny hafatra !')}
+                          </p>
+                          <p className="text-sm text-green-600">
+                            {getText('Nous vous repondrons rapidement.', 'Hamaly anao haingana izahay.')}
+                          </p>
                         </div>
                       </div>
                     </div>
                   )}
                   
                   <form onSubmit={handleSubmit} className="space-y-5">
+                    
+                    {/* Nom et Email */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -224,13 +293,12 @@ export default function ContactPage() {
                         <input 
                           type="text" 
                           name="full_name"
-                          placeholder={getText('Jean RAKOTO', 'Jean RAKOTO')} 
+                          placeholder={getText('Votre nom complet', 'Ny anaranao feno')} 
                           value={formData.full_name} 
                           onChange={handleInputChange} 
                           className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition ${
                             errors.full_name ? 'border-red-500 bg-red-50' : 'border-gray-300'
                           }`}
-                          required 
                         />
                         {errors.full_name && (
                           <p className="text-xs text-red-500 mt-1">{errors.full_name}</p>
@@ -243,13 +311,12 @@ export default function ContactPage() {
                         <input 
                           type="email" 
                           name="email"
-                          placeholder="jean.rakoto@email.com" 
+                          placeholder="exemple@domaine.com" 
                           value={formData.email} 
                           onChange={handleInputChange} 
                           className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition ${
                             errors.email ? 'border-red-500 bg-red-50' : 'border-gray-300'
                           }`}
-                          required 
                         />
                         {errors.email && (
                           <p className="text-xs text-red-500 mt-1">{errors.email}</p>
@@ -257,6 +324,7 @@ export default function ContactPage() {
                       </div>
                     </div>
                     
+                    {/* Téléphone et Sujet */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -265,7 +333,7 @@ export default function ContactPage() {
                         <input 
                           type="tel" 
                           name="phone"
-                          placeholder="+261 32 04 856 97" 
+                          placeholder="+261 XX XXX XX" 
                           value={formData.phone} 
                           onChange={handleInputChange} 
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition" 
@@ -278,13 +346,12 @@ export default function ContactPage() {
                         <input 
                           type="text" 
                           name="subject"
-                          placeholder={getText('Question sur nos projets...', 'Fanontaniana momba ny tetikasa...')} 
+                          placeholder={getText('Objet de votre message', 'Lohahevitry ny hafatrao')} 
                           value={formData.subject} 
                           onChange={handleInputChange} 
                           className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition ${
                             errors.subject ? 'border-red-500 bg-red-50' : 'border-gray-300'
                           }`}
-                          required 
                         />
                         {errors.subject && (
                           <p className="text-xs text-red-500 mt-1">{errors.subject}</p>
@@ -292,20 +359,20 @@ export default function ContactPage() {
                       </div>
                     </div>
                     
+                    {/* Message */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {getText('Message', 'Hafatra')} <span className="text-red-500">*</span>
                       </label>
                       <textarea 
                         name="message"
-                        placeholder={getText('Votre message...', 'Ny hafatrao...')} 
+                        placeholder={getText('Decrivez votre demande...', 'Hazavay ny fangatahanao...')} 
                         rows={5} 
                         value={formData.message} 
                         onChange={handleInputChange} 
                         className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition resize-y ${
                           errors.message ? 'border-red-500 bg-red-50' : 'border-gray-300'
                         }`}
-                        required
                       />
                       {errors.message && (
                         <p className="text-xs text-red-500 mt-1">{errors.message}</p>
@@ -315,6 +382,7 @@ export default function ContactPage() {
                       </p>
                     </div>
                     
+                    {/* Bouton d'envoi */}
                     <button 
                       type="submit" 
                       disabled={loading}
@@ -327,7 +395,7 @@ export default function ContactPage() {
                         </>
                       ) : (
                         <>
-                          <Send size={18} />
+                          <Send className="w-5 h-5" />
                           {getText('Envoyer le message', 'Alefaso ny hafatra')}
                         </>
                       )}
@@ -336,7 +404,9 @@ export default function ContactPage() {
                 </div>
               </div>
 
-              {/* Informations de contact */}
+              {/* ============================================================
+              INFORMATIONS DE CONTACT
+              ============================================================ */}
               <div>
                 <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                   <div className="flex items-center gap-2 mb-5">
@@ -349,6 +419,7 @@ export default function ContactPage() {
                   </div>
                   
                   <div className="space-y-5">
+                    {/* Adresse */}
                     <div className="flex gap-3 items-start group">
                       <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-800 transition-colors">
                         <MapPin className="text-blue-800 group-hover:text-white transition-colors" size={18} />
@@ -359,6 +430,7 @@ export default function ContactPage() {
                       </div>
                     </div>
                     
+                    {/* Téléphone */}
                     <div className="flex gap-3 items-start group">
                       <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-800 transition-colors">
                         <Phone className="text-blue-800 group-hover:text-white transition-colors" size={18} />
@@ -371,6 +443,7 @@ export default function ContactPage() {
                       </div>
                     </div>
                     
+                    {/* Email */}
                     <div className="flex gap-3 items-start group">
                       <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-800 transition-colors">
                         <Mail className="text-blue-800 group-hover:text-white transition-colors" size={18} />
@@ -383,6 +456,7 @@ export default function ContactPage() {
                       </div>
                     </div>
                     
+                    {/* Horaires */}
                     <div className="flex gap-3 items-start group">
                       <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-800 transition-colors">
                         <Clock className="text-blue-800 group-hover:text-white transition-colors" size={18} />
@@ -397,7 +471,7 @@ export default function ContactPage() {
                   </div>
                 </div>
 
-                {/* Reseaux sociaux */}
+                {/* Réseaux sociaux */}
                 <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-6 mt-6 border border-blue-200">
                   <div className="flex items-center gap-2 mb-4">
                     <Heart className="w-5 h-5 text-blue-800" />
@@ -422,7 +496,7 @@ export default function ContactPage() {
                   </div>
                 </div>
 
-                {/* Carte Google Maps simplifiée */}
+                {/* Carte Google Maps */}
                 <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 mt-6">
                   <div className="h-48 w-full bg-gray-200 relative">
                     <iframe 
@@ -449,7 +523,9 @@ export default function ContactPage() {
         </div>
       </div>
 
-      {/* CTA Section */}
+      {/* ============================================================
+      SECTION APPEL A L'ACTION
+      ============================================================ */}
       <div className="bg-gradient-to-r from-blue-800 to-blue-900 py-12 mt-8">
         <div className="max-w-4xl mx-auto text-center px-4">
           <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -481,6 +557,7 @@ export default function ContactPage() {
         </div>
       </div>
 
+      {/* Styles globaux */}
       <style jsx global>{`
         @keyframes fadeInUp {
           from {
@@ -505,16 +582,5 @@ export default function ContactPage() {
         }
       `}</style>
     </div>
-  );
-}
-
-// Composant Info manquant
-function Info(props: any) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="16" x2="12" y2="12" />
-      <line x1="12" y1="8" x2="12.01" y2="8" />
-    </svg>
   );
 }

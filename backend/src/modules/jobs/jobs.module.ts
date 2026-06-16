@@ -1,6 +1,6 @@
 ﻿// backend/src/modules/jobs/jobs.module.ts
 
-import { Module, Logger } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JobsController } from './jobs.controller';
 import { JobsService } from './jobs.service';
@@ -12,19 +12,10 @@ import { UploadModule } from '../upload/upload.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([JobOffer, JobApplication, User]),
-    UploadModule,
+    UploadModule,  //  Importation du UploadModule
   ],
   controllers: [JobsController],
-  providers: [
-    JobsService,
-    {
-      provide: 'JOBS_LOGGER',
-      useFactory: () => new Logger('JobsModule'),
-    },
-  ],
-  exports: [
-    JobsService,
-    TypeOrmModule,
-  ],
+  providers: [JobsService],
+  exports: [JobsService],
 })
-export class JobsModule {}  
+export class JobsModule {}

@@ -13,7 +13,11 @@ import {
   Res, 
   UploadedFile, 
   UseInterceptors,
-  Put
+  Put,
+  HttpCode,
+  HttpStatus,
+  BadRequestException,
+  NotFoundException
 } from '@nestjs/common';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -28,7 +32,10 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { UploadService } from '../upload/upload.service';
+import { memoryStorage } from 'multer';
+import { UserRole } from '../auth/entities/user.entity';
 
 @Controller('jobs')
 export class JobsController {
@@ -41,19 +48,16 @@ export class JobsController {
   // ROUTES PUBLIQUES
   // ============================================================
 
+  @Public()
   @Get('offers/public')
   async findPublic(@Query() queryDto: JobOfferQueryDto) {
     return this.jobsService.findPublished(queryDto);
   }
 
+  @Public()
   @Get('offers/featured')
   async findFeatured() {
     return this.jobsService.findFeatured();
-  }
-
-  @Get('offers/stats')
-  async getStats() {
-    return this.jobsService.getStats();
   }
 
   // ============================================================
@@ -61,9 +65,19 @@ export class JobsController {
   // ============================================================
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Get('offers/stats')
+  async getStats() {
+    return this.jobsService.getStats();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Post('offers')
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(FileInterceptor('image', {
+    storage: memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 },
+  }))
   async create(
     @Body() createJobOfferDto: CreateJobOfferDto,
     @UploadedFile() file?: Express.Multer.File,
@@ -71,69 +85,79 @@ export class JobsController {
     const job = await this.jobsService.create(createJobOfferDto);
     
     if (file) {
-      const image = await this.uploadService.uploadImage(
-        file,
-        'job',
-        job.id,
-        true,
-        0,
-      );
-      
-      await this.jobsService.updateImageUrl(job.id, this.uploadService.getImageUrl(image.id));
-      await this.jobsService.updateMainImage(job.id, image.id);
-      
-      return {
-        ...job,
-        imageUrl: this.uploadService.getImageUrl(image.id),
-        imageId: image.id,
-      };
+      try {
+        const uploadedFile = await this.uploadService.uploadFile(
+          file,
+          'job',
+          job.id,
+        );
+        
+        const baseUrl = process.env.API_URL || 'http://localhost:4001';
+        const imageUrl = `${baseUrl}${this.uploadService.getImageUrl(uploadedFile.id)}`;
+        
+        await this.jobsService.updateImageUrl(job.id, imageUrl);
+        await this.jobsService.updateMainImage(job.id, uploadedFile.id);
+        
+        return {
+          ...job,
+          imageUrl,
+          imageId: uploadedFile.id,
+        };
+      } catch (error) {
+        return job;
+      }
     }
     
     return job;
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Post('offers/:id/upload-image')
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(FileInterceptor('image', {
+    storage: memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 },
+  }))
   async uploadOfferImage(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
-    @Body('isMain') isMain?: string,
   ) {
-    const job = await this.jobsService.findOne(id);
-    if (!job) {
-      throw new Error('Offre non trouvee');
+    if (!file) {
+      throw new BadRequestException('Aucun fichier fourni');
     }
     
-    const isMainImage = isMain === 'true';
+    const job = await this.jobsService.findOne(id);
+    if (!job) {
+      throw new NotFoundException('Offre non trouvee');
+    }
     
-    const image = await this.uploadService.uploadImage(
+    const uploadedFile = await this.uploadService.uploadFile(
       file,
       'job',
       id,
-      isMainImage,
-      0,
     );
     
-    if (isMainImage) {
-      await this.jobsService.updateImageUrl(id, this.uploadService.getImageUrl(image.id));
-      await this.jobsService.updateMainImage(id, image.id);
-    }
+    const baseUrl = process.env.API_URL || 'http://localhost:4001';
+    const imageUrl = `${baseUrl}${this.uploadService.getImageUrl(uploadedFile.id)}`;
+    
+    await this.jobsService.updateImageUrl(id, imageUrl);
+    await this.jobsService.updateMainImage(id, uploadedFile.id);
     
     return {
       success: true,
       image: {
-        id: image.id,
-        url: this.uploadService.getImageUrl(image.id),
-        isMain: image.isMain,
-        fileName: image.fileName,
+        id: uploadedFile.id,
+        url: imageUrl,
+        fileName: uploadedFile.filename,
+        originalName: uploadedFile.originalName,
+        fileSize: uploadedFile.size,
+        format: uploadedFile.format,
       },
     };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Get('offers')
   async findAll(@Query() queryDto: JobOfferQueryDto) {
     const result = await this.jobsService.findAll(queryDto);
@@ -145,11 +169,12 @@ export class JobsController {
         
         if (job.main_image_id) {
           try {
-            const image = await this.uploadService.getImageById(job.main_image_id);
-            imageUrl = this.uploadService.getImageUrl(image.id);
-            imageId = image.id;
+            const file = await this.uploadService.getFileById(job.main_image_id);
+            const baseUrl = process.env.API_URL || 'http://localhost:4001';
+            imageUrl = `${baseUrl}${this.uploadService.getImageUrl(file.id)}`;
+            imageId = file.id;
           } catch (error) {
-            // Ignorer
+            // Ignorer l'erreur
           }
         }
         
@@ -168,106 +193,149 @@ export class JobsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Get('offers/:id')
   async findOne(@Param('id') id: string) {
     const job = await this.jobsService.findOne(id);
     
-    const images = await this.uploadService.getImagesByEntity('job', id);
+    let mainImageUrl = null;
+    let images = [];
+    const baseUrl = process.env.API_URL || 'http://localhost:4001';
+    
+    if (job.main_image_id) {
+      try {
+        const file = await this.uploadService.getFileById(job.main_image_id);
+        mainImageUrl = `${baseUrl}${this.uploadService.getImageUrl(file.id)}`;
+        images.push({
+          id: file.id,
+          url: mainImageUrl,
+          fileName: file.filename,
+          originalName: file.originalName,
+          fileSize: file.size,
+          format: file.format,
+          isMain: true,
+        });
+      } catch (error) {
+        // Ignorer
+      }
+    }
+    
+    try {
+      const otherFiles = await this.uploadService.getFilesByEntity('job', id);
+      for (const file of otherFiles) {
+        if (file.id !== job.main_image_id) {
+          images.push({
+            id: file.id,
+            url: `${baseUrl}${this.uploadService.getImageUrl(file.id)}`,
+            fileName: file.filename,
+            originalName: file.originalName,
+            fileSize: file.size,
+            format: file.format,
+            isMain: false,
+          });
+        }
+      }
+    } catch (error) {
+      // Ignorer
+    }
     
     return {
       ...job,
-      images: images.map(img => ({
-        id: img.id,
-        url: this.uploadService.getImageUrl(img.id),
-        isMain: img.isMain,
-        fileName: img.fileName,
-        fileSize: img.fileSize,
-        mimeType: img.mimeType,
-      })),
-      mainImageUrl: job.main_image_id ? this.uploadService.getImageUrl(job.main_image_id) : null,
+      mainImageUrl,
+      images,
     };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Patch('offers/:id')
   async update(@Param('id') id: string, @Body() updateJobOfferDto: UpdateJobOfferDto) {
     return this.jobsService.update(id, updateJobOfferDto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Patch('offers/:id/status')
   async updateStatus(@Param('id') id: string, @Body() updateJobStatusDto: UpdateJobStatusDto) {
     return this.jobsService.updateStatus(id, updateJobStatusDto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Delete('offers/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string) {
-    await this.uploadService.deleteImagesByEntity('job', id);
-    return this.jobsService.remove(id);
+    await this.uploadService.deleteFilesByEntity('job', id);
+    await this.jobsService.remove(id);
+    return { success: true, message: 'Offre supprimee avec succes' };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Delete('offers/:id/images/:imageId')
   async removeImage(
     @Param('id') id: string,
     @Param('imageId') imageId: string,
   ) {
-    await this.uploadService.deleteImage(imageId);
+    await this.uploadService.deleteFile(imageId);
     return { success: true, message: 'Image supprimee avec succes' };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Put('offers/:id/images/:imageId/main')
   async setMainImage(
     @Param('id') id: string,
     @Param('imageId') imageId: string,
   ) {
-    const image = await this.uploadService.setMainImage(imageId, 'job', id);
+    const file = await this.uploadService.getFileById(imageId);
+    const baseUrl = process.env.API_URL || 'http://localhost:4001';
+    const imageUrl = `${baseUrl}${this.uploadService.getImageUrl(imageId)}`;
+    
     await this.jobsService.updateMainImage(id, imageId);
-    await this.jobsService.updateImageUrl(id, this.uploadService.getImageUrl(imageId));
+    await this.jobsService.updateImageUrl(id, imageUrl);
     
     return {
       success: true,
       image: {
-        id: image.id,
-        url: this.uploadService.getImageUrl(image.id),
-        isMain: image.isMain,
+        id: file.id,
+        url: imageUrl,
+        fileName: file.filename,
+        isMain: true,
       },
     };
   }
 
   // ============================================================
-  // ROUTES CANDIDATURES
+  // ROUTES CANDIDATURES (PUBLIC)
   // ============================================================
 
+  @Public()
   @Post('apply')
   async apply(@Body() createJobApplicationDto: CreateJobApplicationDto) {
     return this.jobsService.apply(createJobApplicationDto);
   }
 
+  // ============================================================
+  // ROUTES CANDIDATURES (ADMIN)
+  // ============================================================
+
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Get('applications')
   async getAllApplications(@Query() queryDto: ApplicationQueryDto) {
     return this.jobsService.getAllApplications(queryDto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Get('applications/stats')
   async getApplicationStats() {
     return this.jobsService.getApplicationStats();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Get('offers/:id/applications')
   async getApplicationsByJob(
     @Param('id') id: string, 
@@ -277,7 +345,7 @@ export class JobsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Patch('applications/:id/status')
   async updateApplicationStatus(
     @Param('id') id: string, 
@@ -287,14 +355,14 @@ export class JobsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Delete('applications/:id')
   async removeApplication(@Param('id') id: string) {
     return this.jobsService.deleteApplication(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Get('applications/export')
   async exportApplications(
     @Query('jobId') jobId: string,

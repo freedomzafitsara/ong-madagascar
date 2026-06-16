@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { UserRole } from '../auth/entities/user.entity';
 
 @Controller('language')
 export class LanguageController {
@@ -59,7 +60,7 @@ export class LanguageController {
    * Crée ou met à jour une traduction (admin uniquement)
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async createOrUpdate(
@@ -72,7 +73,7 @@ export class LanguageController {
    * Met à jour uniquement la version française
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Post(':key/fr')
   async updateFrench(
     @Param('key') key: string,
@@ -85,7 +86,7 @@ export class LanguageController {
    * Met à jour uniquement la version malgache
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Post(':key/mg')
   async updateMalagasy(
     @Param('key') key: string,
@@ -98,7 +99,7 @@ export class LanguageController {
    * Importe des traductions depuis un fichier JSON
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Post('import')
   async importTranslations(
     @Body() body: { fr: Record<string, string>; mg: Record<string, string> },
@@ -110,7 +111,7 @@ export class LanguageController {
    * Supprime une traduction (admin uniquement)
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Delete(':key')
   @HttpCode(HttpStatus.OK)
   async delete(@Param('key') key: string) {
@@ -121,7 +122,7 @@ export class LanguageController {
    * Supprime toutes les traductions (super admin uniquement)
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Delete('all/clear')
   @HttpCode(HttpStatus.OK)
   async deleteAll() {
@@ -132,7 +133,7 @@ export class LanguageController {
    * Compte le nombre de traductions (admin)
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @Get('stats/count')
   async count() {
     const count = await this.languageService.countTranslations();

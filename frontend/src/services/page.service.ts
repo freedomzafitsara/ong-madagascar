@@ -1,9 +1,12 @@
-﻿// src/services/page.service.ts
+﻿// frontend/src/services/page.service.ts
+
 import api from '@/lib/axios';
 
 export interface PageContent {
   id: string;
-  page: string;
+  page_key: string;
+  content_fr?: string;
+  content_mg?: string;
   hero?: {
     title_fr: string;
     title_mg: string;
@@ -17,54 +20,49 @@ export interface PageContent {
   sections?: any[];
   stats?: any[];
   cta?: any;
+  seo_title_fr?: string;
+  seo_title_mg?: string;
+  seo_description_fr?: string;
+  seo_description_mg?: string;
+  seo_keywords?: string;
   is_published: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PageBackground {
   id: string;
-  page: string;
+  page_key: string;
   image_url: string;
-  mobile_url?: string;
-  thumbnail_url?: string;
   is_active: boolean;
   overlay_opacity: number;
   position: string;
-  size: string;
-  alt_text?: string;
+  alt_fr?: string;
+  alt_mg?: string;
+  created_at: string;
+  updated_at: string;
 }
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
 
 export const pageService = {
   // ============================================================
   // CONTENU DES PAGES (PUBLIC)
   // ============================================================
   
-  /**
-   * Récupère le contenu d'une page (public - sans authentification)
-   */
   async getPageContent(page: string): Promise<PageContent | null> {
     try {
-      const response = await fetch(`${API_URL}/api/pages/public/${page}`);
-      if (!response.ok) return null;
-      return await response.json();
+      const response = await api.get(`/pages/public/${page}`);
+      return response.data;
     } catch (error) {
       console.error('Erreur chargement contenu page:', error);
       return null;
     }
   },
 
-  /**
-   * Récupère le contenu d'une page pour admin (avec token)
-   */
   async getPageContentForAdmin(page: string): Promise<PageContent> {
     const response = await api.get(`/pages/${page}`);
     return response.data;
   },
 
-  /**
-   * Met à jour le contenu d'une page (admin)
-   */
   async updatePageContent(page: string, data: Partial<PageContent>): Promise<PageContent> {
     const response = await api.put(`/pages/${page}`, data);
     return response.data;
@@ -74,26 +72,35 @@ export const pageService = {
   // FONDS D'ECRAN (PUBLIC)
   // ============================================================
   
-  /**
-   * Récupère le fond d'écran d'une page (public - sans authentification)
-   */
   async getPageBackground(page: string): Promise<PageBackground | null> {
     try {
-      const response = await fetch(`${API_URL}/api/pages/backgrounds/${page}`);
+      const response = await api.get(`/pages/backgrounds/${page}`);
       
-      if (!response.ok) {
-        return null;
-      }
+      const data = response.data;
       
-      const data = await response.json();
-      
-      if (data && data.is_active && data.image_url) {
-        return data;
+      if (data && data.is_active !== false && data.image_url) {
+        let imageUrl = data.image_url;
+        
+        // Si l'URL est relative, la rendre absolue
+        if (imageUrl && imageUrl.startsWith('/') && !imageUrl.startsWith('http')) {
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+          imageUrl = `${baseUrl}${imageUrl}`;
+        }
+        
+        return {
+          ...data,
+          image_url: imageUrl,
+        };
       }
       
       return null;
-    } catch (error) {
-      console.error('Erreur chargement fond d écran:', error);
+    } catch (error: any) {
+      // Gérer les erreurs axios
+      if (error.response) {
+        console.error(`Erreur ${error.response.status} chargement fond d'ecran:`, error.response.data);
+      } else {
+        console.error('Erreur chargement fond d ecran:', error.message);
+      }
       return null;
     }
   },
@@ -102,40 +109,42 @@ export const pageService = {
   // FONDS D'ECRAN (ADMIN)
   // ============================================================
   
-  /**
-   * Récupère tous les fonds d'écran (admin)
-   */
   async getAllBackgrounds(): Promise<PageBackground[]> {
     const response = await api.get("/pages/backgrounds/all");
     return response.data;
   },
 
-  /**
-   * Récupère le fond d'écran d'une page pour admin (avec token)
-   */
   async getPageBackgroundForAdmin(page: string): Promise<PageBackground | null> {
     try {
-      const response = await api.get(`/pages/backgrounds/${page}`);
+      const response = await api.get(`/pages/backgrounds/admin/${page}`);
       return response.data;
     } catch (error) {
-      console.error('Erreur chargement fond d écran admin:', error);
+      console.error('Erreur chargement fond d ecran admin:', error);
       return null;
     }
   },
 
-  /**
-   * Met à jour le fond d'écran d'une page (admin)
-   */
   async updatePageBackground(page: string, data: Partial<PageBackground>): Promise<PageBackground> {
     const response = await api.put(`/pages/backgrounds/${page}`, data);
     return response.data;
   },
 
-  /**
-   * Supprime un fond d'écran (admin)
-   */
+  async updateBackgroundImage(page: string, imageUrl: string): Promise<PageBackground> {
+    const response = await api.put(`/pages/backgrounds/${page}/image`, { image_url: imageUrl });
+    return response.data;
+  },
+
+  async toggleBackground(page: string): Promise<PageBackground> {
+    const response = await api.put(`/pages/backgrounds/${page}/toggle`);
+    return response.data;
+  },
+
   async deleteBackground(id: string): Promise<void> {
     await api.delete(`/pages/backgrounds/${id}`);
+  },
+
+  async initializePages(): Promise<void> {
+    await api.post('/pages/initialize');
   },
 };
 

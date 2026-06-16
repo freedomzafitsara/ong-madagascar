@@ -64,10 +64,10 @@ const ITEMS_PER_PAGE = 10;
 
 const STATUS_OPTIONS: { value: ApplicationStatus; label: string; color: string; bg: string; icon: any }[] = [
   { value: 'submitted', label: 'Soumise', color: 'text-gray-700', bg: 'bg-gray-100', icon: Clock },
-  { value: 'reviewing', label: 'En révision', color: 'text-blue-800', bg: 'bg-blue-100', icon: Eye },
-  { value: 'shortlisted', label: 'Préselectionnée', color: 'text-purple-800', bg: 'bg-purple-100', icon: Star },
-  { value: 'accepted', label: 'Acceptée', color: 'text-green-800', bg: 'bg-green-100', icon: CheckCircle },
-  { value: 'rejected', label: 'Refusée', color: 'text-red-800', bg: 'bg-red-100', icon: XCircle },
+  { value: 'reviewing', label: 'En revision', color: 'text-blue-800', bg: 'bg-blue-100', icon: Eye },
+  { value: 'shortlisted', label: 'Preselectionnee', color: 'text-purple-800', bg: 'bg-purple-100', icon: Star },
+  { value: 'accepted', label: 'Acceptee', color: 'text-green-800', bg: 'bg-green-100', icon: CheckCircle },
+  { value: 'rejected', label: 'Refusee', color: 'text-red-800', bg: 'bg-red-100', icon: XCircle },
 ];
 
 // ============================================================
@@ -181,7 +181,7 @@ function ApplicationDetailModal({
               <FileCheck className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-800">{getText('Détail de la candidature', 'Antsipirihan\'ny fangatahana')}</h2>
+              <h2 className="text-xl font-bold text-gray-800">{getText('Detail de la candidature', 'Antsipirihan\'ny fangatahana')}</h2>
               <p className="text-sm text-gray-500">{application.full_name}</p>
             </div>
           </div>
@@ -214,9 +214,9 @@ function ApplicationDetailModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InfoDetail label={getText('Nom complet', 'Anarana feno')} value={application.full_name} icon={User} />
             <InfoDetail label="Email" value={application.email} icon={Mail} />
-            <InfoDetail label={getText('Téléphone', 'Telefaonina')} value={application.phone} icon={Phone} />
+            <InfoDetail label={getText('Telephone', 'Telefaonina')} value={application.phone} icon={Phone} />
             <InfoDetail label={getText('Adresse', 'Adiresy')} value={application.address} icon={MapPin} />
-            <InfoDetail label={getText('Expérience', 'Traikefa')} value={application.experience_years ? `${application.experience_years} ans` : undefined} icon={Briefcase} />
+            <InfoDetail label={getText('Experience', 'Traikefa')} value={application.experience_years ? `${application.experience_years} ans` : undefined} icon={Briefcase} />
             <InfoDetail label={getText('Date de candidature', 'Daty nangatahana')} value={formatDate(application.created_at)} icon={Calendar} />
           </div>
 
@@ -252,7 +252,7 @@ function ApplicationDetailModal({
                 {getText('Lettre de motivation', 'Taratra fanolorana')}
               </h3>
               {application.cover_letter_url ? (
-                <DocumentLink url={application.cover_letter_url} label={getText('Télécharger la lettre', 'Alefaso ny taratasy')} icon={FileText} />
+                <DocumentLink url={application.cover_letter_url} label={getText('Telecharger la lettre', 'Alefaso ny taratasy')} icon={FileText} />
               ) : application.cover_letter && (
                 <div className="bg-gray-50 rounded-xl p-4">
                   <div className={`text-sm text-gray-600 whitespace-pre-wrap leading-relaxed ${!showFullLetter && isLongText ? 'max-h-32 overflow-hidden relative' : ''}`}>
@@ -272,7 +272,7 @@ function ApplicationDetailModal({
             <h3 className="text-sm font-semibold text-gray-700 mb-2">{getText('Documents joints', 'Rakitra nampidirina')}</h3>
             <div className="flex flex-wrap gap-3">
               <DocumentLink url={application.cv_url} label="CV" icon={FileText} />
-              <DocumentLink url={application.diploma_url} label={getText('Diplôme', 'Diploma')} icon={GraduationCap} />
+              <DocumentLink url={application.diploma_url} label={getText('Diplome', 'Diploma')} icon={GraduationCap} />
               <DocumentLink url={application.attestation_url} label={getText('Attestation', 'Fanamarinana')} icon={FileCheck} />
             </div>
             {!application.cv_url && !application.diploma_url && !application.attestation_url && (
@@ -308,6 +308,8 @@ export default function ApplicationsPage() {
   const { user, token, isAuthenticated } = useAuth();
   const { language } = useLanguage();
   
+  const jobId = params?.id as string;
+  
   const [job, setJob] = useState<JobOffer | null>(null);
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(true);
@@ -340,74 +342,86 @@ export default function ApplicationsPage() {
   }, [isAuthenticated, hasAccess, router]);
 
   const fetchJob = useCallback(async () => {
-    if (!token || !isMounted.current) return;
+    if (!token || !isMounted.current || !jobId) return;
     try {
-      const response = await api.get(`/jobs/offers/${params.id}`);
+      const response = await api.get(`/jobs/offers/${jobId}`);
       if (response.data && isMounted.current) {
         setJob(response.data);
       }
     } catch (error) {
       console.error('Erreur chargement offre:', error);
     }
-  }, [params.id, token]);
+  }, [jobId, token]);
 
   const fetchApplications = useCallback(async () => {
-    if (!token || !isMounted.current) return;
+    if (!token || !isMounted.current || !jobId) return;
     setLoading(true);
     try {
       const paramsQuery: any = { page: currentPage, limit: ITEMS_PER_PAGE };
       if (filterStatus !== 'all') paramsQuery.status = filterStatus;
       if (searchTerm) paramsQuery.search = searchTerm;
 
-      const response = await api.get(`/jobs/offers/${params.id}/applications`, { params: paramsQuery });
+      const response = await api.get(`/jobs/offers/${jobId}/applications`, { params: paramsQuery });
       
       if (response.data && isMounted.current) {
         setApplications(response.data.data || []);
         setTotalPages(response.data.totalPages || 1);
         setTotalItems(response.data.total || 0);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur:', error);
-      toast.error(getText('Erreur de chargement des candidatures', 'Nisy hadisoana tamin\'ny fampidirana fangatahana'));
+      if (isMounted.current) {
+        toast.error(error.response?.data?.message || getText('Erreur de chargement des candidatures', 'Nisy hadisoana tamin\'ny fampidirana fangatahana'));
+      }
     } finally {
-      setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+      }
     }
-  }, [params.id, token, currentPage, filterStatus, searchTerm, getText]);
+  }, [jobId, token, currentPage, filterStatus, searchTerm, getText]);
+
+  //  filteredApplications est défini ici
+  const filteredApplications = applications.filter((app: JobApplication) => {
+    const matchSearch = app.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        app.email.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchSearch;
+  });
 
   useEffect(() => {
-    if (token && !initialFetchDone.current) {
+    if (token && !initialFetchDone.current && jobId) {
       initialFetchDone.current = true;
       fetchJob();
       fetchApplications();
     }
-  }, [token, fetchJob, fetchApplications]);
+  }, [token, fetchJob, fetchApplications, jobId]);
 
   useEffect(() => {
-    if (initialFetchDone.current && token) {
+    if (initialFetchDone.current && token && jobId) {
       fetchApplications();
     }
-  }, [currentPage, filterStatus, searchTerm, fetchApplications, token]);
+  }, [currentPage, filterStatus, searchTerm, fetchApplications, token, jobId]);
 
   const updateStatus = async (applicationId: string, newStatus: ApplicationStatus) => {
     setUpdatingStatus(true);
     try {
       await api.patch(`/jobs/applications/${applicationId}/status`, { status: newStatus });
-      toast.success(getText('Statut mis à jour', 'Vita ny fanovana sata'));
+      toast.success(getText('Statut mis a jour', 'Vita ny fanovana sata'));
       fetchApplications();
       if (selectedApp && selectedApp.id === applicationId) {
         setSelectedApp({ ...selectedApp, status: newStatus });
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || getText('Erreur lors de la mise à jour', 'Nisy hadisoana tamin\'ny fanovana'));
+      toast.error(error.response?.data?.message || getText('Erreur lors de la mise a jour', 'Nisy hadisoana tamin\'ny fanovana'));
     } finally {
       setUpdatingStatus(false);
     }
   };
 
   const handleExport = async () => {
+    if (!jobId) return;
     setExporting(true);
     try {
-      const response = await api.get(`/jobs/applications/export?jobId=${params.id}`, { responseType: 'blob' });
+      const response = await api.get(`/jobs/applications/export?jobId=${jobId}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -416,7 +430,7 @@ export default function ApplicationsPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(getText('Export réussi', 'Vita ny fanondrana'));
+      toast.success(getText('Export reussi', 'Vita ny fanondrana'));
     } catch (error) {
       console.error('Erreur export:', error);
       toast.error(getText('Erreur lors de l\'export', 'Nisy hadisoana tamin\'ny fanondrana'));
@@ -428,7 +442,7 @@ export default function ApplicationsPage() {
   const handleRefresh = () => {
     fetchApplications();
     fetchJob();
-    toast.success(getText('Données actualisées', 'Havaozina ny angona'));
+    toast.success(getText('Donnees actualisees', 'Havaozina ny angona'));
   };
 
   const formatDate = (date: string) => {
@@ -442,19 +456,13 @@ export default function ApplicationsPage() {
     }
   };
 
-  const filteredApplications = applications.filter(app => {
-    const matchSearch = app.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        app.email.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchSearch;
-  });
-
   const stats = {
     total: applications.length,
-    submitted: applications.filter(a => a.status === 'submitted').length,
-    reviewing: applications.filter(a => a.status === 'reviewing').length,
-    shortlisted: applications.filter(a => a.status === 'shortlisted').length,
-    accepted: applications.filter(a => a.status === 'accepted').length,
-    rejected: applications.filter(a => a.status === 'rejected').length,
+    submitted: applications.filter((a: JobApplication) => a.status === 'submitted').length,
+    reviewing: applications.filter((a: JobApplication) => a.status === 'reviewing').length,
+    shortlisted: applications.filter((a: JobApplication) => a.status === 'shortlisted').length,
+    accepted: applications.filter((a: JobApplication) => a.status === 'accepted').length,
+    rejected: applications.filter((a: JobApplication) => a.status === 'rejected').length,
   };
 
   if (loading && applications.length === 0) {
@@ -505,10 +513,10 @@ export default function ApplicationsPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard label={getText('Total', 'Rehetra')} value={stats.total} icon={Users} color="blue" />
         <StatCard label={getText('Soumises', 'Nalefa')} value={stats.submitted} icon={Clock} color="gray" />
-        <StatCard label={getText('En révision', 'Dinihina')} value={stats.reviewing} icon={Eye} color="blue" />
-        <StatCard label={getText('Préselection', 'Voafidy')} value={stats.shortlisted} icon={Star} color="purple" />
-        <StatCard label={getText('Acceptées', 'Ekena')} value={stats.accepted} icon={CheckCircle} color="green" />
-        <StatCard label={getText('Refusées', 'Nolavina')} value={stats.rejected} icon={XCircle} color="red" />
+        <StatCard label={getText('En revision', 'Dinihina')} value={stats.reviewing} icon={Eye} color="blue" />
+        <StatCard label={getText('Preselection', 'Voafidy')} value={stats.shortlisted} icon={Star} color="purple" />
+        <StatCard label={getText('Acceptees', 'Ekena')} value={stats.accepted} icon={CheckCircle} color="green" />
+        <StatCard label={getText('Refusees', 'Nolavina')} value={stats.rejected} icon={XCircle} color="red" />
       </div>
 
       {/* Filters */}
@@ -530,7 +538,7 @@ export default function ApplicationsPage() {
             className="px-3 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none text-sm min-w-[150px]"
           >
             <option value="all">{getText('Tous statuts', 'Sata rehetra')}</option>
-            {STATUS_OPTIONS.map(opt => (
+            {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
@@ -578,12 +586,12 @@ export default function ApplicationsPage() {
                     <div className="flex flex-col items-center gap-2">
                       <Users className="w-12 h-12 text-gray-300" />
                       <p className="text-gray-500 font-medium">{getText('Aucune candidature', 'Tsy misy fangatahana')}</p>
-                      <p className="text-sm text-gray-400">{getText('Aucun candidat n\'a postulé pour cette offre', 'Tsy misy mpangataka ho an\'ity asa ity')}</p>
+                      <p className="text-sm text-gray-400">{getText('Aucun candidat n\'a postule pour cette offre', 'Tsy misy mpangataka ho an\'ity asa ity')}</p>
                     </div>
                   </td>
                 </tr>
               ) : (
-                filteredApplications.map((app) => (
+                filteredApplications.map((app: JobApplication) => (
                   <tr key={app.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
@@ -618,7 +626,7 @@ export default function ApplicationsPage() {
                         disabled={updatingStatus}
                         className="text-xs border rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none cursor-pointer bg-white"
                       >
-                        {STATUS_OPTIONS.map(opt => (
+                        {STATUS_OPTIONS.map((opt) => (
                           <option key={opt.value} value={opt.value} className={opt.color}>{opt.label}</option>
                         ))}
                       </select>
@@ -636,7 +644,7 @@ export default function ApplicationsPage() {
                       <button 
                         onClick={() => { setSelectedApp(app); setShowDetailModal(true); }} 
                         className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition"
-                        title={getText('Voir le détail', 'Jereo ny antsipirihany')}
+                        title={getText('Voir le detail', 'Jereo ny antsipirihany')}
                       >
                         <Eye className="w-4 h-4" />
                       </button>

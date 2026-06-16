@@ -14,7 +14,11 @@ import { pageService, PageBackground } from '@/services/page.service';
 import { jobService, JobOffer, ContractType, JobStatus } from '@/services/job.service';
 import toast from 'react-hot-toast';
 
-// Configuration des types de contrat - Couleurs Y-MaD (Bleu et Gris)
+// ============================================================
+// CONFIGURATION DES TYPES DE CONTRAT
+// Couleurs Y-MaD: Bleu (#1E3A8A) et Gris (#6B7280)
+// ============================================================
+
 const CONTRACT_LABELS: Record<ContractType, { fr: string; mg: string }> = {
   [ContractType.CDI]: { fr: 'CDI', mg: 'CDI' },
   [ContractType.CDD]: { fr: 'CDD', mg: 'CDD' },
@@ -24,7 +28,6 @@ const CONTRACT_LABELS: Record<ContractType, { fr: string; mg: string }> = {
   [ContractType.TEMPORARY]: { fr: 'Temporaire', mg: 'Vonjimaika' }
 };
 
-// COULEURS Y-MaD: Uniquement Bleu (#1E3A8A) et Gris (#6B7280)
 const CONTRACT_COLORS: Record<ContractType, string> = {
   [ContractType.CDI]: 'bg-blue-800 text-white',
   [ContractType.CDD]: 'bg-gray-600 text-white',
@@ -34,18 +37,34 @@ const CONTRACT_COLORS: Record<ContractType, string> = {
   [ContractType.TEMPORARY]: 'bg-gray-600 text-white'
 };
 
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
+
 export default function JobsPublicPage() {
   const { language } = useLanguage();
+  
+  // État des offres d'emploi
   const [jobs, setJobs] = useState<JobOffer[]>([]);
   const [filteredJobs, setFilteredJobs] = useState<JobOffer[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // État des filtres
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('');
-  const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // État du fond d'écran
+  const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
+  
+  // Statistiques
   const [stats, setStats] = useState({ total: 0, types: 0, locations: 0 });
 
   const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+
+  // ============================================================
+  // CHARGEMENT DES DONNEES
+  // ============================================================
 
   useEffect(() => {
     loadPageBackground();
@@ -59,7 +78,7 @@ export default function JobsPublicPage() {
         setPageBackground(background);
       }
     } catch (error) {
-      console.error('Erreur chargement fond:', error);
+      console.error('Erreur chargement du fond d\'ecran:', error);
     }
   };
 
@@ -69,6 +88,7 @@ export default function JobsPublicPage() {
       const response = await jobService.getPublishedOffers({ page: 1, limit: 100 });
       
       if (response && response.data) {
+        // Filtrer les offres actives: publiées et non expirées
         const activeJobs = response.data.filter(job => {
           const isPublished = job.status === JobStatus.PUBLISHED && job.is_published === true;
           const isNotExpired = !job.deadline || new Date(job.deadline) > new Date();
@@ -78,6 +98,7 @@ export default function JobsPublicPage() {
         setJobs(activeJobs);
         setFilteredJobs(activeJobs);
         
+        // Calcul des statistiques
         const uniqueTypes = new Set(activeJobs.map((j: JobOffer) => j.contract_type).filter(Boolean));
         const uniqueLocations = new Set(activeJobs.map((j: JobOffer) => j.location).filter(Boolean));
         setStats({
@@ -87,15 +108,20 @@ export default function JobsPublicPage() {
         });
       }
     } catch (error: any) {
-      console.error('Erreur:', error);
+      console.error('Erreur lors du chargement des offres:', error);
       toast.error(error.message || getText('Erreur de chargement', 'Nisy hadisoana'));
     } finally {
       setLoading(false);
     }
   };
 
+  // ============================================================
+  // FILTRES
+  // ============================================================
+
   useEffect(() => {
     let filtered = [...jobs];
+    
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(job => 
@@ -105,11 +131,17 @@ export default function JobsPublicPage() {
         job.description_fr.toLowerCase().includes(searchLower)
       );
     }
+    
     if (selectedType) {
       filtered = filtered.filter(job => job.contract_type === selectedType);
     }
+    
     setFilteredJobs(filtered);
   }, [searchTerm, selectedType, jobs]);
+
+  // ============================================================
+  // TYPES DE CONTRAT
+  // ============================================================
 
   const contractTypes = [
     { value: ContractType.CDI, labelFr: 'CDI', labelMg: 'CDI' },
@@ -120,10 +152,14 @@ export default function JobsPublicPage() {
     { value: ContractType.TEMPORARY, labelFr: 'Temporaire', labelMg: 'Vonjimaika' },
   ];
 
+  // ============================================================
+  // STYLES DU FOND D'ECRAN
+  // ============================================================
+
   const backgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundImage: `url(${pageBackground.image_url})`,
     backgroundPosition: pageBackground.position || 'center',
-    backgroundSize: pageBackground.size || 'cover',
+    backgroundSize: 'cover',
     backgroundAttachment: 'fixed',
   } : {};
 
@@ -131,20 +167,31 @@ export default function JobsPublicPage() {
     backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 45) / 100})`,
   } : {};
 
+  // ============================================================
+  // RENDU - CHARGEMENT
+  // ============================================================
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-blue-800 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">{getText('Chargement...', 'Miandry...')}</p>
+          <p className="text-gray-500">{getText('Chargement des offres...', 'Fandefasana ny asa...')}</p>
         </div>
       </div>
     );
   }
 
+  // ============================================================
+  // RENDU - PAGE PRINCIPALE
+  // ============================================================
+
   return (
     <div className="min-h-screen">
-      {/* Hero Section - Plein ecran */}
+      
+      {/* ============================================================
+      SECTION HERO - PLEIN ECRAN AVEC FOND D'ECRAN DYNAMIQUE
+      ============================================================ */}
       <div className="relative h-screen w-full overflow-hidden">
         <div className="absolute inset-0">
           {backgroundStyle.backgroundImage ? (
@@ -158,13 +205,16 @@ export default function JobsPublicPage() {
         </div>
         
         <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
+          
+          {/* Badge */}
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-1.5 md:px-5 md:py-2 mb-6 md:mb-8">
             <Sparkles className="w-4 h-4 text-blue-200" />
             <span className="text-sm font-medium tracking-wide text-white">
-              {getText("Rejoignez l'equipe Y-Mad", 'Miaraha amin\'ny ekipa Y-Mad')}
+              {getText("Rejoignez l'equipe Y-MaD", 'Miaraha amin\'ny ekipa Y-MaD')}
             </span>
           </div>
           
+          {/* Titre principal */}
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-4 md:mb-6 drop-shadow-2xl">
             {getText("Offres d'emploi", 'Asa')}
             <span className="block text-xl md:text-2xl lg:text-3xl text-blue-200 mt-3 font-light tracking-wide">
@@ -172,6 +222,7 @@ export default function JobsPublicPage() {
             </span>
           </h1>
           
+          {/* Sous-titre */}
           <p className="text-base md:text-lg lg:text-xl text-blue-100 max-w-2xl mx-auto leading-relaxed">
             {getText(
               'Decouvrez nos opportunites de carriere et rejoignez une equipe passionnee',
@@ -181,10 +232,13 @@ export default function JobsPublicPage() {
         </div>
       </div>
 
-      {/* Statistiques */}
+      {/* ============================================================
+      SECTION STATISTIQUES
+      ============================================================ */}
       <div className="relative z-10 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-8 md:py-10">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+            
             <div className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1">
               <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-800 transition-colors">
                 <Briefcase className="w-6 h-6 md:w-7 md:h-7 text-blue-800 group-hover:text-white transition-colors" />
@@ -192,6 +246,7 @@ export default function JobsPublicPage() {
               <p className="text-2xl md:text-3xl font-bold text-gray-800">{stats.total}</p>
               <p className="text-xs md:text-sm text-gray-500">{getText('Offres disponibles', 'Asa misokatra')}</p>
             </div>
+            
             <div className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1">
               <div className="w-12 h-12 md:w-14 md:h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-gray-600 transition-colors">
                 <Users className="w-6 h-6 md:w-7 md:h-7 text-gray-600 group-hover:text-white transition-colors" />
@@ -199,6 +254,7 @@ export default function JobsPublicPage() {
               <p className="text-2xl md:text-3xl font-bold text-gray-800">{stats.types}</p>
               <p className="text-xs md:text-sm text-gray-500">{getText('Types de contrat', 'Karazana fifanarahana')}</p>
             </div>
+            
             <div className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-1">
               <div className="w-12 h-12 md:w-14 md:h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-gray-600 transition-colors">
                 <MapPin className="w-6 h-6 md:w-7 md:h-7 text-gray-600 group-hover:text-white transition-colors" />
@@ -206,11 +262,14 @@ export default function JobsPublicPage() {
               <p className="text-2xl md:text-3xl font-bold text-gray-800">{stats.locations}</p>
               <p className="text-xs md:text-sm text-gray-500">{getText('Lieux de travail', 'Toeram-piasana')}</p>
             </div>
+            
           </div>
         </div>
       </div>
 
-      {/* Section Principale */}
+      {/* ============================================================
+      SECTION FILTRES ET LISTE DES OFFRES
+      ============================================================ */}
       <div className="relative z-10 bg-white">
         <div className="max-w-7xl mx-auto px-4 py-10 md:py-16">
           
@@ -227,9 +286,11 @@ export default function JobsPublicPage() {
             </p>
           </div>
 
-          {/* Filtres */}
+          {/* Barre de recherche et filtres */}
           <div className="bg-white rounded-xl shadow-md p-5 mb-8 border border-gray-200">
             <div className="flex flex-col lg:flex-row gap-4">
+              
+              {/* Recherche */}
               <div className="flex-1 relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
@@ -240,11 +301,13 @@ export default function JobsPublicPage() {
                   className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition text-sm"
                 />
               </div>
+              
               <div className="flex gap-3">
+                {/* Filtre type de contrat */}
                 <select
                   value={selectedType}
                   onChange={(e) => setSelectedType(e.target.value)}
-                  className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-800 outline-none bg-white cursor-pointer text-sm"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-800 outline-none bg-white cursor-pointer text-sm min-w-[130px]"
                 >
                   <option value="">{getText('Tous les types', 'Karazana rehetra')}</option>
                   {contractTypes.map(type => (
@@ -254,6 +317,7 @@ export default function JobsPublicPage() {
                   ))}
                 </select>
                 
+                {/* Mode d'affichage */}
                 <div className="flex border border-gray-200 rounded-xl overflow-hidden bg-white">
                   <button
                     onClick={() => setViewMode('grid')}
@@ -281,6 +345,7 @@ export default function JobsPublicPage() {
               </div>
             </div>
             
+            {/* Filtres actifs */}
             {(searchTerm || selectedType) && (
               <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
                 {searchTerm && (
@@ -312,14 +377,15 @@ export default function JobsPublicPage() {
             )}
           </div>
 
-          {/* Resultats */}
+          {/* Résultats */}
           <div className="mb-5">
             <p className="text-sm text-gray-600">
               <span className="font-semibold text-blue-800 text-base">{filteredJobs.length}</span> 
-              {getText(' offre(s) trouvee(s)', ' asa hita')}
+              {' '}{getText(' offre(s) trouvee(s)', ' asa hita')}
             </p>
           </div>
 
+          {/* Liste des offres */}
           {filteredJobs.length === 0 ? (
             <div className="bg-white rounded-xl shadow-md py-16 text-center border border-gray-200">
               <Search className="w-14 h-14 text-gray-300 mx-auto mb-4" />
@@ -342,7 +408,9 @@ export default function JobsPublicPage() {
         </div>
       </div>
 
-      {/* CTA Section */}
+      {/* ============================================================
+      SECTION APPEL A L'ACTION - CANDIDATURE SPONTANEE
+      ============================================================ */}
       <div className="relative z-10 bg-gray-800 py-16">
         <div className="max-w-4xl mx-auto text-center px-4">
           <div className="inline-flex items-center gap-2 bg-gray-700 rounded-full px-4 py-1.5 mb-6">
@@ -373,7 +441,10 @@ export default function JobsPublicPage() {
   );
 }
 
-// Composant Carte (Vue Grille)
+// ============================================================
+// COMPOSANT : CARTE OFFRE (VUE GRILLE)
+// ============================================================
+
 function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
   const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
   const contractType = job.contract_type as ContractType;
@@ -394,6 +465,8 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
 
   return (
     <div className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-200">
+      
+      {/* Image d'en-tête */}
       <div className="relative h-40 overflow-hidden bg-gradient-to-r from-blue-800 to-blue-900">
         {job.image_url ? (
           <img 
@@ -410,6 +483,7 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
           </div>
         )}
         
+        {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-2">
           <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium shadow-sm ${contractColor}`}>
             {language === 'fr' ? contractLabel.fr : contractLabel.mg}
@@ -429,6 +503,7 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
           </div>
         )}
         
+        {/* Overlay au survol */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-5">
           <Link 
             href={`/jobs/${job.id}`}
@@ -439,6 +514,7 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
         </div>
       </div>
       
+      {/* Contenu de la carte */}
       <div className="p-4">
         <h3 className="font-bold text-gray-800 mb-1 line-clamp-1 group-hover:text-blue-800 transition-colors text-base">
           {title}
@@ -471,7 +547,10 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
   );
 }
 
-// Composant Ligne (Vue Liste)
+// ============================================================
+// COMPOSANT : LIGNE OFFRE (VUE LISTE)
+// ============================================================
+
 function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
   const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
   const contractType = job.contract_type as ContractType;
@@ -495,6 +574,8 @@ function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }
       <div className="p-4">
         <div className="flex flex-col md:flex-row justify-between gap-4">
           <div className="flex-1">
+            
+            {/* Titre et badges */}
             <div className="flex items-center gap-2 flex-wrap mb-2">
               <h3 className="font-bold text-gray-800 group-hover:text-blue-800 transition-colors text-base">
                 <Link href={`/jobs/${job.id}`}>{title}</Link>
@@ -514,6 +595,7 @@ function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }
               )}
             </div>
             
+            {/* Informations */}
             <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-2">
               <span className="flex items-center gap-1"><Building className="w-3.5 h-3.5" /> {job.company || 'Y-MaD'}</span>
               {job.location && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {job.location}</span>}
@@ -524,9 +606,11 @@ function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }
               )}
             </div>
             
+            {/* Description */}
             <p className="text-gray-600 line-clamp-2 text-xs leading-relaxed">{description}</p>
           </div>
           
+          {/* Bouton d'action */}
           <div className="flex items-center">
             {!isExpired && (
               <Link 

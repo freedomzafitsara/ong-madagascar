@@ -1,4 +1,5 @@
 // backend/src/entities/job-application.entity.ts
+
 import { 
   Entity, 
   Column, 
@@ -152,6 +153,20 @@ export class JobApplication {
   }
 
   /**
+   * Retourne la classe CSS associee au statut
+   */
+  getStatusClass(): string {
+    const classes: Record<ApplicationStatus, string> = {
+      submitted: 'bg-gray-100 text-gray-700',
+      reviewing: 'bg-blue-100 text-blue-700',
+      shortlisted: 'bg-purple-100 text-purple-700',
+      accepted: 'bg-green-100 text-green-700',
+      rejected: 'bg-red-100 text-red-700'
+    };
+    return classes[this.status] || 'bg-gray-100 text-gray-700';
+  }
+
+  /**
    * Retourne la couleur associee au statut
    */
   getStatusColor(): string {
@@ -163,5 +178,104 @@ export class JobApplication {
       rejected: '#EF4444'
     };
     return colors[this.status] || '#6B7280';
+  }
+
+  /**
+   * Marque la candidature comme examinee
+   */
+  markAsReviewed(userId: string): void {
+    this.reviewed_by = userId;
+    this.reviewed_at = new Date();
+  }
+
+  /**
+   * Change le statut de la candidature
+   */
+  setStatus(status: ApplicationStatus, userId?: string): void {
+    this.status = status;
+    if (userId && (status === 'accepted' || status === 'rejected')) {
+      this.markAsReviewed(userId);
+    }
+  }
+
+  /**
+   * Verifie si la candidature a des documents
+   */
+  hasDocuments(): boolean {
+    return !!(this.cv_url || this.diploma_url || this.attestation_url || this.cover_letter_url);
+  }
+
+  /**
+   * Obtient le nombre de documents associes
+   */
+  getDocumentCount(): number {
+    let count = 0;
+    if (this.cv_url) count++;
+    if (this.diploma_url) count++;
+    if (this.attestation_url) count++;
+    if (this.cover_letter_url) count++;
+    if (this.photo_url) count++;
+    return count;
+  }
+
+  /**
+   * Obtient le resume de la candidature
+   */
+  getSummary(): string {
+    return `${this.full_name} - ${this.email}`;
+  }
+
+  /**
+   * Obtient les informations pour l'export CSV
+   */
+  toCsvRow(): Record<string, any> {
+    return {
+      id: this.id,
+      nom_complet: this.full_name,
+      email: this.email,
+      telephone: this.phone || '',
+      adresse: this.address || '',
+      poste_actuel: this.current_position || '',
+      entreprise_actuelle: this.current_company || '',
+      annees_experience: this.experience_years || 0,
+      statut: this.getStatusLabel(),
+      date_candidature: this.applied_at ? new Date(this.applied_at).toLocaleDateString('fr-FR') : 
+                        this.created_at ? new Date(this.created_at).toLocaleDateString('fr-FR') : '',
+      a_cv: this.cv_url ? 'Oui' : 'Non',
+      a_lettre_motivation: this.cover_letter_url ? 'Oui' : 'Non',
+      a_diplome: this.diploma_url ? 'Oui' : 'Non',
+      notes: this.notes || ''
+    };
+  }
+
+  /**
+   * Convertit l'objet en objet JSON simplifie
+   */
+  toJSON(): Partial<JobApplication> {
+    return {
+      id: this.id,
+      job_offer_id: this.job_offer_id,
+      full_name: this.full_name,
+      email: this.email,
+      phone: this.phone,
+      address: this.address,
+      experience_years: this.experience_years,
+      current_position: this.current_position,
+      current_company: this.current_company,
+      cv_url: this.cv_url,
+      cover_letter: this.cover_letter,
+      cover_letter_url: this.cover_letter_url,
+      diploma_url: this.diploma_url,
+      attestation_url: this.attestation_url,
+      photo_url: this.photo_url,
+      linkedin_url: this.linkedin_url,
+      portfolio_url: this.portfolio_url,
+      status: this.status,
+      notes: this.notes,
+      created_at: this.created_at,
+      updated_at: this.updated_at,
+      applied_at: this.applied_at,
+      jobOffer: this.jobOffer
+    };
   }
 }

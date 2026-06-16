@@ -1,4 +1,6 @@
-﻿'use client';
+﻿// frontend/src/app/(auth)/login/page.tsx
+
+'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -7,29 +9,48 @@ import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft, Loader2, Sparkles } fr
 import { useAuth } from '@/contexts/AuthContext';
 import { pageService, PageBackground } from '@/services/page.service';
 
+// ============================================================
+// PAGE DE CONNEXION - ADMIN Y-MaD
+// ============================================================
+
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
+  
+  // État du formulaire
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  
+  // État du fond d'écran
   const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   const [mounted, setMounted] = useState(false);
+
+  // ============================================================
+  // FONCTION DE TRADUCTION
+  // ============================================================
 
   const getText = (fr: string, mg: string) => {
     const language = localStorage.getItem('y-mad-language') || 'fr';
     return language === 'fr' ? fr : mg;
   };
 
+  // ============================================================
+  // CHARGEMENT DES DONNEES
+  // ============================================================
+
   useEffect(() => {
     setMounted(true);
     loadPageBackground();
 
+    // Récupérer l'email sauvegardé
     const savedEmail = localStorage.getItem('savedEmail');
     if (savedEmail) {
       setEmail(savedEmail);
+      setRememberMe(true);
     }
   }, []);
 
@@ -40,15 +61,20 @@ export default function LoginPage() {
         setPageBackground(background);
       }
     } catch (error) {
-      console.error('Erreur chargement fond d ecran:', error);
+      console.error('Erreur chargement du fond d\'ecran:', error);
     }
   };
+
+  // ============================================================
+  // SOUMISSION DU FORMULAIRE
+  // ============================================================
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
+    // Validation
     if (!email || !password) {
       setError(getText('Veuillez remplir tous les champs', 'Fenoy ny sehatra rehetra'));
       setLoading(false);
@@ -66,7 +92,12 @@ export default function LoginPage() {
     }
   };
 
-  const handleSaveEmail = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ============================================================
+  // GESTION DE LA MÉMORISATION
+  // ============================================================
+
+  const handleRememberMe = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRememberMe(e.target.checked);
     if (e.target.checked) {
       localStorage.setItem('savedEmail', email);
     } else {
@@ -74,7 +105,10 @@ export default function LoginPage() {
     }
   };
 
-  // Style fond d'écran PLEIN ÉCRAN (admin)
+  // ============================================================
+  // STYLES DU FOND D'ECRAN - PLEIN ECRAN
+  // ============================================================
+
   const heroBackgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundImage: `url(${pageBackground.image_url})`,
     backgroundPosition: pageBackground.position || 'center',
@@ -87,6 +121,10 @@ export default function LoginPage() {
     backgroundColor: `rgba(0, 0, 0, ${(pageBackground.overlay_opacity || 35) / 100})`,
   } : {};
 
+  // ============================================================
+  // RENDU - CHARGEMENT
+  // ============================================================
+
   if (!mounted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -98,9 +136,16 @@ export default function LoginPage() {
     );
   }
 
+  // ============================================================
+  // RENDU - PAGE PRINCIPALE
+  // ============================================================
+
   return (
     <div className="min-h-screen">
-      {/* ==================== FOND D'ÉCRAN PLEIN ÉCRAN (ADMIN) ==================== */}
+      
+      {/* ============================================================
+      FOND D'ECRAN PLEIN ECRAN
+      ============================================================ */}
       <div className="fixed inset-0 z-0">
         {pageBackground?.image_url && pageBackground.is_active ? (
           <>
@@ -112,19 +157,25 @@ export default function LoginPage() {
         )}
       </div>
 
-      {/* ==================== CONTENU CENTRÉ ==================== */}
+      {/* ============================================================
+      CONTENU CENTRE
+      ============================================================ */}
       <div className="relative z-10 min-h-screen flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8">
           
-          {/* Lien retour */}
+          {/* ============================================================
+          LIEN RETOUR
+          ============================================================ */}
           <div className="mb-6">
             <Link href="/" className="inline-flex items-center gap-2 text-gray-500 hover:text-blue-600 transition">
               <ArrowLeft className="w-4 h-4" />
-              <span>{getText('Retour à l accueil', 'Hiverina any an-tokotany')}</span>
+              <span>{getText('Retour a l\'accueil', 'Hiverina any an-tokotany')}</span>
             </Link>
           </div>
 
-          {/* En-tête */}
+          {/* ============================================================
+          EN-TETE
+          ============================================================ */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 bg-gray-100 rounded-full px-4 py-1.5 mb-4">
               <Sparkles className="w-4 h-4 text-blue-600" />
@@ -133,11 +184,17 @@ export default function LoginPage() {
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Mail className="w-8 h-8 text-blue-600" />
             </div>
-            <h2 className="text-3xl font-bold text-gray-800">{getText('Connexion', 'Hiditra')}</h2>
-            <p className="text-gray-500 mt-2">{getText('Connectez vous à votre compte', 'Midira ao amin\'ny kaontinao')}</p>
+            <h2 className="text-3xl font-bold text-gray-800">
+              {getText('Connexion', 'Hiditra')}
+            </h2>
+            <p className="text-gray-500 mt-2">
+              {getText('Connectez-vous a votre compte administrateur', 'Midira ao amin\'ny kaontinao administrateur')}
+            </p>
           </div>
 
-          {/* Erreur */}
+          {/* ============================================================
+          MESSAGE D'ERREUR
+          ============================================================ */}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-2">
               <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -145,8 +202,12 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Formulaire */}
+          {/* ============================================================
+          FORMULAIRE DE CONNEXION
+          ============================================================ */}
           <form onSubmit={handleSubmit} className="space-y-5">
+            
+            {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 {getText('Adresse email', 'Adiresy email')}
@@ -165,6 +226,7 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Mot de passe */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 {getText('Mot de passe', 'Tenimiafina')}
@@ -190,20 +252,25 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Options */}
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input 
                   type="checkbox" 
+                  checked={rememberMe}
+                  onChange={handleRememberMe}
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
-                  onChange={handleSaveEmail}
                 />
-                <span className="text-sm text-gray-600">{getText('Se souvenir de moi', 'Tsarovy aho')}</span>
+                <span className="text-sm text-gray-600">
+                  {getText('Se souvenir de moi', 'Tsarovy aho')}
+                </span>
               </label>
               <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
                 {getText('Mot de passe oublié', 'Hadino ny tenimiafina')}
               </Link>
             </div>
 
+            {/* Bouton de connexion */}
             <button
               type="submit"
               disabled={loading}
@@ -220,13 +287,24 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Lien d'inscription */}
+          {/* ============================================================
+          LIEN INSCRIPTION
+          ============================================================ */}
           <div className="mt-6 text-center">
             <p className="text-gray-600">
-              {getText('Pas encore de compte', 'Mbola tsy manana kaonty')}{' '}
+              {getText('Pas encore de compte ?', 'Mbola tsy manana kaonty ?')}{' '}
               <Link href="/register" className="text-blue-600 font-semibold hover:underline">
                 {getText('S\'inscrire', 'Misoratra anarana')}
               </Link>
+            </p>
+          </div>
+          
+          {/* ============================================================
+          MENTION
+          ============================================================ */}
+          <div className="mt-4 text-center">
+            <p className="text-xs text-gray-400">
+              {getText('Acces reserve a l\'administration de Y-MaD', 'Fidirana ho an\'ny mpitantana Y-MaD ihany')}
             </p>
           </div>
         </div>

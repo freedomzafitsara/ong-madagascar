@@ -6,9 +6,9 @@ export const JOB_STATUSES = ['draft', 'published', 'closed', 'expired', 'archive
 export type JobStatus = typeof JOB_STATUSES[number];
 
 export class UpdateJobStatusDto {
-  @IsString({ message: 'Le statut doit être une chaîne de caractères' })
+  @IsString({ message: 'Le statut doit etre une chaine de caracteres' })
   @IsIn(JOB_STATUSES, { 
-    message: 'Le statut doit être: draft, published, closed, expired ou archived' 
+    message: 'Le statut doit etre: draft, published, closed, expired ou archived' 
   })
   @IsNotEmpty({ message: 'Le statut est requis' })
   status: JobStatus;

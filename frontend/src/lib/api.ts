@@ -3,6 +3,10 @@
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 
+// ============================================================
+// CONFIGURATION
+// ============================================================
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
 export const api: AxiosInstance = axios.create({
@@ -13,6 +17,10 @@ export const api: AxiosInstance = axios.create({
   },
   timeout: 30000,
 });
+
+// ============================================================
+// INTERCEPTEUR DE REQUETE
+// ============================================================
 
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
@@ -29,6 +37,10 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
+// ============================================================
+// INTERCEPTEUR DE REPONSE
+// ============================================================
 
 api.interceptors.response.use(
   (response: AxiosResponse) => {
@@ -56,6 +68,10 @@ api.interceptors.response.use(
         console.error('Ressource non trouvee:', data?.message || 'La ressource demandee n\'existe pas');
       }
       
+      if (status === 500) {
+        console.error('Erreur serveur:', data?.message || 'Erreur interne du serveur');
+      }
+      
       const errorMessage = data?.message || data?.error || `Erreur ${status}`;
       return Promise.reject(new Error(errorMessage));
     }
@@ -70,6 +86,10 @@ api.interceptors.response.use(
   }
 );
 
+// ============================================================
+// FONCTIONS UTILITAIRES
+// ============================================================
+
 export const extractData = <T>(response: AxiosResponse<T>): T => {
   return response.data;
 };
@@ -82,6 +102,7 @@ export interface ApiResponse<T = any> {
   total?: number;
   page?: number;
   totalPages?: number;
+  limit?: number;
 }
 
 export interface LoginResponse {

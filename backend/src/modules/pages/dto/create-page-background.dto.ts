@@ -30,16 +30,8 @@ export class CreatePageBackgroundDto {
   @IsIn(['home', 'projects', 'jobs', 'blog', 'contact', 'login', 'dashboard', 'profile', 'about', 'faq'])
   page_key: string;
 
-  @IsUrl()
+  @IsUrl({}, { message: 'L\'URL de l\'image doit etre valide' })
   image_url: string;
-
-  @IsOptional()
-  @IsUrl()
-  mobile_url?: string;
-
-  @IsOptional()
-  @IsUrl()
-  thumbnail_url?: string;
 
   @IsOptional()
   @IsString()
@@ -63,23 +55,6 @@ export class CreatePageBackgroundDto {
   @IsString()
   @IsIn(['center', 'top', 'bottom', 'left', 'right'])
   position?: string;
-
-  @IsOptional()
-  @IsString()
-  @IsIn(['cover', 'contain', 'auto'])
-  size?: string;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(10)
-  blur?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(200)
-  brightness?: number;
 
   @IsOptional()
   @IsUUID()

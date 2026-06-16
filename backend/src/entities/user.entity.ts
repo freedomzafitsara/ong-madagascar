@@ -6,21 +6,31 @@ import {
   PrimaryGeneratedColumn, 
   CreateDateColumn, 
   UpdateDateColumn,
+  Index,
   BeforeInsert,
-  BeforeUpdate,
-  Index
+  BeforeUpdate
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
-export type UserRole = 'admin' | 'super_admin';
+export enum UserRole {
+  VISITOR = 'visitor',
+  CANDIDATE = 'candidate',
+  ADMIN = 'admin',
+  SUPER_ADMIN = 'super_admin'
+}
 
 @Entity('users')
 @Index(['email'])
 @Index(['role'])
-@Index(['is_active'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ length: 255, unique: true })
+  email: string;
+
+  @Column({ length: 255 })
+  password: string;
 
   @Column({ name: 'first_name', length: 100 })
   first_name: string;
@@ -28,23 +38,28 @@ export class User {
   @Column({ name: 'last_name', length: 100 })
   last_name: string;
 
-  @Column({ unique: true, length: 255 })
-  email: string;
+  // ✅ AJOUTER LA COLONNE phone
+  @Column({ length: 50, nullable: true })
+  phone: string;
 
-  @Column({ select: false, length: 255 })
-  password: string;
-
-  @Column({ length: 20, default: 'admin' })
-  role: string;
+  @Column({ 
+    type: 'enum', 
+    enum: UserRole, 
+    default: UserRole.VISITOR 
+  })
+  role: UserRole;
 
   @Column({ name: 'is_active', default: true })
   is_active: boolean;
 
+  @Column({ name: 'avatar_url', nullable: true })
+  avatar_url: string;
+
   @Column({ name: 'last_login', nullable: true })
   last_login: Date;
 
-  @Column({ nullable: true })
-  avatar: string;
+  @Column({ name: 'must_change_password', default: false })
+  must_change_password: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
@@ -52,16 +67,37 @@ export class User {
   @UpdateDateColumn({ name: 'updated_at' })
   updated_at: Date;
 
+  // Méthodes
   @BeforeInsert()
   @BeforeUpdate()
   async hashPassword() {
     if (this.password && !this.password.startsWith('$2b$')) {
-      const saltRounds = 10;
-      this.password = await bcrypt.hash(this.password, saltRounds);
+      const salt = await bcrypt.genSalt(12);
+      this.password = await bcrypt.hash(this.password, salt);
     }
   }
 
-  async comparePassword(attempt: string): Promise<boolean> {
-    return bcrypt.compare(attempt, this.password);
+  async validatePassword(password: string): Promise<boolean> {
+    return bcrypt.compare(password, this.password);
+  }
+
+  isAdmin(): boolean {
+    return this.role === UserRole.ADMIN || this.role === UserRole.SUPER_ADMIN;
+  }
+
+  isSuperAdmin(): boolean {
+    return this.role === UserRole.SUPER_ADMIN;
+  }
+
+  isCandidate(): boolean {
+    return this.role === UserRole.CANDIDATE;
+  }
+
+  isVisitor(): boolean {
+    return this.role === UserRole.VISITOR;
+  }
+
+  getFullName(): string {
+    return `${this.first_name} ${this.last_name}`;
   }
 }

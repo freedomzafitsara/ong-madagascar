@@ -4,10 +4,10 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
-import { DatabaseImage } from '../../entities/database-image.entity';
+import { UploadedFile } from '../../entities/uploaded-file.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([DatabaseImage])],
+  imports: [TypeOrmModule.forFeature([UploadedFile])],
   controllers: [UploadController],
   providers: [UploadService],
   exports: [UploadService],

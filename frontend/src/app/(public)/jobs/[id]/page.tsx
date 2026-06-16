@@ -17,14 +17,16 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { jobService, JobOffer, CreateJobApplicationDto, JobStatus } from '@/services/job.service';
-import { uploadService, DatabaseImage } from '@/services/upload.service';
+import { uploadService, UploadedFile } from '@/services/upload.service';
 import toast from 'react-hot-toast';
 
-// Import dynamique de l'éditeur Quill
+// ============================================================
+// CONFIGURATION DE L'EDITEUR QUILL
+// ============================================================
+
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 import 'react-quill/dist/quill.snow.css';
 
-// Configuration de l'éditeur Quill
 const QUILL_MODULES = {
   toolbar: [
     [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
@@ -46,6 +48,10 @@ const QUILL_FORMATS = [
   'link', 'image'
 ];
 
+// ============================================================
+// INTERFACES
+// ============================================================
+
 interface ApplicationFormData {
   full_name: string;
   email: string;
@@ -60,22 +66,21 @@ interface ApplicationFormData {
 }
 
 interface FileUploadState {
-  file: DatabaseImage | null;
+  file: UploadedFile | null;
   uploading: boolean;
   error: string;
 }
 
+// ============================================================
+// CONSTANTES
+// ============================================================
+
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 
-// Format téléphone Madagascar: +261 32 04 856 97
+// Validation téléphone Madagascar
 const validatePhoneNumber = (phone: string): boolean => {
-  if (!phone) return true; // Optionnel
-  // Format acceptés:
-  // +261321234567
-  // +261 32 12 345 67
-  // 0321234567
-  // 32 12 345 67
+  if (!phone) return true;
   const cleanPhone = phone.replace(/\s/g, '');
   const phoneRegex = /^(?:\+261|0)(?:32|33|34|37|38)\d{7}$/;
   return phoneRegex.test(cleanPhone);
@@ -93,38 +98,45 @@ const formatPhoneNumber = (phone: string): string => {
   return phone;
 };
 
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
+
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { language } = useLanguage();
   const jobId = params?.id as string;
   
+  // État de l'offre
   const [job, setJob] = useState<JobOffer | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  
+  // État du formulaire
   const [applying, setApplying] = useState<boolean>(false);
   const [showApplicationForm, setShowApplicationForm] = useState<boolean>(false);
   const [phoneError, setPhoneError] = useState<string>('');
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   
+  // État des fichiers uploadés
   const [cvState, setCvState] = useState<FileUploadState>({
     file: null,
     uploading: false,
     error: ''
   });
-  
   const [coverLetterState, setCoverLetterState] = useState<FileUploadState>({
     file: null,
     uploading: false,
     error: ''
   });
-  
   const [photoState, setPhotoState] = useState<FileUploadState>({
     file: null,
     uploading: false,
     error: ''
   });
-  
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   
+  // Données du formulaire
   const [formData, setFormData] = useState<ApplicationFormData>({
     full_name: '',
     email: '',
@@ -138,18 +150,24 @@ export default function JobDetailPage() {
     portfolio_url: ''
   });
 
+  // Références
   const cvInputRef = useRef<HTMLInputElement>(null);
   const coverLetterInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const getText = useCallback((fr: string, mg: string): string => {
     return language === 'fr' ? fr : mg;
   }, [language]);
 
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/;
+  const validateEmail = useCallback((email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
-  };
+  }, []);
+
+  // ============================================================
+  // CHARGEMENT DE L'OFFRE
+  // ============================================================
 
   useEffect(() => {
     if (jobId) {
@@ -170,6 +188,7 @@ export default function JobDetailPage() {
     try {
       const data = await jobService.getOfferById(jobId);
       
+      // Vérifier que l'offre est publiée et disponible
       if (data.status !== JobStatus.PUBLISHED || !data.is_published) {
         toast.error(getText('Cette offre n\'est pas disponible', 'Tsy misy ity asa ity'));
         router.push('/jobs');
@@ -178,13 +197,17 @@ export default function JobDetailPage() {
       
       setJob(data);
     } catch (error) {
-      console.error('Erreur:', error);
+      console.error('Erreur lors du chargement de l\'offre:', error);
       toast.error(getText('Offre non trouvee', 'Tsy hita ny asa'));
       router.push('/jobs');
     } finally {
       setLoading(false);
     }
   };
+
+  // ============================================================
+  // GESTION DU FORMULAIRE
+  // ============================================================
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const rawValue = e.target.value;
@@ -194,7 +217,7 @@ export default function JobDetailPage() {
     if (rawValue && !validatePhoneNumber(rawValue)) {
       setPhoneError(getText(
         'Format invalide. Utilisez +261 XX XXX XX',
-        'Tsy mety ny format. Mampiasà +261 XX XXX XX'
+        'Tsy mety ny format. Mampiasa +261 XX XXX XX'
       ));
     } else {
       setPhoneError('');
@@ -204,11 +227,18 @@ export default function JobDetailPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>): void => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (formErrors[name]) {
+      setFormErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
   const handleCoverLetterChange = (value: string): void => {
     setFormData(prev => ({ ...prev, cover_letter: value }));
   };
+
+  // ============================================================
+  // GESTION DES FICHIERS
+  // ============================================================
 
   const handleFileUpload = async (
     file: File,
@@ -220,7 +250,7 @@ export default function JobDetailPage() {
     try {
       const result = await uploadService.uploadImage(file, type as any, jobId);
       setState(prev => ({ ...prev, file: result, uploading: false, error: '' }));
-      return result.url;
+      return result.url || uploadService.getImageUrl(result.id);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
       setState(prev => ({ ...prev, file: null, uploading: false, error: errorMessage }));
@@ -307,44 +337,42 @@ export default function JobDetailPage() {
     if (photoInputRef.current) photoInputRef.current.value = '';
   };
 
+  // ============================================================
+  // VALIDATION ET SOUMISSION
+  // ============================================================
+
   const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    
     if (!formData.full_name.trim()) {
-      toast.error(getText('Veuillez entrer votre nom complet', 'Ampidiro ny anaranao feno'));
-      return false;
+      errors.full_name = getText('Le nom complet est requis', 'Ilaina ny anarana feno');
     }
     
     if (!validateEmail(formData.email)) {
-      toast.error(getText('Veuillez entrer un email valide', 'Ampidiro ny adiresy mailaka marina'));
-      return false;
+      errors.email = getText('Email invalide', 'Tsy mety ny email');
     }
     
     if (formData.phone && !validatePhoneNumber(formData.phone)) {
-      toast.error(getText('Numéro de téléphone invalide', 'Tsy mety ny laharana telefaonina'));
-      return false;
+      errors.phone = getText('Numero de telephone invalide', 'Tsy mety ny laharana');
     }
     
     if (!cvState.file) {
-      toast.error(getText('Veuillez uploader votre CV (PDF)', 'Alefaso ny CV anao (PDF)'));
-      return false;
+      errors.cv = getText('CV requis (PDF)', 'Ilaina ny CV (PDF)');
     }
     
-    return true;
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
     if (!validateForm()) {
+      toast.error(getText('Veuillez corriger les erreurs', 'Ahitsio ny hadisoana'));
       return;
     }
     
     setApplying(true);
-    
-    if (!cvState.file) {
-      toast.error(getText('Veuillez uploader votre CV (PDF)', 'Alefaso ny CV anao (PDF)'));
-      setApplying(false);
-      return;
-    }
     
     try {
       const cleanPhone = formData.phone ? formData.phone.replace(/\s/g, '') : undefined;
@@ -358,10 +386,10 @@ export default function JobDetailPage() {
         experience_years: formData.experience_years || 0,
         current_position: formData.current_position?.trim() || undefined,
         current_company: formData.current_company?.trim() || undefined,
-        cv_url: cvState.file.url,
+        cv_url: cvState.file?.url || uploadService.getImageUrl(cvState.file?.id || ''),
         cover_letter: formData.cover_letter?.trim() || undefined,
-        cover_letter_url: coverLetterState.file?.url,
-        photo_url: photoState.file?.url,
+        cover_letter_url: coverLetterState.file?.url || uploadService.getImageUrl(coverLetterState.file?.id || ''),
+        photo_url: photoState.file?.url || uploadService.getImageUrl(photoState.file?.id || ''),
         linkedin_url: formData.linkedin_url?.trim() || undefined,
         portfolio_url: formData.portfolio_url?.trim() || undefined,
       };
@@ -371,8 +399,8 @@ export default function JobDetailPage() {
       setShowApplicationForm(false);
       resetForm();
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message;
-      toast.error(errorMessage || getText('Erreur lors de l\'envoi', 'Nisy olana tamin\'ny fandefasana'));
+      const errorMessage = error.response?.data?.message || error.message || getText('Erreur lors de l\'envoi', 'Nisy olana tamin\'ny fandefasana');
+      toast.error(errorMessage);
     } finally {
       setApplying(false);
     }
@@ -392,10 +420,15 @@ export default function JobDetailPage() {
       portfolio_url: ''
     });
     setPhoneError('');
+    setFormErrors({});
     removeCv();
     removeCoverLetterFile();
     removePhoto();
   };
+
+  // ============================================================
+  // RENDU
+  // ============================================================
 
   if (loading) {
     return (
@@ -428,6 +461,10 @@ export default function JobDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      
+      {/* ============================================================
+      EN-TÊTE - RETOUR
+      ============================================================ */}
       <div className="bg-white border-b sticky top-0 z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-4">
           <Link href="/jobs" className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-800 transition">
@@ -437,7 +474,13 @@ export default function JobDetailPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+        
+        {/* ============================================================
+        CARTE DE L'OFFRE
+        ============================================================ */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+          
+          {/* Image de couverture */}
           {imageUrl && (
             <div className="relative h-72 w-full bg-gradient-to-r from-blue-800 to-blue-900">
               <img 
@@ -451,9 +494,12 @@ export default function JobDetailPage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             </div>
           )}
+          
+          {/* Contenu de la carte */}
           <div className="p-8">
             <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">{title}</h1>
             
+            {/* Informations clés */}
             <div className="flex flex-wrap gap-4 mb-6">
               {job.company && (
                 <span className="flex items-center gap-2 text-gray-600 text-sm bg-gray-100 px-3 py-1.5 rounded-full">
@@ -478,6 +524,7 @@ export default function JobDetailPage() {
               )}
             </div>
 
+            {/* Bouton postuler */}
             {isAvailable ? (
               <button
                 onClick={() => setShowApplicationForm(true)}
@@ -496,6 +543,9 @@ export default function JobDetailPage() {
           </div>
         </div>
 
+        {/* ============================================================
+        DESCRIPTION DU POSTE
+        ============================================================ */}
         <div className="bg-white rounded-2xl shadow-lg p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <FileText className="w-6 h-6 text-blue-800" />
@@ -506,9 +556,14 @@ export default function JobDetailPage() {
           </div>
         </div>
 
+        {/* ============================================================
+        FORMULAIRE DE CANDIDATURE (MODAL)
+        ============================================================ */}
         {showApplicationForm && isAvailable && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowApplicationForm(false)}>
             <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              
+              {/* En-tête du modal */}
               <div className="sticky top-0 bg-white border-b p-5 flex justify-between items-center">
                 <div>
                   <h2 className="text-xl font-bold text-gray-800">{getText('Candidature', 'Fangatahana')}</h2>
@@ -522,7 +577,9 @@ export default function JobDetailPage() {
                 </button>
               </div>
               
-              <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              {/* Formulaire */}
+              <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6">
+                
                 {/* Photo de profil */}
                 <div className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -588,9 +645,14 @@ export default function JobDetailPage() {
                         required
                         value={formData.full_name}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition ${
+                          formErrors.full_name ? 'border-red-500' : 'border-gray-300'
+                        }`}
                         placeholder={getText('Votre nom complet', 'Anaranao feno')}
                       />
+                      {formErrors.full_name && (
+                        <p className="text-xs text-red-500 mt-1">{formErrors.full_name}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -602,9 +664,14 @@ export default function JobDetailPage() {
                         required
                         value={formData.email}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition ${
+                          formErrors.email ? 'border-red-500' : 'border-gray-300'
+                        }`}
                         placeholder="votre@email.com"
                       />
+                      {formErrors.email && (
+                        <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -616,11 +683,13 @@ export default function JobDetailPage() {
                           name="phone"
                           value={formData.phone}
                           onChange={handlePhoneChange}
-                          className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition ${phoneError ? 'border-red-500' : 'border-gray-300'}`}
+                          className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition ${
+                            phoneError || formErrors.phone ? 'border-red-500' : 'border-gray-300'
+                          }`}
                           placeholder="+261 XX XXX XX"
                         />
-                        {phoneError && (
-                          <p className="text-xs text-red-500 mt-1">{phoneError}</p>
+                        {(phoneError || formErrors.phone) && (
+                          <p className="text-xs text-red-500 mt-1">{phoneError || formErrors.phone}</p>
                         )}
                         <p className="text-xs text-gray-400 mt-1">
                           {getText('Format: +261 XX XXX XX', 'Format: +261 XX XXX XX')}
@@ -724,7 +793,7 @@ export default function JobDetailPage() {
                     <div
                       onClick={() => cvInputRef.current?.click()}
                       className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition ${
-                        cvState.error ? 'border-red-400 bg-red-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                        cvState.error || formErrors.cv ? 'border-red-400 bg-red-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
                       }`}
                     >
                       <input
@@ -749,10 +818,12 @@ export default function JobDetailPage() {
                       )}
                     </div>
                   )}
-                  {cvState.error && <p className="text-xs text-red-500 mt-2">{cvState.error}</p>}
+                  {(cvState.error || formErrors.cv) && (
+                    <p className="text-xs text-red-500 mt-2">{cvState.error || formErrors.cv}</p>
+                  )}
                 </div>
 
-                {/* Lettre de motivation avec éditeur Word */}
+                {/* Lettre de motivation */}
                 <div className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Mail className="w-5 h-5 text-blue-800" />
@@ -761,7 +832,7 @@ export default function JobDetailPage() {
                   
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {getText('Rédigez votre lettre', 'Soraty ny taratasy')}
+                      {getText('Redigez votre lettre', 'Soraty ny taratasy')}
                     </label>
                     <div className="quill-editor">
                       <ReactQuill
@@ -771,8 +842,8 @@ export default function JobDetailPage() {
                         modules={QUILL_MODULES}
                         formats={QUILL_FORMATS}
                         placeholder={getText(
-                          'Pourquoi postulez-vous ? Qu\'est-ce qui vous motive à rejoindre notre équipe ?\n\nDécrivez vos compétences, votre expérience et votre motivation...',
-                          'Fa maninona no mangataka? Inona no manosika anao hanatevin-daharana ny ekipanay?\n\nHazavao ny fahaizanao, ny traikefanao ary ny antony manosika anao...'
+                          'Pourquoi postulez-vous ? Qu\'est-ce qui vous motive ?',
+                          'Fa maninona no mangataka? Inona no manosika anao?'
                         )}
                         className="bg-white"
                       />
@@ -893,6 +964,7 @@ export default function JobDetailPage() {
         )}
       </div>
 
+      {/* Styles de l'éditeur Quill */}
       <style jsx global>{`
         .quill-editor .ql-container {
           min-height: 250px;

@@ -16,9 +16,6 @@ import {
 import { Type } from 'class-transformer';
 import { PartialType } from '@nestjs/mapped-types';
 
-// ============================================================
-// TYPES DE PAGES
-// ============================================================
 export type PageType = 
   | 'home'
   | 'projects'
@@ -31,9 +28,6 @@ export type PageType =
   | 'about'
   | 'faq';
 
-// ============================================================
-// HERO SECTION (bannière principale)
-// ============================================================
 export class HeroDto {
   @IsOptional()
   @IsString()
@@ -72,9 +66,6 @@ export class HeroDto {
   is_active?: boolean;
 }
 
-// ============================================================
-// SECTION DYNAMIQUE
-// ============================================================
 export class SectionDto {
   @IsOptional()
   @IsString()
@@ -122,9 +113,6 @@ export class SectionDto {
   button_link?: string;
 }
 
-// ============================================================
-// STATISTIQUES (chiffres clés)
-// ============================================================
 export class StatDto {
   @IsString()
   value: string;
@@ -144,9 +132,6 @@ export class StatDto {
   color?: string;
 }
 
-// ============================================================
-// CALL TO ACTION (appel à l'action)
-// ============================================================
 export class CtaDto {
   @IsOptional()
   @IsString()
@@ -185,9 +170,6 @@ export class CtaDto {
   is_active?: boolean;
 }
 
-// ============================================================
-// CREATE PAGE CONTENT DTO
-// ============================================================
 export class CreatePageContentDto {
   @IsString()
   @IsIn(['home', 'projects', 'jobs', 'blog', 'contact', 'login', 'dashboard', 'profile', 'about', 'faq'])
@@ -258,7 +240,4 @@ export class CreatePageContentDto {
   updated_by?: string;
 }
 
-// ============================================================
-// UPDATE PAGE CONTENT DTO
-// ============================================================
 export class UpdatePageContentDto extends PartialType(CreatePageContentDto) {}

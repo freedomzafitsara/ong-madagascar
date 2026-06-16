@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -16,6 +16,10 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import { pageService, PageBackground } from '@/services/page.service';
 import { api } from '@/lib/api';
+
+// ============================================================
+// INTERFACES
+// ============================================================
 
 interface BlogPost {
   id: string;
@@ -39,7 +43,10 @@ interface BlogPost {
   created_at: string;
 }
 
-// Categories avec icones - comme page projets
+// ============================================================
+// CATEGORIES DU BLOG
+// ============================================================
+
 const categories = [
   { value: 'news', labelFr: 'Actualites', labelMg: 'Vaovao', icon: Newspaper },
   { value: 'success_story', labelFr: 'Success story', labelMg: 'Fahombiazana', icon: Heart },
@@ -48,7 +55,10 @@ const categories = [
   { value: 'event_recap', labelFr: 'Evenements', labelMg: 'Hetsika', icon: CalendarIcon },
 ];
 
-// Import manquant
+// ============================================================
+// ICONES PERSONNALISEES
+// ============================================================
+
 function Newspaper(props: any) {
   return (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -71,9 +81,14 @@ function CalendarIcon(props: any) {
   );
 }
 
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
+
 export default function BlogPage() {
   const router = useRouter();
   const { language } = useLanguage();
+  
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [filteredPosts, setFilteredPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -227,7 +242,6 @@ export default function BlogPage() {
     if (url) window.open(url, '_blank', 'width=600,height=400');
   };
 
-  // Style fond d'ecran PLEIN ECRAN - identique à la page projets
   const heroBackgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
     backgroundImage: `url(${pageBackground.image_url})`,
     backgroundPosition: pageBackground.position || 'center',
@@ -253,6 +267,7 @@ export default function BlogPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      
       {/* ==================== HERO SECTION - PLEIN ECRAN ==================== */}
       <section className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">

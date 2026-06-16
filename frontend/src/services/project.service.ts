@@ -1,5 +1,6 @@
-﻿// src/services/project.service.ts
-import api from '@/lib/axios';
+﻿// frontend/src/services/project.service.ts
+
+import api from '@/lib/api';  // ✅ Utiliser le même import que blog.service
 
 export interface Project {
   id: string;

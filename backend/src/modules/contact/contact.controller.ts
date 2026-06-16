@@ -20,6 +20,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { UserRole } from '../auth/entities/user.entity';
 
 @Controller('contact')
 export class ContactController {
@@ -35,28 +36,28 @@ export class ContactController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async findAll(@Query() query: ContactQueryDto) {
     return this.contactService.findAll(query);
   }
 
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async getStats() {
     return this.contactService.getStats();
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async findOne(@Param('id') id: string) {
     return this.contactService.findOne(id);
   }
 
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async updateStatus(
     @Param('id') id: string,
     @Body() updateDto: UpdateContactStatusDto,
@@ -67,7 +68,7 @@ export class ContactController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
   async remove(@Param('id') id: string) {
     await this.contactService.remove(id);

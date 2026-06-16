@@ -2,6 +2,10 @@
 
 import api from '@/lib/api';
 
+// ============================================================
+// ENUMS
+// ============================================================
+
 export enum JobStatus {
   DRAFT = 'draft',
   PUBLISHED = 'published',
@@ -27,6 +31,10 @@ export enum ApplicationStatus {
   REJECTED = 'rejected'
 }
 
+// ============================================================
+// INTERFACES
+// ============================================================
+
 export interface JobOffer {
   id: string;
   title_fr: string;
@@ -47,10 +55,42 @@ export interface JobOffer {
   main_image_id?: string;
 }
 
+export interface CreateJobOfferDto {
+  title_fr: string;
+  title_mg?: string;
+  description_fr: string;
+  description_mg?: string;
+  company?: string;
+  location?: string;
+  contract_type?: ContractType;
+  deadline?: string;
+  is_published?: boolean;
+  image_url?: string;
+  main_image_id?: string;
+}
+
+export interface JobOfferStats {
+  total: number;
+  published: number;
+  draft: number;
+  expired: number;
+  closed: number;
+  archived: number;
+  total_applications: number;
+  pending_applications: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  totalPages: number;
+  limit: number;
+}
+
 export interface JobApplication {
   id: string;
   job_offer_id: string;
-  user_id?: string;
   full_name: string;
   email: string;
   phone?: string;
@@ -64,10 +104,12 @@ export interface JobApplication {
   photo_url?: string;
   linkedin_url?: string;
   portfolio_url?: string;
+  diploma_url?: string;
+  attestation_url?: string;
   status: string;
   notes?: string;
   created_at: string;
-  jobOffer?: JobOffer;
+  applied_at?: string;
 }
 
 export interface CreateJobApplicationDto {
@@ -87,62 +129,65 @@ export interface CreateJobApplicationDto {
   portfolio_url?: string;
   diploma_url?: string;
   attestation_url?: string;
-  experience?: string;
 }
 
-export interface UpdateApplicationStatusDto {
-  status: ApplicationStatus;
-  notes?: string;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  totalPages: number;
-  limit: number;
-}
-
-export interface JobOfferStats {
-  total: number;
-  published: number;
-  draft: number;
-  expired: number;
-  closed: number;
-  archived: number;
-  total_applications: number;
-  pending_applications: number;
-}
+// ============================================================
+// SERVICE
+// ============================================================
 
 export const jobService = {
-  // Routes publiques
-  async getPublishedOffers(params?: { page?: number; limit?: number; contract_type?: ContractType; search?: string }): Promise<PaginatedResponse<JobOffer>> {
-    const response = await api.get("/jobs/offers/public", { params });
+  // ============================================================
+  // ROUTES PUBLIQUES
+  // ============================================================
+
+  async getPublishedOffers(params?: { page?: number; limit?: number; contract_type?: string; search?: string }): Promise<PaginatedResponse<JobOffer>> {
+    const response = await api.get('/jobs/offers/public', { params });
     return response.data;
   },
 
   async getFeaturedOffers(): Promise<JobOffer[]> {
-    const response = await api.get("/jobs/offers/featured");
+    const response = await api.get('/jobs/offers/featured');
+    return response.data;
+  },
+
+  async getPublicOfferById(id: string): Promise<JobOffer> {
+    const response = await api.get(`/jobs/offers/public/${id}`);
+    return response.data;
+  },
+
+  // ============================================================
+  // ROUTES ADMIN - OFFRES
+  // ============================================================
+
+  async getAllOffers(params?: { page?: number; limit?: number; status?: string; contract_type?: string; search?: string }): Promise<PaginatedResponse<JobOffer>> {
+    const response = await api.get('/jobs/offers', { params });
     return response.data;
   },
 
   async getOfferById(id: string): Promise<JobOffer> {
-    const response = await api.get(`/jobs/offers/${id}`);
+    if (!id || id.length < 10) {
+      throw new Error('ID d\'offre invalide');
+    }
+    try {
+      const response = await api.get(`/jobs/offers/${id}`);
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new Error('Offre non trouvee');
+      }
+      if (error.response?.status === 400) {
+        throw new Error('ID d\'offre invalide');
+      }
+      throw error;
+    }
+  },
+
+  async createOffer(data: CreateJobOfferDto): Promise<JobOffer> {
+    const response = await api.post('/jobs/offers', data);
     return response.data;
   },
 
-  // Routes Admin
-  async getAllOffers(params?: { page?: number; limit?: number; status?: string; contract_type?: string; search?: string }): Promise<PaginatedResponse<JobOffer>> {
-    const response = await api.get("/jobs/offers", { params });
-    return response.data;
-  },
-
-  async createOffer(data: Partial<JobOffer>): Promise<JobOffer> {
-    const response = await api.post("/jobs/offers", data);
-    return response.data;
-  },
-
-  async updateOffer(id: string, data: Partial<JobOffer>): Promise<JobOffer> {
+  async updateOffer(id: string, data: Partial<CreateJobOfferDto>): Promise<JobOffer> {
     const response = await api.patch(`/jobs/offers/${id}`, data);
     return response.data;
   },
@@ -157,9 +202,12 @@ export const jobService = {
     return response.data;
   },
 
-  // Statistiques
+  // ============================================================
+  // STATISTIQUES
+  // ============================================================
+
   async getJobStats(): Promise<JobOfferStats> {
-    const response = await api.get("/jobs/offers/stats");
+    const response = await api.get('/jobs/offers/stats');
     const data = response.data;
     return {
       total: data.total || 0,
@@ -173,14 +221,17 @@ export const jobService = {
     };
   },
 
-  // Candidatures
+  // ============================================================
+  // CANDIDATURES
+  // ============================================================
+
   async apply(data: CreateJobApplicationDto): Promise<JobApplication> {
-    const response = await api.post("/jobs/apply", data);
+    const response = await api.post('/jobs/apply', data);
     return response.data;
   },
 
   async getAllApplications(params?: { page?: number; limit?: number; status?: string; job_offer_id?: string }): Promise<PaginatedResponse<JobApplication>> {
-    const response = await api.get("/jobs/applications", { params });
+    const response = await api.get('/jobs/applications', { params });
     return response.data;
   },
 
@@ -189,8 +240,8 @@ export const jobService = {
     return response.data;
   },
 
-  async updateApplicationStatus(id: string, data: UpdateApplicationStatusDto): Promise<JobApplication> {
-    const response = await api.patch(`/jobs/applications/${id}/status`, data);
+  async updateApplicationStatus(id: string, status: ApplicationStatus, notes?: string): Promise<JobApplication> {
+    const response = await api.patch(`/jobs/applications/${id}/status`, { status, notes });
     return response.data;
   },
 
@@ -200,13 +251,16 @@ export const jobService = {
   },
 
   async getApplicationStats(): Promise<any> {
-    const response = await api.get("/jobs/applications/stats");
+    const response = await api.get('/jobs/applications/stats');
     return response.data;
   },
 
-  // Export
+  // ============================================================
+  // EXPORT
+  // ============================================================
+
   async exportApplications(jobId?: string): Promise<string> {
-    const response = await api.get("/jobs/applications/export", { params: { jobId } });
+    const response = await api.get('/jobs/applications/export', { params: { jobId } });
     return response.data;
   }
 };

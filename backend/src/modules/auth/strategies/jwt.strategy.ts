@@ -3,27 +3,26 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(
-    private configService: ConfigService,
-    private authService: AuthService,
-  ) {
+  constructor(private authService: AuthService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'secretKey',
+      secretOrKey: process.env.JWT_SECRET || 'your-secret-key',
     });
   }
 
   async validate(payload: any) {
-    const user = await this.authService.validateUser(payload.sub);
-    if (!user) {
-      throw new UnauthorizedException('Utilisateur non trouvé ou compte désactivé');
-    }
-    return { id: payload.sub, email: payload.email, role: payload.role };
+    //  le payload contient déjà les informations
+    return {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      first_name: payload.first_name,
+      last_name: payload.last_name,
+    };
   }
 }

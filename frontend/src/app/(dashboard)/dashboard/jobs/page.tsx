@@ -7,7 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link';
 import Image from 'next/image';
-import { jobService, JobOffer, JobStatus, ContractType, JobOfferStats } from '@/services/job.service';
+import { jobService } from '@/services/job.service';
+import type { JobOffer, JobStatus, ContractType, JobOfferStats } from '@/services/job.service';
 import { 
   Briefcase, Search, Plus, Download, RefreshCw, Loader2,
   Eye, Edit, Trash2, MapPin, Calendar, Users,
@@ -18,6 +19,10 @@ import {
 import toast from 'react-hot-toast';
 
 const ITEMS_PER_PAGE = 10;
+
+// ============================================================
+// COMPOSANTS
+// ============================================================
 
 function ArchiveIcon(props: any) {
   return (
@@ -30,13 +35,20 @@ function ArchiveIcon(props: any) {
 }
 
 function StatCard({ label, value, icon: Icon, isBlue = false, onClick }: { 
-  label: string; value: number; icon: any; isBlue?: boolean; onClick?: () => void;
+  label: string; 
+  value: number; 
+  icon: any; 
+  isBlue?: boolean; 
+  onClick?: () => void;
 }) {
   const bgClass = isBlue ? 'bg-blue-100' : 'bg-gray-100';
   const iconClass = isBlue ? 'text-blue-800' : 'text-gray-600';
   
   return (
-    <div onClick={onClick} className={`bg-white rounded-xl shadow-sm border border-gray-200 p-4 transition hover:shadow-md ${onClick ? 'cursor-pointer' : ''}`}>
+    <div 
+      onClick={onClick} 
+      className={`bg-white rounded-xl shadow-sm border border-gray-200 p-4 transition hover:shadow-md ${onClick ? 'cursor-pointer' : ''}`}
+    >
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500">{label}</p>
@@ -50,6 +62,10 @@ function StatCard({ label, value, icon: Icon, isBlue = false, onClick }: {
   );
 }
 
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
+
 export default function JobsDashboardPage() {
   const { user, token } = useAuth();
   const { language } = useLanguage();
@@ -61,44 +77,62 @@ export default function JobsDashboardPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [stats, setStats] = useState<JobOfferStats>({
-    total: 0, published: 0, draft: 0, closed: 0, expired: 0, archived: 0,
-    total_applications: 0, pending_applications: 0,
+    total: 0,
+    published: 0,
+    draft: 0,
+    closed: 0,
+    expired: 0,
+    archived: 0,
+    total_applications: 0,
+    pending_applications: 0,
   });
   const [exporting, setExporting] = useState(false);
   
   const isMounted = useRef(true);
   const initialFetchDone = useRef(false);
+  const fetchJobsRef = useRef<(() => void) | null>(null);
+  const fetchStatsRef = useRef<(() => void) | null>(null);
 
   const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin';
   const isSuperAdmin = user?.role === 'super_admin';
 
-  const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+  const getText = useCallback((fr: string, mg: string) => {
+    return language === 'fr' ? fr : mg;
+  }, [language]);
 
-  const getStatusBadge = (status: JobStatus) => {
-    const config: Record<JobStatus, { fr: string; mg: string; className: string }> = {
-      [JobStatus.PUBLISHED]: { fr: 'Publiee', mg: 'Navoaka', className: 'bg-gray-100 text-gray-700 border-gray-200' },
-      [JobStatus.DRAFT]: { fr: 'Brouillon', mg: 'Volavola', className: 'bg-gray-100 text-gray-500 border-gray-200' },
-      [JobStatus.CLOSED]: { fr: 'Fermee', mg: 'Nakatona', className: 'bg-gray-100 text-gray-700 border-gray-200' },
-      [JobStatus.EXPIRED]: { fr: 'Expiree', mg: 'Lany daty', className: 'bg-gray-100 text-gray-500 border-gray-200' },
-      [JobStatus.ARCHIVED]: { fr: 'Archivee', mg: 'Voatahiry', className: 'bg-gray-100 text-gray-600 border-gray-200' }
+  const getStatusBadge = useCallback((status: string) => {
+    const config: Record<string, { fr: string; mg: string; className: string }> = {
+      published: { fr: 'Publiee', mg: 'Navoaka', className: 'bg-green-100 text-green-700 border-green-200' },
+      draft: { fr: 'Brouillon', mg: 'Volavola', className: 'bg-gray-100 text-gray-500 border-gray-200' },
+      closed: { fr: 'Fermee', mg: 'Nakatona', className: 'bg-red-100 text-red-700 border-red-200' },
+      expired: { fr: 'Expiree', mg: 'Lany daty', className: 'bg-orange-100 text-orange-700 border-orange-200' },
+      archived: { fr: 'Archivee', mg: 'Voatahiry', className: 'bg-purple-100 text-purple-700 border-purple-200' }
     };
     const badge = config[status];
     if (!badge) return <span className="px-2 py-1 text-xs rounded-full bg-gray-100">{status}</span>;
-    return <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border ${badge.className}`}>
-      {language === 'fr' ? badge.fr : badge.mg}
-    </span>;
-  };
+    return (
+      <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border ${badge.className}`}>
+        {language === 'fr' ? badge.fr : badge.mg}
+      </span>
+    );
+  }, [language]);
 
-  const formatDate = (dateString?: string): string => {
+  const formatDate = useCallback((dateString?: string): string => {
     if (!dateString) return getText('Non definie', 'Tsy voafaritra');
     try {
       return new Date(dateString).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'mg-MG', {
-        day: '2-digit', month: '2-digit', year: 'numeric'
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
       });
     } catch {
       return getText('Date invalide', 'Daty tsy mety');
     }
-  };
+  }, [language, getText]);
+
+  // ============================================================
+  // FETCH FUNCTIONS
+  // ============================================================
 
   const fetchJobs = useCallback(async () => {
     if (!token || !isMounted.current) return;
@@ -149,7 +183,15 @@ export default function JobsDashboardPage() {
     }
   }, [token]);
 
-  // Nettoyage du composant
+  // ============================================================
+  // SIDE EFFECTS
+  // ============================================================
+
+  useEffect(() => {
+    fetchJobsRef.current = fetchJobs;
+    fetchStatsRef.current = fetchStats;
+  }, [fetchJobs, fetchStats]);
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -157,7 +199,6 @@ export default function JobsDashboardPage() {
     };
   }, []);
 
-  // Chargement initial unique
   useEffect(() => {
     if (token && !initialFetchDone.current) {
       initialFetchDone.current = true;
@@ -166,12 +207,15 @@ export default function JobsDashboardPage() {
     }
   }, [token, fetchStats, fetchJobs]);
 
-  // Rechargement quand les filtres ou la page changent
   useEffect(() => {
-    if (initialFetchDone.current && token) {
-      fetchJobs();
+    if (initialFetchDone.current && token && fetchJobsRef.current) {
+      fetchJobsRef.current();
     }
-  }, [currentPage, filters.status, filters.contractType, filters.search, fetchJobs, token]);
+  }, [currentPage, filters.status, filters.contractType, filters.search, token]);
+
+  // ============================================================
+  // HANDLERS
+  // ============================================================
 
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(getText(`Supprimer l'offre "${title}" ?`, `Hofafana ny asa "${title}" ?`))) return;
@@ -185,14 +229,16 @@ export default function JobsDashboardPage() {
     }
   };
 
-  const handleToggleStatus = async (id: string, currentStatus: JobStatus) => {
-    const newStatus = currentStatus === JobStatus.PUBLISHED ? JobStatus.CLOSED : JobStatus.PUBLISHED;
-    const action = currentStatus === JobStatus.PUBLISHED ? getText('fermer', 'hanakatona') : getText('publier', 'hamoaka');
+  const handleToggleStatus = async (id: string, currentStatus: string) => {
+    const isPublished = currentStatus === 'published';
+    const newStatus = isPublished ? 'closed' : 'published';
+    const action = isPublished ? getText('fermer', 'hanakatona') : getText('publier', 'hamoaka');
+    
     if (!confirm(getText(`${action.toUpperCase()} - Confirmer ?`, `${action.toUpperCase()} - Azonao antoka ?`))) return;
     
     try {
-      await jobService.updateOfferStatus(id, newStatus);
-      toast.success(currentStatus === JobStatus.PUBLISHED ? getText('Offre fermee', 'Nakatona') : getText('Offre publiee', 'Navoaka'));
+      await jobService.updateOfferStatus(id, newStatus as any);
+      toast.success(isPublished ? getText('Offre fermee', 'Nakatona') : getText('Offre publiee', 'Navoaka'));
       fetchJobs();
       fetchStats();
     } catch (error: any) {
@@ -226,14 +272,22 @@ export default function JobsDashboardPage() {
     fetchStats();
   };
 
+  // ============================================================
+  // STATUS OPTIONS (avec des string literals au lieu de l'enum)
+  // ============================================================
+
   const statusOptions = [
     { value: 'all', label: getText('Tous statuts', 'Sata rehetra') },
-    { value: JobStatus.PUBLISHED, label: getText('Publiees', 'Navoaka') },
-    { value: JobStatus.DRAFT, label: getText('Brouillons', 'Volavola') },
-    { value: JobStatus.CLOSED, label: getText('Fermees', 'Nakatona') },
-    { value: JobStatus.EXPIRED, label: getText('Expirees', 'Lany daty') },
-    { value: JobStatus.ARCHIVED, label: getText('Archivees', 'Voatahiry') },
+    { value: 'published', label: getText('Publiees', 'Navoaka') },
+    { value: 'draft', label: getText('Brouillons', 'Volavola') },
+    { value: 'closed', label: getText('Fermees', 'Nakatona') },
+    { value: 'expired', label: getText('Expirees', 'Lany daty') },
+    { value: 'archived', label: getText('Archivees', 'Voatahiry') },
   ];
+
+  // ============================================================
+  // RENDU
+  // ============================================================
 
   if (loading && jobs.length === 0 && !initialFetchDone.current) {
     return (
@@ -295,7 +349,9 @@ export default function JobsDashboardPage() {
             onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(1); }}
             className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white min-w-[140px] focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none"
           >
-            {statusOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            {statusOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
           <div className="flex gap-2">
             <button onClick={handleRefresh} className="p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
@@ -314,12 +370,24 @@ export default function JobsDashboardPage() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{getText('Offre', 'Asa')}</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{getText('Entreprise', 'Orinasa')}</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{getText('Lieu', 'Toerana')}</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">{getText('Candidatures', 'Fangatahana')}</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{getText('Statut', 'Sata')}</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">{getText('Actions', 'Hetsika')}</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  {getText('Offre', 'Asa')}
+                </th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  {getText('Entreprise', 'Orinasa')}
+                </th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  {getText('Lieu', 'Toerana')}
+                </th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  {getText('Candidatures', 'Fangatahana')}
+                </th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  {getText('Statut', 'Sata')}
+                </th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  {getText('Actions', 'Hetsika')}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -345,7 +413,9 @@ export default function JobsDashboardPage() {
                           )}
                         </div>
                         <div>
-                          <p className="font-semibold text-gray-800">{language === 'fr' ? job.title_fr : (job.title_mg || job.title_fr)}</p>
+                          <p className="font-semibold text-gray-800">
+                            {language === 'fr' ? job.title_fr : (job.title_mg || job.title_fr)}
+                          </p>
                           <p className="text-xs text-gray-400">{formatDate(job.created_at)}</p>
                         </div>
                       </div>
@@ -363,21 +433,37 @@ export default function JobsDashboardPage() {
                     <td className="px-5 py-4">{getStatusBadge(job.status)}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-center gap-1">
-                        <Link href={`/dashboard/jobs/${job.id}`} className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" title={getText('Voir', 'Jereo')}>
+                        <Link 
+                          href={`/dashboard/jobs/${job.id}`} 
+                          className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" 
+                          title={getText('Voir', 'Jereo')}
+                        >
                           <Eye className="w-4 h-4" />
                         </Link>
                         {hasEditRights && (
                           <>
-                            <Link href={`/dashboard/jobs/${job.id}/edit`} className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" title={getText('Modifier', 'Hanova')}>
+                            <Link 
+                              href={`/dashboard/jobs/${job.id}/edit`} 
+                              className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" 
+                              title={getText('Modifier', 'Hanova')}
+                            >
                               <Edit className="w-4 h-4" />
                             </Link>
-                            <button onClick={() => handleToggleStatus(job.id, job.status)} className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" title={job.status === JobStatus.PUBLISHED ? getText('Fermer', 'Hakatona') : getText('Publier', 'Hamoa')}>
-                              {job.status === JobStatus.PUBLISHED ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                            <button 
+                              onClick={() => handleToggleStatus(job.id, job.status)} 
+                              className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" 
+                              title={job.status === 'published' ? getText('Fermer', 'Hakatona') : getText('Publier', 'Hamoa')}
+                            >
+                              {job.status === 'published' ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
                             </button>
                           </>
                         )}
                         {isSuperAdmin && (
-                          <button onClick={() => handleDelete(job.id, job.title_fr)} className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition" title={getText('Supprimer', 'Hamafa')}>
+                          <button 
+                            onClick={() => handleDelete(job.id, job.title_fr)} 
+                            className="p-2 text-gray-500 hover:text-red-600 rounded-lg hover:bg-gray-100 transition" 
+                            title={getText('Supprimer', 'Hamafa')}
+                          >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
@@ -398,10 +484,18 @@ export default function JobsDashboardPage() {
             {getText('Page', 'Pejy')} {currentPage} / {totalPages} ({totalItems} {getText('offres', 'asa')})
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 transition">
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+              disabled={currentPage === 1} 
+              className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 transition"
+            >
               <ChevronLeft className="w-5 h-5 text-gray-600" />
             </button>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 transition">
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+              disabled={currentPage === totalPages} 
+              className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 transition"
+            >
               <ChevronRight className="w-5 h-5 text-gray-600" />
             </button>
           </div>

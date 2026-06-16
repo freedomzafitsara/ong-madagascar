@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { UserRole } from '../auth/entities/user.entity';
 
 @Controller('projects')
 export class ProjectsController {
@@ -26,14 +27,14 @@ export class ProjectsController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async create(@Body() createDto: CreateProjectDto) {
     return this.projectsService.create(createDto);
   }
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async findAll(@Query() query: ProjectQueryDto) {
     return this.projectsService.findAll(query);
   }
@@ -52,7 +53,7 @@ export class ProjectsController {
 
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async getStats() {
     return this.projectsService.getStats();
   }
@@ -65,21 +66,21 @@ export class ProjectsController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async update(@Param('id') id: string, @Body() updateDto: UpdateProjectDto) {
     return this.projectsService.update(id, updateDto);
   }
 
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin', 'admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async updateStatus(@Param('id') id: string, @Body('status') status: string) {
     return this.projectsService.updateStatus(id, status);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('super_admin')
+@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async remove(@Param('id') id: string) {
     return this.projectsService.remove(id);

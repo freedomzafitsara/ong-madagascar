@@ -1,282 +1,333 @@
-﻿'use client';
+﻿// frontend/src/contexts/AuthContext.tsx
+
+'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
 // ============================================================
-// 1. ENUM DES RÔLES (simplifié pour le thème)
-// ============================================================
-
-export enum UserRole {
-  SUPER_ADMIN = 'super_admin',
-  ADMIN = 'admin',
-}
-
-// ============================================================
-// 2. INTERFACES ET TYPES (alignés avec le backend)
+// TYPES
 // ============================================================
 
 export interface User {
   id: string;
   email: string;
-  first_name: string;      // ✅ snake_case (backend)
-  last_name: string;       // ✅ snake_case (backend)
-  role: UserRole;
-  is_active: boolean;      // ✅ snake_case (backend)
-  avatar_url?: string;
-  phone?: string;
-  region?: string;
-  bio?: string;
-  position?: string;
-  department?: string;
-  skills?: string;
-  social_linkedin?: string;
-  social_twitter?: string;
-  social_github?: string;
-  created_at?: string;
-  last_login?: string;
-  updated_at?: string;
-  email_verified?: boolean;
-  language?: string;
-}
-
-export interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-  register: (userData: RegisterData) => Promise<void>;
-  hasRole: (roles: UserRole[]) => boolean;
-  isAuthenticated: boolean;
-  updateUser: (data: Partial<User>) => void;
-  refreshToken: () => Promise<boolean>;
-}
-
-export interface RegisterData {
-  email: string;
-  password: string;
   first_name: string;
   last_name: string;
   phone?: string;
+  role: 'visitor' | 'candidate' | 'admin' | 'super_admin';
+  avatar_url?: string;
+  is_active: boolean;
+  last_login?: string;
 }
 
-interface LoginResponse {
-  access_token?: string;
-  token?: string;
-  user: User;
-  message?: string;
-  statusCode?: number;
+export interface RegisterData {
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  role?: 'visitor' | 'candidate';
+}
+
+interface AuthContextType {
+  user: User | null;
+  token: string | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  isCandidate: boolean;
+  isVisitor: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => void;
+  updateProfile: (data: Partial<User>) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<void>;
 }
 
 // ============================================================
-// 3. CONTEXTE
+// CONTEXT
 // ============================================================
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
-// ============================================================
-// 4. PROVIDER
-// ============================================================
-
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Charger la session au démarrage
+  // ============================================================
+  // CHARGEMENT DE LA SESSION
+  // ============================================================
+
   useEffect(() => {
-    const storedToken = localStorage.getItem('access_token') || localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    
-    console.log('Chargement session - Token present:', !!storedToken);
-    console.log('Chargement session - User present:', !!storedUser);
-    
-    if (storedToken && storedUser) {
+    const loadSession = () => {
       try {
-        const parsedUser = JSON.parse(storedUser) as User;
-        setToken(storedToken);
-        setUser(parsedUser);
-        console.log('Session chargee avec succes');
+        const storedToken = localStorage.getItem('access_token');
+        const storedUser = localStorage.getItem('user');
+
+        if (storedToken && storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          // ✅ S'assurer que l'utilisateur a toutes les propriétés requises
+          if (parsedUser && parsedUser.id && parsedUser.email) {
+            setToken(storedToken);
+            setUser(parsedUser);
+          } else {
+            // Si les données sont invalides, nettoyer
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user');
+          }
+        }
       } catch (error) {
-        console.error('Erreur lors du chargement de la session:', error);
+        console.error('Erreur chargement session:', error);
         localStorage.removeItem('access_token');
-        localStorage.removeItem('token');
         localStorage.removeItem('user');
+      } finally {
+        setIsLoading(false);
       }
-    } else {
-      console.log('Aucune session trouvee');
-    }
-    setLoading(false);
+    };
+
+    loadSession();
   }, []);
 
-  // Mettre à jour l'utilisateur
-  const updateUser = (data: Partial<User>) => {
-    if (user) {
-      const updatedUser = { ...user, ...data };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      console.log('Utilisateur mis a jour');
-    }
-  };
+  // ============================================================
+  // VÉRIFICATIONS DES RÔLES
+  // ============================================================
 
-  // Vérifier si l'utilisateur a un rôle spécifique
-  const hasRole = (roles: UserRole[]): boolean => {
-    if (!user) return false;
-    return roles.includes(user.role);
-  };
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isCandidate = user?.role === 'candidate';
+  const isVisitor = !user || user?.role === 'visitor';
+  const isAuthenticated = !!user && !!token;
 
-  // Rafraîchir le token
-  const refreshToken = async (): Promise<boolean> => {
+  // ============================================================
+  // CONNEXION
+  // ============================================================
+
+  const login = async (email: string, password: string) => {
     try {
-      const refreshTokenValue = localStorage.getItem('refresh_token');
-      if (!refreshTokenValue) return false;
-      
-      const response = await fetch(`${API_URL}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshTokenValue }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const newToken = data.access_token || data.token;
-        if (newToken) {
-          localStorage.setItem('access_token', newToken);
-          localStorage.setItem('token', newToken);
-          setToken(newToken);
-          console.log('Token rafraichi avec succes');
-          return true;
-        }
-      }
-      return false;
-    } catch (error) {
-      console.error('Erreur lors du rafraichissement du token:', error);
-      return false;
-    }
-  };
-
-  // Connexion
-  const login = async (email: string, password: string): Promise<void> => {
-    try {
-      console.log('Tentative de connexion pour:', email);
-      
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
-      const data: LoginResponse = await response.json();
-
       if (!response.ok) {
-        const errorMsg = data.message || 'Email ou mot de passe incorrect';
-        console.error('Echec de connexion:', errorMsg);
-        throw new Error(errorMsg);
+        const error = await response.json();
+        throw new Error(error.message || 'Erreur de connexion');
       }
 
-      const authToken = data.access_token || data.token;
-      
-      if (!authToken || !data.user) {
-        throw new Error('Impossible de recuperer les informations de connexion');
-      }
+      const data = await response.json();
 
-      console.log('Connexion reussie, token obtenu');
-
-      // Enrichir les données utilisateur avec les champs attendus
-      const enrichedUserData: User = {
-        ...data.user,
-        role: data.user.role as UserRole,
-        created_at: data.user.created_at || new Date().toISOString(),
-        last_login: data.user.last_login || new Date().toISOString(),
+      // ✅ S'assurer que l'utilisateur a toutes les propriétés
+      const userData: User = {
+        id: data.user.id,
+        email: data.user.email,
+        first_name: data.user.first_name || '',
+        last_name: data.user.last_name || '',
+        phone: data.user.phone || '',
+        role: data.user.role || 'visitor',
+        avatar_url: data.user.avatar_url || '',
         is_active: data.user.is_active !== undefined ? data.user.is_active : true,
+        last_login: data.user.last_login || new Date().toISOString(),
       };
 
-      localStorage.setItem('access_token', authToken);
-      localStorage.setItem('token', authToken);
-      localStorage.setItem('user', JSON.stringify(enrichedUserData));
-      
-      setToken(authToken);
-      setUser(enrichedUserData);
-      
-      router.push('/dashboard');
-      
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(userData));
+
+      setToken(data.access_token);
+      setUser(userData);
+
+      // Redirection selon le rôle
+      if (userData.role === 'admin' || userData.role === 'super_admin') {
+        router.push('/dashboard');
+      } else {
+        router.push('/');
+      }
+
     } catch (error) {
-      console.error('Erreur de connexion:', error);
       throw error;
     }
   };
 
-  // Déconnexion
-  const logout = (): void => {
-    console.log('Deconnexion');
+  // ============================================================
+  // INSCRIPTION
+  // ============================================================
+
+  const register = async (data: RegisterData) => {
+    try {
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Erreur lors de l\'inscription');
+      }
+
+      router.push('/login?registered=true');
+
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  // ============================================================
+  // DÉCONNEXION
+  // ============================================================
+
+  const logout = () => {
     localStorage.removeItem('access_token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
     router.push('/login');
   };
 
-  // Inscription
-  const register = async (userData: RegisterData): Promise<void> => {
+  // ============================================================
+  // MISE À JOUR DU PROFIL
+  // ============================================================
+
+  const updateProfile = async (data: Partial<User>) => {
+    if (!token) throw new Error('Non authentifié');
+
     try {
-      console.log('Tentative d\'inscription pour:', userData.email);
-      
-      const response = await fetch(`${API_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData),
+      const response = await fetch(`${API_URL}/auth/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || 'Erreur lors de l\'inscription');
+        const error = await response.json();
+        throw new Error(error.message || 'Erreur de mise à jour');
       }
 
-      console.log('Inscription reussie');
-      router.push('/login?registered=true');
+      const updatedUser = await response.json();
       
+      // ✅ Mettre à jour l'utilisateur en conservant toutes les propriétés
+      if (user) {
+        const newUser: User = {
+          ...user,
+          first_name: updatedUser.first_name || user.first_name,
+          last_name: updatedUser.last_name || user.last_name,
+          phone: updatedUser.phone || user.phone,
+          avatar_url: updatedUser.avatar_url || user.avatar_url,
+        };
+        setUser(newUser);
+        localStorage.setItem('user', JSON.stringify(newUser));
+      }
+
     } catch (error) {
-      console.error('Erreur d\'inscription:', error);
       throw error;
     }
   };
 
-  // Valeur du contexte
-  const contextValue: AuthContextType = {
-    user,
-    token,
-    loading,
-    login,
-    logout,
-    register,
-    hasRole,
-    isAuthenticated: !!token && !!user && user.is_active === true,
-    updateUser,
-    refreshToken,
+  // ============================================================
+  // CHANGEMENT DE MOT DE PASSE
+  // ============================================================
+
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    if (!token) throw new Error('Non authentifié');
+
+    try {
+      const response = await fetch(`${API_URL}/auth/change-password`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Erreur de changement de mot de passe');
+      }
+
+    } catch (error) {
+      throw error;
+    }
   };
 
+  // ============================================================
+  // UPLOAD AVATAR
+  // ============================================================
+
+  const uploadAvatar = async (file: File) => {
+    if (!token) throw new Error('Non authentifié');
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+      const response = await fetch(`${API_URL}/auth/upload-avatar`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Erreur d\'upload');
+      }
+
+      const data = await response.json();
+      
+      // ✅ Mettre à jour l'avatar
+      if (user) {
+        const newUser: User = {
+          ...user,
+          avatar_url: data.avatar_url,
+        };
+        setUser(newUser);
+        localStorage.setItem('user', JSON.stringify(newUser));
+      }
+
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  // ============================================================
+  // PROVIDER
+  // ============================================================
+
   return (
-    <AuthContext.Provider value={contextValue}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      isLoading,
+      isAuthenticated,
+      isAdmin,
+      isCandidate,
+      isVisitor,
+      login,
+      register,
+      logout,
+      updateProfile,
+      changePassword,
+      uploadAvatar,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-// ============================================================
-// 5. HOOK PERSONNALISÉ
-// ============================================================
-
-export const useAuth = (): AuthContextType => {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth doit être utilisé à l\'intérieur d\'un AuthProvider');
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };

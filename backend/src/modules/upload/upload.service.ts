@@ -1,49 +1,38 @@
 // backend/src/modules/upload/upload.service.ts
+
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { DatabaseImage } from '../../entities/database-image.entity';
-
-const sharp = require('sharp');
+import { UploadedFile } from '../../entities/uploaded-file.entity';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class UploadService {
   private readonly logger = new Logger(UploadService.name);
+  private readonly uploadsPath = path.join(process.cwd(), 'uploads');
 
   constructor(
-    @InjectRepository(DatabaseImage)
-    private imageRepository: Repository<DatabaseImage>,
-  ) {}
+    @InjectRepository(UploadedFile)
+    private fileRepository: Repository<UploadedFile>,
+  ) {
+    // Créer le dossier uploads s'il n'existe pas
+    if (!fs.existsSync(this.uploadsPath)) {
+      fs.mkdirSync(this.uploadsPath, { recursive: true });
+    }
+  }
 
-  async uploadImage(
+  async uploadFile(
     file: Express.Multer.File,
     entityType: string,
     entityId?: string,
-    isMain: boolean = false,
-    displayOrder: number = 0,
-  ): Promise<DatabaseImage> {
-    // CORRECTION: Normalisation du MIME type
-    let mimeType = file.mimetype.toLowerCase();
-    const fileName = file.originalname.toLowerCase();
+  ): Promise<UploadedFile> {
+    this.logger.log(`Upload: ${file.originalname}, MIME: ${file.mimetype}, Taille: ${file.size}`);
+
+    const mimeType = file.mimetype.toLowerCase();
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
     
-    // Correction pour les fichiers PDF envoyés avec application/octet-stream
-    if (mimeType === 'application/octet-stream' && fileName.endsWith('.pdf')) {
-      mimeType = 'application/pdf';
-      file.mimetype = 'application/pdf';
-      this.logger.log(`Correction MIME: application/octet-stream -> application/pdf pour ${file.originalname}`);
-    }
-    
-    const validImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-    const validDocumentTypes = ['application/pdf'];
-    
-    const isImage = validImageTypes.includes(mimeType);
-    const isDocument = validDocumentTypes.includes(mimeType);
-    
-    this.logger.log(`Upload: ${file.originalname}, MIME: ${mimeType}, isImage: ${isImage}, isDocument: ${isDocument}`);
-    
-    // CORRECTION: Message d'erreur plus clair
-    if (!isImage && !isDocument) {
-      this.logger.error(`Type refuse: ${file.mimetype}`);
+    if (!validTypes.includes(mimeType)) {
       throw new BadRequestException(
         `Format non supporte. Types acceptes: JPG, PNG, WEBP, GIF, PDF. Format recu: ${file.mimetype}`
       );
@@ -54,134 +43,119 @@ export class UploadService {
     }
 
     try {
-      let processedBuffer = file.buffer;
-      let finalMimeType = mimeType;
-      let finalFileName = file.originalname;
-      
-      // Sharp uniquement pour les IMAGES (pas les PDF)
-      if (isImage && file.size > 1024 * 1024) {
-        try {
-          processedBuffer = await sharp(file.buffer)
-            .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 85 })
-            .toBuffer();
-          
-          finalMimeType = 'image/jpeg';
-          finalFileName = file.originalname.replace(/\.[^/.]+$/, '') + '.jpg';
-          
-          this.logger.log(`Image optimisee: ${(file.size / 1024 / 1024).toFixed(2)} Mo`);
-        } catch (sharpError) {
-          this.logger.warn(`Erreur Sharp, utilisation originale: ${sharpError.message}`);
-          processedBuffer = file.buffer;
-          finalMimeType = mimeType;
-          finalFileName = file.originalname;
-        }
+      // Générer un nom de fichier unique
+      const timestamp = Date.now();
+      const uniqueId = Math.random().toString(36).substring(2, 8);
+      const ext = this.getExtensionFromMimeType(mimeType);
+      const finalFileName = `${timestamp}-${uniqueId}.${ext}`;
+      const relativePath = `uploads/${entityType}/${finalFileName}`;
+      const fullPath = path.join(this.uploadsPath, entityType, finalFileName);
+
+      // Créer le dossier du type d'entité
+      const entityDir = path.join(this.uploadsPath, entityType);
+      if (!fs.existsSync(entityDir)) {
+        fs.mkdirSync(entityDir, { recursive: true });
       }
 
-      // Si c'est une image principale, retirer le flag des autres
-      if (isMain && entityId && isImage) {
-        await this.imageRepository.update(
-          { entityType, entityId, isMain: true },
-          { isMain: false }
-        );
-      }
+      // Sauvegarder le fichier sur le disque
+      fs.writeFileSync(fullPath, file.buffer);
 
-      const image = this.imageRepository.create({
-        entityType,
-        entityId,
-        fileName: finalFileName,
+      // Créer l'URL du fichier
+      const fileUrl = `/${relativePath}`;
+
+      // Sauvegarder dans uploaded_files
+      const fileEntity = this.fileRepository.create({
+        url: fileUrl,
+        filePath: relativePath,
+        filename: finalFileName,
         originalName: file.originalname,
-        mimeType: finalMimeType,
-        fileSize: processedBuffer.length,
-        imageData: processedBuffer,
-        isMain: (isImage && isMain),
-        displayOrder,
+        format: ext,
+        size: file.size,
+        type: entityType,
+        entityId: entityId || null,
       });
 
-      const savedImage = await this.imageRepository.save(image);
+      const savedFile = await this.fileRepository.save(fileEntity);
       
-      this.logger.log(`Fichier stocke: ${savedImage.id} - Type: ${savedImage.mimeType} - Taille: ${(savedImage.fileSize / 1024).toFixed(2)} KB`);
+      this.logger.log(`Fichier stocke: ${savedFile.id} - ${savedFile.filename}`);
       
-      return savedImage;
+      return savedFile;
     } catch (error) {
       this.logger.error(`Erreur upload: ${error.message}`);
       throw new BadRequestException(`Erreur lors de l'upload: ${error.message}`);
     }
   }
 
-  async getImageById(id: string): Promise<DatabaseImage> {
-    const image = await this.imageRepository.findOne({ where: { id } });
-    if (!image) {
-      throw new NotFoundException(`Fichier ${id} non trouve`);
-    }
-    return image;
+  private getExtensionFromMimeType(mimeType: string): string {
+    const mimeMap: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+      'application/pdf': 'pdf',
+    };
+    return mimeMap[mimeType] || 'bin';
   }
 
-  async getImagesByEntity(entityType: string, entityId?: string): Promise<DatabaseImage[]> {
-    const query: any = { entityType };
+  async getFileById(id: string): Promise<UploadedFile> {
+    const file = await this.fileRepository.findOne({ where: { id } });
+    if (!file) {
+      throw new NotFoundException(`Fichier ${id} non trouve`);
+    }
+    return file;
+  }
+
+  async getFilesByEntity(entityType: string, entityId?: string): Promise<UploadedFile[]> {
+    const query: any = { type: entityType };
     if (entityId) {
       query.entityId = entityId;
     }
     
-    return this.imageRepository.find({
+    return this.fileRepository.find({
       where: query,
-      order: { isMain: 'DESC', displayOrder: 'ASC', createdAt: 'ASC' },
+      order: { createdAt: 'DESC' },
     });
   }
 
-  async getMainImage(entityType: string, entityId: string): Promise<DatabaseImage | null> {
-    return this.imageRepository.findOne({
-      where: { entityType, entityId, isMain: true },
-    });
+  async getMainFile(entityType: string, entityId: string): Promise<UploadedFile | null> {
+    const files = await this.getFilesByEntity(entityType, entityId);
+    return files.length > 0 ? files[0] : null;
   }
 
-  async updateImageAlt(id: string, altTextFr?: string, altTextMg?: string): Promise<DatabaseImage> {
-    const image = await this.getImageById(id);
-    
-    if (altTextFr !== undefined) image.altTextFr = altTextFr;
-    if (altTextMg !== undefined) image.altTextMg = altTextMg;
-    
-    return this.imageRepository.save(image);
+  async getFileUrl(id: string): Promise<string> {
+    const file = await this.getFileById(id);
+    return file.url;
   }
 
-  async reorderImages(imageIds: string[]): Promise<void> {
-    for (let i = 0; i < imageIds.length; i++) {
-      await this.imageRepository.update(imageIds[i], { displayOrder: i });
-    }
-    this.logger.log(`Reordonnancement de ${imageIds.length} fichiers`);
-  }
-
-  async setMainImage(id: string, entityType: string, entityId: string): Promise<DatabaseImage> {
-    const image = await this.getImageById(id);
+  async deleteFile(id: string): Promise<void> {
+    const file = await this.getFileById(id);
     
-    if (!image.mimeType.startsWith('image/')) {
-      throw new BadRequestException('Seules les images peuvent etre definies comme principales');
+    // Supprimer le fichier physique
+    try {
+      const fullPath = path.join(process.cwd(), file.filePath);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+        this.logger.log(`Fichier physique supprime: ${fullPath}`);
+      }
+    } catch (error) {
+      this.logger.warn(`Impossible de supprimer le fichier physique: ${error.message}`);
     }
     
-    await this.imageRepository.update(
-      { entityType, entityId, isMain: true },
-      { isMain: false }
-    );
-    
-    await this.imageRepository.update(id, { isMain: true });
-    
-    this.logger.log(`Image principale mise a jour: ${id}`);
-    
-    return this.getImageById(id);
-  }
-
-  async deleteImage(id: string): Promise<void> {
-    const image = await this.getImageById(id);
-    await this.imageRepository.remove(image);
+    // Supprimer l'entrée en base
+    await this.fileRepository.remove(file);
     this.logger.log(`Fichier supprime: ${id}`);
   }
 
-  async deleteImagesByEntity(entityType: string, entityId: string): Promise<void> {
-    const result = await this.imageRepository.delete({ entityType, entityId });
-    this.logger.log(`Fichiers supprimes pour ${entityType}/${entityId}: ${result.affected || 0}`);
+  async deleteFilesByEntity(entityType: string, entityId: string): Promise<void> {
+    const files = await this.getFilesByEntity(entityType, entityId);
+    for (const file of files) {
+      await this.deleteFile(file.id);
+    }
+    this.logger.log(`Fichiers supprimes pour ${entityType}/${entityId}: ${files.length}`);
   }
 
   getImageUrl(id: string): string {
-    return `/api/upload/image/${id}`;
+    return `/api/upload/file/${id}`;
   }
 }

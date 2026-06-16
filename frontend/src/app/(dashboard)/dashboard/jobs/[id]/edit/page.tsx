@@ -8,14 +8,13 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { jobService, JobOffer, ContractType, JobStatus } from '@/services/job.service';
-import { uploadService, DatabaseImage } from '@/services/upload.service';
+import { uploadService, UploadedFile } from '@/services/upload.service';
 import dynamic from 'next/dynamic';
 import { 
   ArrowLeft, Save, Loader2, AlertCircle, CheckCircle,
   Building, MapPin, Briefcase, Calendar,
   FileText, Eye, XCircle, Clock, X,
-  Upload, Trash2, Globe, 
-  GraduationCap, Target
+  Upload, Trash2, Globe
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -25,10 +24,8 @@ const RichTextEditor = dynamic(
   { ssr: false, loading: () => <div className="h-64 bg-gray-100 animate-pulse rounded-lg" /> }
 );
 
-// Types
 type StatusColor = 'green' | 'red' | 'orange' | 'purple' | 'gray' | 'blue';
 
-// Configuration des couleurs pour les statuts
 const STATUS_COLORS: Record<StatusColor, string> = {
   green: 'bg-green-50 border-green-200 text-green-700',
   red: 'bg-red-50 border-red-200 text-red-700',
@@ -38,7 +35,6 @@ const STATUS_COLORS: Record<StatusColor, string> = {
   blue: 'bg-blue-50 border-blue-200 text-blue-700',
 };
 
-// Configuration des types de contrat
 const CONTRACT_TYPES: { value: ContractType; label: string; color: StatusColor }[] = [
   { value: ContractType.CDI, label: 'CDI', color: 'blue' },
   { value: ContractType.CDD, label: 'CDD', color: 'cyan' as StatusColor },
@@ -48,7 +44,6 @@ const CONTRACT_TYPES: { value: ContractType; label: string; color: StatusColor }
   { value: ContractType.TEMPORARY, label: 'Temporaire', color: 'gray' },
 ];
 
-// Configuration des statuts
 const STATUS_OPTIONS = [
   { value: JobStatus.PUBLISHED, label: 'Publie', labelMg: 'Navoaka', color: 'green' as StatusColor, icon: CheckCircle },
   { value: JobStatus.DRAFT, label: 'Brouillon', labelMg: 'Volavola', color: 'gray' as StatusColor, icon: FileText },
@@ -57,7 +52,6 @@ const STATUS_OPTIONS = [
   { value: JobStatus.ARCHIVED, label: 'Archive', labelMg: 'Voatahiry', color: 'purple' as StatusColor, icon: ArchiveIcon },
 ];
 
-// Composant icone archive
 function ArchiveIcon(props: any) {
   return (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -68,45 +62,12 @@ function ArchiveIcon(props: any) {
   );
 }
 
-// Composant carte de statut
-interface StatusCardProps {
-  status: string;
-  count: number;
-  icon: React.ElementType;
-  color: StatusColor;
-  onClick?: () => void;
-}
-
-function StatusCard({ status, count, icon: Icon, color, onClick }: StatusCardProps) {
-  const colorClass = STATUS_COLORS[color] || STATUS_COLORS.gray;
-  
-  return (
-    <div 
-      onClick={onClick}
-      className={`rounded-xl border p-4 transition-all hover:shadow-md cursor-pointer ${colorClass}`}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-2xl font-bold">{count}</p>
-          <p className="text-xs font-medium mt-0.5">{status}</p>
-        </div>
-        <div className="w-10 h-10 bg-white/50 rounded-lg flex items-center justify-center">
-          <Icon className="w-5 h-5" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Section de formulaire
-interface FormSectionProps {
-  title: string;
-  icon: React.ElementType;
-  children: React.ReactNode;
-  className?: string;
-}
-
-function FormSection({ title, icon: Icon, children, className = '' }: FormSectionProps) {
+function FormSection({ title, icon: Icon, children, className = '' }: { 
+  title: string; 
+  icon: React.ElementType; 
+  children: React.ReactNode; 
+  className?: string 
+}) {
   return (
     <div className={`border-b border-gray-200 pb-6 mb-6 last:border-b-0 ${className}`}>
       <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -122,7 +83,6 @@ function FormSection({ title, icon: Icon, children, className = '' }: FormSectio
   );
 }
 
-// Composant principal
 export default function EditJobPage() {
   const params = useParams();
   const router = useRouter();
@@ -133,7 +93,7 @@ export default function EditJobPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [uploadedImage, setUploadedImage] = useState<DatabaseImage | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'description' | 'publication'>('general');
   
@@ -150,11 +110,13 @@ export default function EditJobPage() {
     try {
       const response = await jobService.getOfferById(jobId);
       setJob(response);
+      
+      // Récupérer l'image si elle existe
       if (response.main_image_id) {
         try {
-          const images = await uploadService.getImages('job', jobId);
-          const mainImage = images.find(img => img.id === response.main_image_id);
-          if (mainImage) setUploadedImage(mainImage);
+          const files = await uploadService.getFiles('job', jobId);
+          const mainFile = files.find((f: UploadedFile) => f.id === response.main_image_id);
+          if (mainFile) setUploadedFile(mainFile);
         } catch (err) {
           console.error('Erreur chargement image:', err);
         }
@@ -196,9 +158,13 @@ export default function EditJobPage() {
     if (!job) return;
     setUploadingImage(true);
     try {
-      const image = await uploadService.uploadImage(file, 'job', job.id, true);
-      setUploadedImage(image);
-      await jobService.updateOffer(job.id, { image_url: image.url });
+      const result = await uploadService.uploadImage(file, 'job');
+      setUploadedFile(result);
+      const imageUrl = uploadService.getImageUrl(result.id);
+      await jobService.updateOffer(job.id, { 
+        image_url: imageUrl, 
+        main_image_id: result.id 
+      });
       toast.success(getText('Image uploadee avec succes', 'Nahomana ny fampidirana sary'));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
@@ -209,11 +175,14 @@ export default function EditJobPage() {
   };
 
   const handleRemoveImage = async () => {
-    if (!uploadedImage || !job) return;
+    if (!uploadedFile || !job) return;
     try {
-      await uploadService.deleteImage(uploadedImage.id);
-      setUploadedImage(null);
-      await jobService.updateOffer(job.id, { image_url: undefined });
+      await uploadService.deleteFile(uploadedFile.id);
+      setUploadedFile(null);
+      await jobService.updateOffer(job.id, { 
+        image_url: undefined, 
+        main_image_id: undefined 
+      });
       toast.success(getText('Image supprimee', 'Voafafa ny sary'));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la suppression';
@@ -239,7 +208,10 @@ export default function EditJobPage() {
       if (job.location) updateData.location = job.location;
       if (job.contract_type) updateData.contract_type = job.contract_type;
       if (job.deadline) updateData.deadline = job.deadline;
-      if (uploadedImage) updateData.image_url = uploadedImage.url;
+      if (uploadedFile) {
+        updateData.image_url = uploadService.getImageUrl(uploadedFile.id);
+        updateData.main_image_id = uploadedFile.id;
+      }
       updateData.is_published = job.is_published;
 
       await jobService.updateOffer(job.id, updateData);
@@ -275,7 +247,7 @@ export default function EditJobPage() {
     );
   };
 
-  const imageUrl = uploadedImage ? uploadService.getImageUrl(uploadedImage.id) : null;
+  const imageUrl = uploadedFile ? uploadService.getImageUrl(uploadedFile.id) : null;
 
   if (loading) {
     return (

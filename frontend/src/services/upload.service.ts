@@ -2,23 +2,33 @@
 
 'use client';
 
-export interface DatabaseImage {
+// ============================================================
+// INTERFACES
+// ============================================================
+
+export interface UploadedFile {
   id: string;
   url: string;
   fileName: string;
   originalName: string;
   fileSize: number;
-  mimeType: string;
-  isMain: boolean;
-  displayOrder: number;
-  altTextFr?: string;
-  altTextMg?: string;
+  format: string;
+  type: string;
+  entityId: string | null;
   createdAt: string;
 }
 
 export type EntityType = 'job' | 'project' | 'blog' | 'profile' | 'background' | 'cv' | 'cover_letter';
 
+// ============================================================
+// CONSTANTES
+// ============================================================
+
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001').replace(/\/api$/, '');
+
+// ============================================================
+// SERVICE
+// ============================================================
 
 class UploadService {
   private getToken(): string | null {
@@ -28,13 +38,16 @@ class UploadService {
     return null;
   }
 
+  // ============================================================
+  // UPLOAD
+  // ============================================================
+
   async uploadImage(
     file: File, 
     entityType: EntityType = 'job', 
     entityId?: string, 
     isMain: boolean = false
-  ): Promise<DatabaseImage> {
-    // CORRECTION: Accepter les images ET les PDF
+  ): Promise<UploadedFile> {
     const validImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     const validDocumentTypes = ['application/pdf'];
     
@@ -46,7 +59,6 @@ class UploadService {
       throw new Error('Format non supporte. JPG, PNG, WEBP, GIF, PDF uniquement.');
     }
 
-    // CORRECTION: Taille max différente selon le type
     const maxSize = isDocument ? 100 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > maxSize) {
       throw new Error(`Fichier trop grand. Maximum ${isDocument ? '100' : '5'} Mo.`);
@@ -67,13 +79,7 @@ class UploadService {
 
     const uploadUrl = `${API_BASE_URL}/api/upload/single`;
     
-    console.log('=== UPLOAD DEBUG ===');
-    console.log('API_BASE_URL:', API_BASE_URL);
-    console.log('Upload URL:', uploadUrl);
-    console.log('File:', file.name, file.type, file.size);
-    console.log('EntityType:', entityType);
-    console.log('EntityId:', entityId);
-    console.log('IsMain:', isMain);
+    console.log('Upload:', file.name, file.type, file.size);
     
     try {
       const response = await fetch(uploadUrl, {
@@ -83,8 +89,6 @@ class UploadService {
         },
         body: formData,
       });
-
-      console.log('Response status:', response.status);
 
       if (!response.ok) {
         let errorMessage = `Erreur HTTP ${response.status}`;
@@ -98,34 +102,40 @@ class UploadService {
       }
 
       const data = await response.json();
-      console.log('Response data:', data);
       
-      const image: DatabaseImage = {
+      // Convertir la réponse en UploadedFile
+      const uploadedFile: UploadedFile = {
         id: data.id,
         url: this.getImageUrl(data.id),
-        fileName: data.fileName,
-        originalName: data.originalName || data.fileName,
-        fileSize: data.fileSize,
-        mimeType: data.mimeType,
-        isMain: data.isMain || false,
-        displayOrder: data.displayOrder || 0,
-        altTextFr: data.altTextFr,
-        altTextMg: data.altTextMg,
-        createdAt: data.createdAt,
+        fileName: data.fileName || data.filename || '',
+        originalName: data.originalName || data.original_name || file.name,
+        fileSize: data.fileSize || data.size || file.size,
+        format: data.format || data.mimeType || this.getExtensionFromFile(file),
+        type: data.type || entityType,
+        entityId: data.entityId || entityId || null,
+        createdAt: data.createdAt || new Date().toISOString(),
       };
       
-      console.log('Fichier stocke:', image);
-      console.log('=== FIN UPLOAD ===');
+      console.log('Fichier stocke:', uploadedFile.id);
       
-      return image;
+      return uploadedFile;
     } catch (error) {
       console.error('Upload error:', error);
       throw error;
     }
   }
 
-  async getImages(entityType: EntityType, entityId?: string): Promise<DatabaseImage[]> {
-    const params = new URLSearchParams({ entityType });
+  private getExtensionFromFile(file: File): string {
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    return ext;
+  }
+
+  // ============================================================
+  // RECUPERATION DES FICHIERS
+  // ============================================================
+
+  async getFiles(entityType: EntityType, entityId?: string): Promise<UploadedFile[]> {
+    const params = new URLSearchParams({ type: entityType });
     if (entityId) {
       params.append('entityId', entityId);
     }
@@ -138,124 +148,60 @@ class UploadService {
     });
 
     if (!response.ok) {
-      throw new Error('Erreur lors de la recuperation des images');
+      throw new Error('Erreur lors de la recuperation des fichiers');
     }
 
     const data = await response.json();
     
-    const images = (data.images || []).map((img: any) => ({
-      id: img.id,
-      url: this.getImageUrl(img.id),
-      fileName: img.fileName,
-      originalName: img.originalName || img.fileName,
-      fileSize: img.fileSize,
-      mimeType: img.mimeType,
-      isMain: img.isMain || false,
-      displayOrder: img.displayOrder || 0,
-      altTextFr: img.altTextFr,
-      altTextMg: img.altTextMg,
-      createdAt: img.createdAt,
+    const files = (data.files || []).map((file: any) => ({
+      id: file.id,
+      url: this.getImageUrl(file.id),
+      fileName: file.fileName || file.filename || '',
+      originalName: file.originalName || file.original_name || '',
+      fileSize: file.fileSize || file.size || 0,
+      format: file.format || file.mimeType || '',
+      type: file.type || entityType,
+      entityId: file.entityId || null,
+      createdAt: file.createdAt || new Date().toISOString(),
     }));
     
-    return images;
+    return files;
   }
 
-  async getMainImage(entityType: EntityType, entityId: string): Promise<DatabaseImage | null> {
-    const response = await fetch(
-      `${API_BASE_URL}/api/upload/main?entityType=${entityType}&entityId=${entityId}`,
-      { method: 'GET' }
-    );
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    
-    if (!data.image) {
-      return null;
-    }
-    
-    const img = data.image;
-    return {
-      id: img.id,
-      url: this.getImageUrl(img.id),
-      fileName: img.fileName,
-      originalName: img.originalName || img.fileName,
-      fileSize: img.fileSize,
-      mimeType: img.mimeType,
-      isMain: img.isMain || true,
-      displayOrder: img.displayOrder || 0,
-      altTextFr: img.altTextFr,
-      altTextMg: img.altTextMg,
-      createdAt: img.createdAt,
-    };
-  }
-
-  async getImageById(id: string): Promise<DatabaseImage> {
-    const response = await fetch(`${API_BASE_URL}/api/upload/image/${id}`, {
+  async getFile(id: string): Promise<UploadedFile> {
+    const response = await fetch(`${API_BASE_URL}/api/upload/file/${id}`, {
       method: 'GET',
     });
 
     if (!response.ok) {
-      throw new Error('Image non trouvee');
+      throw new Error('Fichier non trouve');
     }
 
+    const data = await response.json();
+    
     return {
-      id: id,
-      url: this.getImageUrl(id),
-      fileName: '',
-      originalName: '',
-      fileSize: 0,
-      mimeType: 'image/jpeg',
-      isMain: false,
-      displayOrder: 0,
-      createdAt: new Date().toISOString(),
+      id: data.id,
+      url: this.getImageUrl(data.id),
+      fileName: data.fileName || data.filename || '',
+      originalName: data.originalName || data.original_name || '',
+      fileSize: data.fileSize || data.size || 0,
+      format: data.format || data.mimeType || '',
+      type: data.type || '',
+      entityId: data.entityId || null,
+      createdAt: data.createdAt || new Date().toISOString(),
     };
   }
 
-  async updateImageAlt(id: string, altTextFr?: string, altTextMg?: string): Promise<void> {
-    const token = this.getToken();
-    if (!token) {
-      throw new Error('Non authentifie');
-    }
-
-    const response = await fetch(`${API_BASE_URL}/api/upload/${id}/alt`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ altTextFr, altTextMg }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Erreur lors de la mise a jour');
-    }
+  async getMainFile(entityType: EntityType, entityId: string): Promise<UploadedFile | null> {
+    const files = await this.getFiles(entityType, entityId);
+    return files.length > 0 ? files[0] : null;
   }
 
-  async setMainImage(id: string, entityType: EntityType, entityId: string): Promise<void> {
-    const token = this.getToken();
-    if (!token) {
-      throw new Error('Non authentifie');
-    }
+  // ============================================================
+  // SUPPRESSION
+  // ============================================================
 
-    const response = await fetch(
-      `${API_BASE_URL}/api/upload/${id}/main?entityType=${entityType}&entityId=${entityId}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Erreur lors du changement d\'image principale');
-    }
-  }
-
-  async deleteImage(id: string): Promise<void> {
+  async deleteFile(id: string): Promise<void> {
     const token = this.getToken();
     if (!token) {
       throw new Error('Non authentifie');
@@ -273,34 +219,28 @@ class UploadService {
     }
   }
 
-  async reorderImages(imageIds: string[]): Promise<void> {
-    const token = this.getToken();
-    if (!token) {
-      throw new Error('Non authentifie');
-    }
-
-    const response = await fetch(`${API_BASE_URL}/api/upload/reorder`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ imageIds }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Erreur lors du reordonnancement');
+  async deleteFilesByEntity(entityType: EntityType, entityId: string): Promise<void> {
+    const files = await this.getFiles(entityType, entityId);
+    for (const file of files) {
+      await this.deleteFile(file.id);
     }
   }
+
+  // ============================================================
+  // UTILITAIRES
+  // ============================================================
 
   getImageUrl(id: string): string {
-    return `${API_BASE_URL}/api/upload/image/${id}`;
+    return `${API_BASE_URL}/api/upload/file/${id}`;
   }
 
-  async checkUploadHealth(): Promise<boolean> {
+  getImageUrlFromFile(file: UploadedFile): string {
+    return file.url || this.getImageUrl(file.id);
+  }
+
+  async checkHealth(): Promise<boolean> {
     try {
-      const healthUrl = `${API_BASE_URL}/api/upload/health`;
-      const response = await fetch(healthUrl);
+      const response = await fetch(`${API_BASE_URL}/api/upload/health`);
       return response.ok;
     } catch {
       return false;

@@ -1,46 +1,90 @@
-﻿// src/components/auth/ProtectedRoute.tsx
+﻿// frontend/src/components/auth/ProtectedRoute.tsx
+
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
-  allowedRoles?: string[];
+  children: ReactNode;
+  requiredRole?: 'visitor' | 'candidate' | 'admin' | 'super_admin';
+  redirectTo?: string;
 }
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, isAuthenticated, loading } = useAuth();
+export function ProtectedRoute({ 
+  children, 
+  requiredRole, 
+  redirectTo = '/login' 
+}: ProtectedRouteProps) {
   const router = useRouter();
+  const { user, isLoading, isAuthenticated, isAdmin, isCandidate } = useAuth();
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    }
-    if (!loading && isAuthenticated && allowedRoles && allowedRoles.length > 0) {
-      if (!allowedRoles.includes(user?.role || '')) {
-        router.push('/dashboard');
+    if (!isLoading) {
+      // ✅ Vérifier l'authentification
+      if (!isAuthenticated) {
+        router.push(redirectTo);
+        return;
+      }
+
+      // ✅ Vérifier le rôle requis
+      if (requiredRole) {
+        let hasRequiredRole = false;
+        
+        switch (requiredRole) {
+          case 'admin':
+          case 'super_admin':
+            hasRequiredRole = isAdmin;
+            break;
+          case 'candidate':
+            hasRequiredRole = isCandidate || isAdmin;
+            break;
+          case 'visitor':
+            hasRequiredRole = true;
+            break;
+        }
+
+        if (!hasRequiredRole) {
+          router.push('/');
+        }
       }
     }
-  }, [loading, isAuthenticated, router, allowedRoles, user?.role]);
+  }, [isLoading, isAuthenticated, user, requiredRole, router, redirectTo, isAdmin, isCandidate]);
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-ymad-gray-50">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-ymad-blue-200 border-t-ymad-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-ymad-gray-500">Chargement...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-blue-800 animate-spin" />
       </div>
     );
   }
 
-  if (!isAuthenticated) return null;
-  
-  if (allowedRoles && allowedRoles.length > 0) {
-    if (!allowedRoles.includes(user?.role || '')) return null;
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  if (requiredRole) {
+    let hasRequiredRole = false;
+    
+    switch (requiredRole) {
+      case 'admin':
+      case 'super_admin':
+        hasRequiredRole = isAdmin;
+        break;
+      case 'candidate':
+        hasRequiredRole = isCandidate || isAdmin;
+        break;
+      case 'visitor':
+        hasRequiredRole = true;
+        break;
+    }
+
+    if (!hasRequiredRole) {
+      return null;
+    }
   }
 
   return <>{children}</>;
-};
+}

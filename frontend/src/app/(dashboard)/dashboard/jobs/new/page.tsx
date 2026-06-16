@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { jobService, ContractType } from '@/services/job.service';
-import { uploadService, DatabaseImage } from '@/services/upload.service';
+import { uploadService } from '@/services/upload.service';
 import { RichTextEditor } from '@/components/admin/RichTextEditor';
 import { 
   ArrowLeft, Save, Briefcase, MapPin, Building, Calendar, 
@@ -16,6 +16,19 @@ import {
   Upload, Eye, Trash2, Globe, Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+// Interface pour le fichier uploadé
+interface UploadedFile {
+  id: string;
+  url: string;
+  fileName: string;
+  originalName: string;
+  fileSize: number;
+  format: string;
+  type: string;
+  entityId: string | null;
+  createdAt: string;
+}
 
 const CONTRACT_TYPES = [
   { value: ContractType.CDI, labelFr: 'CDI', labelMg: 'CDI' },
@@ -45,10 +58,11 @@ const isDateExpired = (dateString: string): boolean => {
 // Composant principal
 export default function NewJobPage() {
   const router = useRouter();
-  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  // ✅ CORRECTION: utiliser isLoading au lieu de loading
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { language } = useLanguage();
   const [loading, setLoading] = useState(false);
-  const [uploadedImage, setUploadedImage] = useState<DatabaseImage | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
@@ -121,7 +135,7 @@ export default function NewJobPage() {
   const removeImage = () => {
     setImageFile(null);
     setImagePreview(null);
-    setUploadedImage(null);
+    setUploadedFile(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -141,10 +155,30 @@ export default function NewJobPage() {
       let imageId = null;
       
       if (imageFile) {
-        const image = await uploadService.uploadImage(imageFile, 'job', undefined, true);
-        imageUrl = image.url;
-        imageId = image.id;
-        setUploadedImage(image);
+        try {
+          const result = await uploadService.uploadImage(imageFile, 'job');
+          imageUrl = result.url || uploadService.getImageUrl(result.id);
+          imageId = result.id;
+          
+          const uploadedFileData: UploadedFile = {
+            id: result.id,
+            url: result.url || '',
+            fileName: (result as any).fileName || '',
+            originalName: (result as any).originalName || '',
+            fileSize: (result as any).fileSize || 0,
+            format: (result as any).format || '',
+            type: (result as any).type || 'job',
+            entityId: (result as any).entityId || null,
+            createdAt: (result as any).createdAt || new Date().toISOString(),
+          };
+          setUploadedFile(uploadedFileData);
+        } catch (uploadError: any) {
+          console.error('Erreur upload:', uploadError);
+          toast.error(uploadError.message || getText('Erreur lors de l\'upload', 'Nisy hadisoana tamin\'ny fampidirana sary'));
+          setLoading(false);
+          setUploadingImage(false);
+          return;
+        }
       }
       
       // 2. Creation de l'offre
@@ -165,7 +199,10 @@ export default function NewJobPage() {
       
       // 3. Si l'offre a ete creee avec une image, mettre a jour la reference
       if (imageId && result.id) {
-        await jobService.updateOffer(result.id, { image_url: imageUrl || undefined });
+        await jobService.updateOffer(result.id, { 
+          image_url: imageUrl || undefined,
+          main_image_id: imageId,
+        });
       }
       
       toast.success(result.is_published
