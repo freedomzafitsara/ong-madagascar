@@ -1,6 +1,4 @@
-﻿// backend/src/modules/auth/auth.controller.ts
-
-import { 
+﻿import { 
   Controller, 
   Post, 
   Body, 
@@ -9,7 +7,9 @@ import {
   Req, 
   Put,
   UploadedFile,
-  UseInterceptors
+  UseInterceptors,
+  Param,
+  Patch
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
@@ -24,7 +24,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   // ============================================================
-  // ROUTES PUBLIQUES
+  // ROUTES PUBLIQUES - Accessibles sans authentification
   // ============================================================
 
   @Public()
@@ -52,7 +52,7 @@ export class AuthController {
   }
 
   // ============================================================
-  // ROUTES PROTEGEES
+  // ROUTES PROTEGEES - Authentification requise
   // ============================================================
 
   @UseGuards(JwtAuthGuard)
@@ -96,15 +96,15 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
-  @Post('users/:id/role')
-  async updateUserRole(@Req() req: any, @Body('role') role: UserRole) {
-    return this.authService.updateUserRole(req.params.id, role);
+  @Patch('users/:id/role')
+  async updateUserRole(@Param('id') id: string, @Body('role') role: UserRole) {
+    return this.authService.updateUserRole(id, role);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
-  @Post('users/:id/toggle-status')
-  async toggleUserStatus(@Req() req: any) {
-    return this.authService.toggleUserStatus(req.params.id);
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Patch('users/:id/toggle-status')
+  async toggleUserStatus(@Param('id') id: string) {
+    return this.authService.toggleUserStatus(id);
   }
 }

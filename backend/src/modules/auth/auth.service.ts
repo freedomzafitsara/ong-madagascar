@@ -1,47 +1,61 @@
-﻿// backend/src/modules/auth/auth.service.ts
-
-import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException, Logger } from '@nestjs/common';
+﻿import { 
+  Injectable, 
+  BadRequestException, 
+  NotFoundException, 
+  UnauthorizedException, 
+  ForbiddenException, 
+  Logger 
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { User, UserRole } from '../../entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import { UploadService } from '../upload/upload.service';
+import { EmailService } from '../email/email.service';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+
+  // Durée de validité du token en minutes
+  private readonly TOKEN_EXPIRY_MINUTES = 1;
 
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private jwtService: JwtService,
     private uploadService: UploadService,
+    private emailService: EmailService,
   ) {}
 
   // ============================================================
   // INSCRIPTION
   // ============================================================
 
-  async register(registerDto: any): Promise<{ success: boolean; message: string }> {
+  async register(registerDto: any): Promise<{ success: boolean; message: string; user?: any }> {
     const { email, password, first_name, last_name, phone, role } = registerDto;
 
+    // Vérifier si l'email existe déjà
     const existingUser = await this.userRepository.findOne({ where: { email } });
     if (existingUser) {
       throw new BadRequestException('Cet email est deja utilise');
     }
 
-    // ✅ Si role est spécifié et que c'est ADMIN, vérifier que c'est un super admin qui crée
+    // Déterminer le rôle
     let userRole = UserRole.VISITOR;
+    
+    // Empêcher la création de comptes admin via l'inscription
     if (role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Vous ne pouvez pas creer un compte administrateur');
     }
     
-    // ✅ Si role est CANDIDATE, l'attribuer
     if (role === UserRole.CANDIDATE) {
       userRole = UserRole.CANDIDATE;
     }
 
+    // Créer l'utilisateur
     const user = this.userRepository.create({
       email,
       password,
@@ -55,10 +69,26 @@ export class AuthService {
     await this.userRepository.save(user);
     
     this.logger.log(`Nouvel utilisateur cree: ${email} (${userRole})`);
+
+    // Envoyer l'email de bienvenue
+    try {
+      await this.emailService.sendWelcomeEmail(email, first_name);
+      this.logger.log(`Email de bienvenue envoye a ${email}`);
+    } catch (error) {
+      this.logger.error(`Erreur envoi email de bienvenue: ${error.message}`);
+    }
     
     return { 
       success: true, 
-      message: 'Inscription reussie. Vous pouvez maintenant vous connecter.' 
+      message: 'Inscription reussie. Un email de confirmation vous a ete envoye.',
+      user: {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        role: user.role,
+        avatar_url: user.avatar_url,
+      }
     };
   }
 
@@ -87,6 +117,7 @@ export class AuthService {
     user.last_login = new Date();
     await this.userRepository.save(user);
 
+    // Générer le token JWT
     const payload = { 
       sub: user.id, 
       email: user.email, 
@@ -97,7 +128,7 @@ export class AuthService {
 
     const token = this.jwtService.sign(payload);
 
-    // ✅ Retourner les informations utilisateur
+    // Données utilisateur retournées
     const userData = {
       id: user.id,
       email: user.email,
@@ -107,6 +138,10 @@ export class AuthService {
       role: user.role,
       avatar_url: user.avatar_url,
       is_active: user.is_active,
+      isAdmin: user.isAdmin(),
+      isCandidate: user.isCandidate(),
+      canPostulate: user.canPostulate(),
+      canAccessDashboard: user.canAccessDashboard(),
     };
 
     this.logger.log(`Utilisateur connecte: ${email} (${user.role})`);
@@ -138,8 +173,16 @@ export class AuthService {
       is_active: user.is_active,
       last_login: user.last_login,
       created_at: user.created_at,
+      isAdmin: user.isAdmin(),
+      isCandidate: user.isCandidate(),
+      canPostulate: user.canPostulate(),
+      canAccessDashboard: user.canAccessDashboard(),
     };
   }
+
+  // ============================================================
+  // MISE A JOUR DU PROFIL
+  // ============================================================
 
   async updateProfile(userId: string, updateDto: any): Promise<any> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
@@ -156,6 +199,10 @@ export class AuthService {
     return this.getProfile(userId);
   }
 
+  // ============================================================
+  // CHANGEMENT DE MOT DE PASSE
+  // ============================================================
+
   async changePassword(userId: string, changePasswordDto: any): Promise<{ success: boolean; message: string }> {
     const { currentPassword, newPassword } = changePasswordDto;
 
@@ -169,8 +216,19 @@ export class AuthService {
       throw new BadRequestException('Mot de passe actuel incorrect');
     }
 
+    // Validation de la force du mot de passe
     if (newPassword.length < 6) {
       throw new BadRequestException('Le nouveau mot de passe doit contenir au moins 6 caracteres');
+    }
+
+    const hasUppercase = /[A-Z]/.test(newPassword);
+    const hasLowercase = /[a-z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+    
+    if (!hasUppercase || !hasLowercase || !hasNumber) {
+      throw new BadRequestException(
+        'Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre'
+      );
     }
 
     user.password = newPassword;
@@ -181,6 +239,10 @@ export class AuthService {
     
     return { success: true, message: 'Mot de passe modifie avec succes' };
   }
+
+  // ============================================================
+  // UPLOAD AVATAR
+  // ============================================================
 
   async uploadAvatar(userId: string, file: Express.Multer.File): Promise<{ avatar_url: string }> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
@@ -195,6 +257,135 @@ export class AuthService {
     await this.userRepository.save(user);
 
     return { avatar_url: avatarUrl };
+  }
+
+  // ============================================================
+  // MOT DE PASSE OUBLIE - AVEC ENVOI D'EMAIL ET TOKEN 1 MINUTE
+  // ============================================================
+
+  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+    // Vérifier si l'utilisateur existe
+    const user = await this.userRepository.findOne({ where: { email } });
+    
+    if (!user) {
+      // Ne pas révéler que l'email n'existe pas (sécurité)
+      return { 
+        success: true, 
+        message: 'Si l\'email existe, un lien de reinitialisation a ete envoye' 
+      };
+    }
+
+    // Générer un token de réinitialisation
+    const resetToken = randomBytes(32).toString('hex');
+    const resetTokenExpires = new Date();
+    
+    // ✅ TOKEN VALABLE 1 MINUTE
+    resetTokenExpires.setMinutes(resetTokenExpires.getMinutes() + this.TOKEN_EXPIRY_MINUTES);
+
+    // Sauvegarder le token dans la base de données
+    user.reset_token = resetToken;
+    user.reset_token_expires = resetTokenExpires;
+    await this.userRepository.save(user);
+
+    this.logger.log(`Token genere pour ${email}, expire dans ${this.TOKEN_EXPIRY_MINUTES} minute(s)`);
+
+    // Envoyer l'email avec le lien de réinitialisation
+    try {
+      await this.emailService.sendResetPasswordEmail(
+        email,
+        resetToken,
+        user.first_name
+      );
+
+      this.logger.log(`Email de reinitialisation envoye a ${email}`);
+
+      return { 
+        success: true, 
+        message: 'Un lien de reinitialisation a ete envoye a votre email' 
+      };
+
+    } catch (error) {
+      this.logger.error(`Erreur envoi email a ${email}:`, error.message);
+      
+      // Si l'email ne peut pas être envoyé, on retourne quand même un succès
+      // pour ne pas révéler l'existence de l'email (sécurité)
+      return { 
+        success: true, 
+        message: 'Un lien de reinitialisation a ete envoye a votre email' 
+      };
+    }
+  }
+
+  // ============================================================
+  // REINITIALISATION DU MOT DE PASSE
+  // ============================================================
+
+  async resetPassword(resetDto: any): Promise<{ success: boolean; message: string }> {
+    const { token, newPassword } = resetDto;
+
+    // Vérifier la présence du token
+    if (!token) {
+      throw new BadRequestException('Token requis');
+    }
+
+    if (!newPassword) {
+      throw new BadRequestException('Nouveau mot de passe requis');
+    }
+
+    // Rechercher l'utilisateur avec le token valide
+    const user = await this.userRepository.findOne({
+      where: {
+        reset_token: token,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Token invalide ou expire');
+    }
+
+    // Vérifier si le token n'a pas expiré (1 minute)
+    if (user.reset_token_expires && new Date() > user.reset_token_expires) {
+      throw new BadRequestException(
+        `Le token a expire. Veuillez refaire une demande. (Duree de validite: ${this.TOKEN_EXPIRY_MINUTES} minute(s))`
+      );
+    }
+
+    // Valider la force du nouveau mot de passe
+    if (newPassword.length < 6) {
+      throw new BadRequestException('Le mot de passe doit contenir au moins 6 caracteres');
+    }
+
+    const hasUppercase = /[A-Z]/.test(newPassword);
+    const hasLowercase = /[a-z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+    
+    if (!hasUppercase || !hasLowercase || !hasNumber) {
+      throw new BadRequestException(
+        'Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre'
+      );
+    }
+
+    // Mettre à jour le mot de passe
+    user.password = newPassword;
+    user.reset_token = null;
+    user.reset_token_expires = null;
+    user.must_change_password = false;
+    await this.userRepository.save(user);
+
+    this.logger.log(`Mot de passe reinitialise pour ${user.email}`);
+
+    // Envoyer un email de confirmation
+    try {
+      await this.emailService.sendResetConfirmationEmail(user.email, user.first_name);
+      this.logger.log(`Email de confirmation envoye a ${user.email}`);
+    } catch (error) {
+      this.logger.error(`Erreur envoi email de confirmation: ${error.message}`);
+    }
+
+    return { 
+      success: true, 
+      message: 'Mot de passe reinitialise avec succes' 
+    };
   }
 
   // ============================================================
@@ -216,6 +407,11 @@ export class AuthService {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
+    // Empêcher la modification du rôle SUPER_ADMIN
+    if (user.role === UserRole.SUPER_ADMIN && role !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Impossible de modifier le role du Super Admin');
+    }
+
     user.role = role;
     await this.userRepository.save(user);
 
@@ -230,6 +426,11 @@ export class AuthService {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
+    // Empêcher la désactivation du SUPER_ADMIN
+    if (user.role === UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Impossible de desactiver le Super Admin');
+    }
+
     user.is_active = !user.is_active;
     await this.userRepository.save(user);
 
@@ -242,26 +443,27 @@ export class AuthService {
   }
 
   // ============================================================
-  // MOT DE PASSE OUBLIE
+  // CREATION DU SUPER ADMIN UNIQUE
   // ============================================================
 
-  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
-    const user = await this.userRepository.findOne({ where: { email } });
-    if (!user) {
-      // Ne pas révéler que l'email n'existe pas (sécurité)
-      return { success: true, message: 'Si l\'email existe, un lien de reinitialisation a ete envoye' };
+  async seedSuperAdmin(): Promise<void> {
+    const adminEmail = process.env.SUPER_ADMIN_EMAIL || 'admin@ymad.mg';
+    const existingAdmin = await this.userRepository.findOne({ 
+      where: { email: adminEmail } 
+    });
+
+    if (!existingAdmin) {
+      const admin = this.userRepository.create({
+        email: adminEmail,
+        password: process.env.SUPER_ADMIN_PASSWORD || 'Admin123!',
+        first_name: process.env.SUPER_ADMIN_FIRST_NAME || 'Admin',
+        last_name: process.env.SUPER_ADMIN_LAST_NAME || 'Y-MaD',
+        role: UserRole.SUPER_ADMIN,
+        is_active: true,
+      });
+
+      await this.userRepository.save(admin);
+      this.logger.log(`Super Admin cree: ${adminEmail}`);
     }
-
-    // Ici, envoyer un email avec le lien de réinitialisation
-    // ...
-
-    return { success: true, message: 'Un lien de reinitialisation a ete envoye a votre email' };
-  }
-
-  async resetPassword(resetDto: any): Promise<{ success: boolean; message: string }> {
-    // Ici, vérifier le token et réinitialiser le mot de passe
-    // ...
-
-    return { success: true, message: 'Mot de passe reinitialise avec succes' };
   }
 }
