@@ -5,7 +5,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { pageService, PageBackground } from '@/services/page.service';
 import { 
   Search, MapPin, Calendar, Heart, X, Image as ImageIcon, 
   ChevronRight, Grid3x3, LayoutList, Sparkles, TrendingUp, 
@@ -32,6 +31,17 @@ interface Project {
   status?: string;
 }
 
+interface PageBackground {
+  id: string;
+  page_key: string;
+  image_url: string;
+  is_active: boolean;
+  overlay_opacity: number;
+  position: string;
+  alt_fr?: string;
+  alt_mg?: string;
+}
+
 // ============================================================
 // CATEGORIES DE PROJETS
 // ============================================================
@@ -48,26 +58,57 @@ const categories = [
 ];
 
 // ============================================================
+// FONCTIONS UTILITAIRES
+// ============================================================
+
+/**
+ * Supprime les balises HTML d'un texte
+ */
+const stripHtml = (html: string): string => {
+  if (!html) return '';
+  let cleaned = html.replace(/<[^>]*>/g, ' ');
+  cleaned = cleaned
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/?p>/gi, ' ');
+  return cleaned.replace(/\s+/g, ' ').trim();
+};
+
+/**
+ * Extrait un extrait de texte pour l'affichage
+ */
+const getExcerpt = (html: string, maxLength: number = 120): string => {
+  const text = stripHtml(html);
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+};
+
+// ============================================================
 // PAGE PRINCIPALE
 // ============================================================
 
 export default function ProjectsPage() {
   const { language } = useLanguage();
   
-  // État des projets
+  // Etat des projets
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // État des filtres
+  // Etat des filtres
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
-  // État du fond d'écran
+  // Etat du fond d'ecran
   const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   
-  // État du modal
+  // Etat du modal
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showModal, setShowModal] = useState(false);
 
@@ -84,7 +125,10 @@ export default function ProjectsPage() {
 
   const loadPageBackground = async () => {
     try {
-      const background = await pageService.getPageBackground('projects');
+      // ✅ CORRIGE : Utiliser la route directe /pages/backgrounds/projects
+      const response = await api.get('/pages/backgrounds/projects');
+      const background = response.data;
+      
       if (background && background.is_active && background.image_url) {
         setPageBackground(background);
       }
@@ -240,7 +284,7 @@ export default function ProjectsPage() {
           )}
         </div>
 
-        {/* Contenu superposé */}
+        {/* Contenu superpose */}
         <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
           
           {/* Badge */}
@@ -262,7 +306,7 @@ export default function ProjectsPage() {
             )}
           </p>
           
-          {/* Indicateur de défilement */}
+          {/* Indicateur de defilement */}
           <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
             <div className="w-7 h-11 border-2 border-white/40 rounded-full flex justify-center">
               <div className="w-1.5 h-2.5 bg-white rounded-full mt-2 animate-pulse"></div>
@@ -337,7 +381,7 @@ export default function ProjectsPage() {
             </div>
             
             <div className="flex gap-3">
-              {/* Filtre catégorie */}
+              {/* Filtre categorie */}
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
@@ -421,6 +465,9 @@ export default function ProjectsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProjects.map((project) => {
               const CategoryIcon = getCategoryIcon(project.category);
+              // ✅ Description nettoyee
+              const cleanDescription = getExcerpt(getProjectDescription(project), 100);
+              
               return (
                 <div 
                   key={project.id}
@@ -452,7 +499,8 @@ export default function ProjectsPage() {
                     <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
                       <MapPin className="w-3.5 h-3.5" /> {project.location || 'Madagascar'}
                     </div>
-                    <p className="text-gray-600 text-sm line-clamp-2">{getProjectDescription(project)}</p>
+                    {/* ✅ Description sans balises HTML */}
+                    <p className="text-gray-600 text-sm line-clamp-2">{cleanDescription}</p>
                     <div className="mt-4 flex items-center justify-between">
                       <span className="text-blue-600 font-medium text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
                         {getText('Voir details', 'Jereo')} <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
@@ -467,6 +515,9 @@ export default function ProjectsPage() {
           <div className="space-y-4">
             {filteredProjects.map((project) => {
               const CategoryIcon = getCategoryIcon(project.category);
+              // ✅ Description nettoyee
+              const cleanDescription = getExcerpt(getProjectDescription(project), 150);
+              
               return (
                 <div 
                   key={project.id}
@@ -498,7 +549,8 @@ export default function ProjectsPage() {
                     <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
                       <MapPin className="w-3.5 h-3.5" /> {project.location || 'Madagascar'}
                     </div>
-                    <p className="text-gray-600 text-sm line-clamp-2">{getProjectDescription(project)}</p>
+                    {/* ✅ Description sans balises HTML */}
+                    <p className="text-gray-600 text-sm line-clamp-2">{cleanDescription}</p>
                     <div className="mt-2">
                       <span className="text-blue-600 font-medium text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
                         {getText('Voir details', 'Jereo')} <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
@@ -537,13 +589,13 @@ export default function ProjectsPage() {
       </div>
 
       {/* ============================================================
-      MODAL DÉTAIL DU PROJET
+      MODAL DETAIL DU PROJET
       ============================================================ */}
       {showModal && selectedProject && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             
-            {/* En-tête du modal */}
+            {/* En-tete du modal */}
             <div className="sticky top-0 bg-white p-5 border-b flex justify-between items-center rounded-t-2xl z-10">
               <div>
                 <h2 className="text-2xl font-bold text-gray-800">{getProjectTitle(selectedProject)}</h2>
@@ -573,8 +625,9 @@ export default function ProjectsPage() {
               <h3 className="font-semibold text-lg text-gray-800 mb-3">
                 {getText('Description du projet', 'Famaritana ny tetikasa')}
               </h3>
+              {/*  Description sans balises HTML */}
               <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">
-                {getProjectDescription(selectedProject)}
+                {stripHtml(getProjectDescription(selectedProject))}
               </p>
               <div className="mt-4 text-sm text-gray-400">
                 {getText('Date de publication:', 'Daty namoahana:')} {formatDate(selectedProject.created_at)}

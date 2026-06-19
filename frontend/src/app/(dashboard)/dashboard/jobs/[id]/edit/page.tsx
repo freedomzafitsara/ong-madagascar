@@ -24,7 +24,15 @@ const RichTextEditor = dynamic(
   { ssr: false, loading: () => <div className="h-64 bg-gray-100 animate-pulse rounded-lg" /> }
 );
 
-type StatusColor = 'green' | 'red' | 'orange' | 'purple' | 'gray' | 'blue';
+// ============================================================
+// TYPES
+// ============================================================
+
+type StatusColor = 'green' | 'red' | 'orange' | 'purple' | 'gray' | 'blue' | 'cyan';
+
+// ============================================================
+// CONSTANTES
+// ============================================================
 
 const STATUS_COLORS: Record<StatusColor, string> = {
   green: 'bg-green-50 border-green-200 text-green-700',
@@ -33,16 +41,26 @@ const STATUS_COLORS: Record<StatusColor, string> = {
   purple: 'bg-purple-50 border-purple-200 text-purple-700',
   gray: 'bg-gray-50 border-gray-200 text-gray-700',
   blue: 'bg-blue-50 border-blue-200 text-blue-700',
+  cyan: 'bg-cyan-50 border-cyan-200 text-cyan-700',
 };
 
 const CONTRACT_TYPES: { value: ContractType; label: string; color: StatusColor }[] = [
   { value: ContractType.CDI, label: 'CDI', color: 'blue' },
-  { value: ContractType.CDD, label: 'CDD', color: 'cyan' as StatusColor },
+  { value: ContractType.CDD, label: 'CDD', color: 'cyan' },
   { value: ContractType.STAGE, label: 'Stage', color: 'green' },
   { value: ContractType.FREELANCE, label: 'Freelance', color: 'purple' },
   { value: ContractType.ALTERNANCE, label: 'Alternance', color: 'orange' },
   { value: ContractType.TEMPORARY, label: 'Temporaire', color: 'gray' },
 ];
+
+// ✅ CORRIGE : Ajout de l'icone Archive
+const ArchiveIcon = (props: any) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="20" height="5" x="2" y="3" rx="1" />
+    <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+    <path d="M10 12h4" />
+  </svg>
+);
 
 const STATUS_OPTIONS = [
   { value: JobStatus.PUBLISHED, label: 'Publie', labelMg: 'Navoaka', color: 'green' as StatusColor, icon: CheckCircle },
@@ -52,15 +70,9 @@ const STATUS_OPTIONS = [
   { value: JobStatus.ARCHIVED, label: 'Archive', labelMg: 'Voatahiry', color: 'purple' as StatusColor, icon: ArchiveIcon },
 ];
 
-function ArchiveIcon(props: any) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect width="20" height="5" x="2" y="3" rx="1" />
-      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-      <path d="M10 12h4" />
-    </svg>
-  );
-}
+// ============================================================
+// COMPOSANTS
+// ============================================================
 
 function FormSection({ title, icon: Icon, children, className = '' }: { 
   title: string; 
@@ -82,6 +94,10 @@ function FormSection({ title, icon: Icon, children, className = '' }: {
     </div>
   );
 }
+
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
 
 export default function EditJobPage() {
   const params = useParams();
@@ -111,7 +127,6 @@ export default function EditJobPage() {
       const response = await jobService.getOfferById(jobId);
       setJob(response);
       
-      // Récupérer l'image si elle existe
       if (response.main_image_id) {
         try {
           const files = await uploadService.getFiles('job', jobId);
@@ -228,21 +243,17 @@ export default function EditJobPage() {
     }
   };
 
+  // ✅ CORRIGE : Fonction getStatusBadge utilisant STATUS_OPTIONS
   const getStatusBadge = (status: JobStatus) => {
-    const config: Record<JobStatus, { fr: string; mg: string; className: string; icon: React.ElementType }> = {
-      [JobStatus.PUBLISHED]: { fr: 'Publiee', mg: 'Navoaka', className: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle },
-      [JobStatus.DRAFT]: { fr: 'Brouillon', mg: 'Volavola', className: 'bg-gray-100 text-gray-600 border-gray-200', icon: FileText },
-      [JobStatus.CLOSED]: { fr: 'Fermee', mg: 'Nakatona', className: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
-      [JobStatus.EXPIRED]: { fr: 'Expiree', mg: 'Lany daty', className: 'bg-orange-100 text-orange-700 border-orange-200', icon: Clock },
-      [JobStatus.ARCHIVED]: { fr: 'Archivee', mg: 'Voatahiry', className: 'bg-purple-100 text-purple-700 border-purple-200', icon: ArchiveIcon }
-    };
-    const badge = config[status];
-    if (!badge) return <span className="px-2 py-1 text-xs rounded-full bg-gray-100">{status}</span>;
-    const Icon = badge.icon;
+    const option = STATUS_OPTIONS.find(opt => opt.value === status);
+    if (!option) {
+      return <span className="px-2 py-1 text-xs rounded-full bg-gray-100">{status}</span>;
+    }
+    const Icon = option.icon;
     return (
-      <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border ${badge.className}`}>
+      <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border ${STATUS_COLORS[option.color]}`}>
         <Icon className="w-3 h-3" />
-        {language === 'fr' ? badge.fr : badge.mg}
+        {language === 'fr' ? option.label : option.labelMg}
       </span>
     );
   };

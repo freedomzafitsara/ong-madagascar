@@ -16,6 +16,10 @@ import {
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 
+// ============================================================
+// INTERFACES
+// ============================================================
+
 interface ContactMessage {
   id: string;
   name: string;
@@ -24,6 +28,7 @@ interface ContactMessage {
   subject: string;
   message: string;
   status: string;
+  admin_notes?: string;
   created_at: string;
 }
 
@@ -35,14 +40,39 @@ interface ContactStats {
   archived: number;
 }
 
+// ============================================================
+// CONSTANTES
+// ============================================================
+
 const ITEMS_PER_PAGE = 10;
 
 const STATUS_OPTIONS = [
   { value: 'unread', label: 'Non lu', color: 'text-red-800', bg: 'bg-red-100', icon: AlertCircle },
   { value: 'read', label: 'Lu', color: 'text-blue-800', bg: 'bg-blue-100', icon: CheckCircle },
-  { value: 'replied', label: 'Répondu', color: 'text-green-800', bg: 'bg-green-100', icon: Reply },
-  { value: 'archived', label: 'Archivé', color: 'text-gray-600', bg: 'bg-gray-100', icon: Archive }
+  { value: 'replied', label: 'Repondu', color: 'text-green-800', bg: 'bg-green-100', icon: Reply },
+  { value: 'archived', label: 'Archive', color: 'text-gray-600', bg: 'bg-gray-100', icon: Archive }
 ];
+
+// ============================================================
+// FONCTIONS UTILITAIRES
+// ============================================================
+
+const stripHtml = (html: string): string => {
+  if (!html) return '';
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return div.textContent || div.innerText || '';
+};
+
+const getExcerpt = (html: string, maxLength: number = 80): string => {
+  const text = stripHtml(html);
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+};
+
+// ============================================================
+// COMPOSANTS
+// ============================================================
 
 function StatCard({ label, value, icon: Icon, isBlue = false, onClick }: { 
   label: string; value: number; icon: any; isBlue?: boolean; onClick?: () => void;
@@ -73,23 +103,33 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ============================================================
+// MODAL DE DETAIL
+// ============================================================
+
 function MessageDetailModal({ 
   message, 
   onClose, 
   onUpdateStatus,
   onDelete,
-  formatDate
+  formatDate,
+  getText,
+  onSendReply
 }: { 
   message: ContactMessage; 
   onClose: () => void; 
   onUpdateStatus: (id: string, status: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   formatDate: (date: string) => string;
+  getText: (fr: string, mg: string) => string;
+  onSendReply: (id: string, reply: string, notes?: string) => Promise<void>;
 }) {
   const [status, setStatus] = useState(message.status);
   const [updating, setUpdating] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [adminNotes, setAdminNotes] = useState(message.admin_notes || '');
   const [showReply, setShowReply] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const handleStatusChange = async (newStatus: string) => {
     setUpdating(true);
@@ -99,34 +139,51 @@ function MessageDetailModal({
   };
 
   const handleDelete = async () => {
-    if (confirm(`Supprimer le message de ${message.name} ?`)) {
+    const confirmMsg = getText(
+      `Supprimer le message de ${message.name} ?`,
+      `Hofafana ny hafatra avy amin'i ${message.name} ?`
+    );
+    if (confirm(confirmMsg)) {
       await onDelete(message.id);
       onClose();
     }
   };
 
-  const handleReply = async () => {
+  const handleSendReply = async () => {
     if (!replyText.trim()) {
-      toast.error('Veuillez saisir votre réponse');
+      toast.error(getText('Veuillez saisir votre reponse', 'Ampidiro ny valinteninao'));
       return;
     }
-    toast.success('Réponse envoyée avec succès');
-    setShowReply(false);
-    setReplyText('');
-    await onUpdateStatus(message.id, 'replied');
+
+    setSending(true);
+    try {
+      await onSendReply(message.id, replyText, adminNotes);
+      toast.success(getText('Reponse envoyee avec succes au client', 'Vita ny fandefasana valiny ho an\'ny mpangataka'));
+      setShowReply(false);
+      setReplyText('');
+      await onUpdateStatus(message.id, 'replied');
+      onClose();
+    } catch (error: any) {
+      console.error('Erreur:', error);
+      const errorMsg = error.response?.data?.message || error.message || getText('Erreur lors de l\'envoi de la reponse', 'Nisy hadisoana tamin\'ny fandefasana valiny');
+      toast.error(errorMsg);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        
         <div className="sticky top-0 bg-white px-6 py-5 border-b flex justify-between items-center z-10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-800 rounded-xl flex items-center justify-center">
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-800">Détail du message</h2>
-              <p className="text-sm text-gray-500">Message de {message.name}</p>
+              <h2 className="text-xl font-bold text-gray-800">{getText('Detail du message', 'Antsipirihan\'ny hafatra')}</h2>
+              <p className="text-sm text-gray-500">{getText('Message de', 'Hafatra avy amin\'i')} {message.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -140,10 +197,11 @@ function MessageDetailModal({
         </div>
 
         <div className="p-6 space-y-6">
+          
           <div className="bg-gray-50 rounded-xl p-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-600">Statut :</span>
+                <span className="text-sm font-medium text-gray-600">{getText('Statut :', 'Sata :')}</span>
                 <StatusBadge status={status} />
               </div>
               <select
@@ -166,7 +224,7 @@ function MessageDetailModal({
                   <User className="w-4 h-4 text-gray-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Nom complet</p>
+                  <p className="text-xs text-gray-500">{getText('Nom complet', 'Anarana feno')}</p>
                   <p className="text-sm font-medium text-gray-800">{message.name}</p>
                 </div>
               </div>
@@ -191,7 +249,7 @@ function MessageDetailModal({
                     <Phone className="w-4 h-4 text-gray-600" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Téléphone</p>
+                    <p className="text-xs text-gray-500">{getText('Telephone', 'Telefaonina')}</p>
                     <p className="text-sm font-medium text-gray-800">{message.phone}</p>
                   </div>
                 </div>
@@ -203,7 +261,7 @@ function MessageDetailModal({
                   <Calendar className="w-4 h-4 text-gray-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Date de réception</p>
+                  <p className="text-xs text-gray-500">{getText('Date de reception', 'Daty nahazoana')}</p>
                   <p className="text-sm font-medium text-gray-800">{formatDate(message.created_at)}</p>
                 </div>
               </div>
@@ -213,7 +271,7 @@ function MessageDetailModal({
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-blue-800" />
-              Sujet
+              {getText('Sujet', 'Lohahevitra')}
             </h3>
             <div className="bg-gray-50 rounded-xl p-4">
               <p className="text-gray-800 font-medium">{message.subject}</p>
@@ -223,33 +281,80 @@ function MessageDetailModal({
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
               <FileText className="w-4 h-4 text-blue-800" />
-              Message
+              {getText('Message', 'Hafatra')}
             </h3>
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{message.message}</p>
+            <div className="bg-gray-50 rounded-xl p-4 prose max-w-none">
+              <div dangerouslySetInnerHTML={{ __html: message.message }} />
             </div>
           </div>
 
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-800" />
+              {getText('Notes internes', 'Fanamarihana')}
+            </h3>
+            <textarea
+              value={adminNotes}
+              onChange={(e) => setAdminNotes(e.target.value)}
+              onBlur={async () => {
+                if (adminNotes !== message.admin_notes) {
+                  try {
+                    await api.patch(`/contact/${message.id}/status`, { admin_notes: adminNotes });
+                    toast.success(getText('Notes sauvegardees', 'Vita ny fitehirizana'));
+                  } catch (error) {
+                    console.error('Erreur:', error);
+                  }
+                }
+              }}
+              placeholder={getText('Ajouter des notes internes...', 'Ampidiro fanamarihana...')}
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none resize-none text-sm"
+              rows={3}
+            />
+          </div>
+
           {!showReply ? (
-            <button onClick={() => setShowReply(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition">
-              <Reply className="w-4 h-4" /> Répondre
+            <button 
+              onClick={() => setShowReply(true)} 
+              className="flex items-center gap-2 px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition"
+            >
+              <Reply className="w-4 h-4" /> {getText('Repondre', 'Valio')}
             </button>
           ) : (
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-700">Votre réponse</label>
+            <div className="space-y-3 border rounded-xl p-4 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700">
+                  {getText('Votre reponse', 'Valinteninao')}
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <span className="text-xs text-gray-400">
+                  {getText('Le client recevra cette reponse par email', 'Hahazo valiny amin\'ny mail ny mpangataka')}
+                </span>
+              </div>
               <textarea
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 rows={5}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none resize-none"
-                placeholder="Saisissez votre réponse ici..."
+                placeholder={getText('Saisissez votre reponse ici...', 'Ampidiro ny valinteninao eto...')}
               />
               <div className="flex gap-3">
-                <button onClick={handleReply} className="flex items-center gap-2 px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition">
-                  <Send className="w-4 h-4" /> Envoyer la réponse
+                <button 
+                  onClick={handleSendReply}
+                  disabled={sending}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition disabled:opacity-50"
+                >
+                  {sending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  {getText('Envoyer la reponse', 'Alefaso ny valiny')}
                 </button>
-                <button onClick={() => setShowReply(false)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
-                  Annuler
+                <button 
+                  onClick={() => setShowReply(false)} 
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                >
+                  {getText('Annuler', 'Aoka')}
                 </button>
               </div>
             </div>
@@ -258,13 +363,17 @@ function MessageDetailModal({
 
         <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t flex justify-end">
           <button onClick={onClose} className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
-            Fermer
+            {getText('Fermer', 'Hidy')}
           </button>
         </div>
       </div>
     </div>
   );
 }
+
+// ============================================================
+// PAGE PRINCIPALE - CORRIGEE
+// ============================================================
 
 export default function ContactsPage() {
   const { token, user, isAuthenticated } = useAuth();
@@ -286,6 +395,8 @@ export default function ContactsPage() {
   const [exporting, setExporting] = useState(false);
 
   const initialLoaded = useRef(false);
+  const isMounted = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'admin';
 
@@ -302,8 +413,17 @@ export default function ContactsPage() {
     }
   };
 
+  // ✅ loadMessages avec AbortController
   const loadMessages = useCallback(async () => {
-    if (!token) return;
+    if (!token || !isMounted.current) return;
+
+    // Annuler la requete precedente
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     
     setLoading(true);
     try {
@@ -311,26 +431,38 @@ export default function ContactsPage() {
       if (filterStatus !== 'all') params.status = filterStatus;
       if (searchTerm) params.search = searchTerm;
 
-      const response = await api.get('/contact', { params });
+      const response = await api.get('/contact', { 
+        params,
+        signal: controller.signal 
+      });
       
-      if (response.data) {
+      if (response.data && isMounted.current) {
         setMessages(response.data.data || []);
         setTotalPages(response.data.totalPages || 1);
         setTotalItems(response.data.total || 0);
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'CanceledError' || error.name === 'AbortError') {
+        // Requete annulee volontairement
+        return;
+      }
       console.error('Erreur chargement messages:', error);
-      toast.error(getText('Erreur de chargement', 'Nisy hadisoana'));
+      if (isMounted.current) {
+        toast.error(getText('Erreur de chargement', 'Nisy hadisoana'));
+      }
     } finally {
-      setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+      }
     }
   }, [currentPage, filterStatus, searchTerm, token, getText]);
 
+  // ✅ loadStats
   const loadStats = useCallback(async () => {
-    if (!token) return;
+    if (!token || !isMounted.current) return;
     try {
       const response = await api.get('/contact/stats');
-      if (response.data) {
+      if (response.data && isMounted.current) {
         setStats({
           total: response.data.total || 0,
           unread: response.data.unread || 0,
@@ -344,10 +476,28 @@ export default function ContactsPage() {
     }
   }, [token]);
 
+  // ✅ loadAllData - avec verification du montage
   const loadAllData = useCallback(async () => {
-    await Promise.all([loadMessages(), loadStats()]);
-  }, [loadMessages, loadStats]);
+    if (!token || !isMounted.current) return;
+    try {
+      await Promise.all([loadMessages(), loadStats()]);
+    } catch (error) {
+      console.error('Erreur chargement donnees:', error);
+    }
+  }, [loadMessages, loadStats, token]);
 
+  // ✅ Montage / Demontage
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  // ✅ Redirection
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login');
@@ -356,60 +506,96 @@ export default function ContactsPage() {
     }
   }, [isAuthenticated, hasAccess, router]);
 
+  // ✅ Chargement initial UNIQUE
   useEffect(() => {
-    if (token && !initialLoaded.current) {
+    if (token && !initialLoaded.current && isMounted.current) {
       initialLoaded.current = true;
-      loadAllData();
+      // Charger avec un delai pour eviter les conflits
+      const timer = setTimeout(() => {
+        loadAllData();
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [token, loadAllData]);
 
+  // ✅ Rechargement quand les filtres changent
   useEffect(() => {
-    if (initialLoaded.current && token) {
-      loadMessages();
+    if (initialLoaded.current && token && isMounted.current) {
+      const timer = setTimeout(() => {
+        loadMessages();
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [currentPage, filterStatus, searchTerm, loadMessages, token]);
 
+  // ✅ updateStatus
   const updateStatus = async (id: string, status: string) => {
     try {
       await api.patch(`/contact/${id}/status`, { status });
-      toast.success(getText('Statut mis à jour', 'Vita ny fanovana sata'));
-      loadMessages();
-      loadStats();
+      toast.success(getText('Statut mis a jour', 'Vita ny fanovana sata'));
+      setTimeout(() => {
+        loadMessages();
+        loadStats();
+      }, 200);
     } catch (error) {
       console.error('Erreur:', error);
-      toast.error(getText('Erreur lors de la mise à jour', 'Nisy hadisoana'));
+      toast.error(getText('Erreur lors de la mise a jour', 'Nisy hadisoana'));
     }
   };
 
+  // ✅ deleteMessage
   const deleteMessage = async (id: string) => {
     try {
       await api.delete(`/contact/${id}`);
-      toast.success(getText('Message supprimé', 'Vita ny fanafoanana'));
-      loadMessages();
-      loadStats();
+      toast.success(getText('Message supprime', 'Vita ny fanafoanana'));
+      setTimeout(() => {
+        loadMessages();
+        loadStats();
+      }, 200);
     } catch (error) {
       console.error('Erreur:', error);
       toast.error(getText('Erreur lors de la suppression', 'Nisy hadisoana'));
     }
   };
 
+  // ✅ sendReply
+  const sendReply = async (id: string, reply: string, notes?: string) => {
+    try {
+      const response = await api.post(`/contact/${id}/reply`, {
+        reply: reply,
+        admin_notes: notes || '',
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Erreur sendReply:', error);
+      if (error.response?.status === 404) {
+        throw new Error('La route de reponse n\'existe pas.');
+      }
+      throw error;
+    }
+  };
+
   const handleRefresh = () => {
     loadMessages();
     loadStats();
-    toast.success(getText('Données actualisées', 'Havaozina ny angona'));
+    toast.success(getText('Donnees actualisees', 'Havaozina ny angona'));
   };
 
   const handleClearFilters = () => {
     setSearchTerm('');
     setFilterStatus('all');
     setCurrentPage(1);
-    toast.success(getText('Filtres effacés', 'Vonoina ny sivana'));
+    toast.success(getText('Filtres effaces', 'Vonoina ny sivana'));
   };
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const response = await api.get('/contact/export', { responseType: 'blob' });
+      const response = await api.get('/contact/export', { 
+        params: { status: filterStatus !== 'all' ? filterStatus : undefined },
+        responseType: 'blob' 
+      });
+      
       const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -419,7 +605,7 @@ export default function ContactsPage() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      toast.success(getText('Export réussi', 'Vita ny fanondrana'));
+      toast.success(getText('Export reussi', 'Vita ny fanondrana'));
     } catch (error) {
       console.error('Erreur export:', error);
       toast.error(getText('Erreur lors de l\'export', 'Nisy hadisoana tamin\'ny fanondrana'));
@@ -437,7 +623,7 @@ export default function ContactsPage() {
     return null;
   }
 
-  if (loading && messages.length === 0 && !initialLoaded.current) {
+  if (loading && messages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 className="w-12 h-12 text-blue-800 animate-spin" />
@@ -457,7 +643,7 @@ export default function ContactsPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-800">{getText('Messages de contact', 'Hafatra')}</h1>
-            <p className="text-gray-500 text-sm">{getText('Gérez les messages reçus', 'Fitantanana ny hafatra')}</p>
+            <p className="text-gray-500 text-sm">{getText('Gerez les messages recus', 'Fitantanana ny hafatra')}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -501,13 +687,13 @@ export default function ContactsPage() {
           onClick={() => handleStatusFilterClick('read')}
         />
         <StatCard 
-          label={getText('Répondus', 'Valiana')} 
+          label={getText('Repondus', 'Valiana')} 
           value={stats.replied} 
           icon={Reply}
           onClick={() => handleStatusFilterClick('replied')}
         />
         <StatCard 
-          label={getText('Archivés', 'Tehirizina')} 
+          label={getText('Archives', 'Tehirizina')} 
           value={stats.archived} 
           icon={Archive}
           onClick={() => handleStatusFilterClick('archived')}
@@ -545,7 +731,6 @@ export default function ContactsPage() {
           </button>
         </div>
         
-        {/* Afficher les filtres actifs */}
         {(searchTerm || filterStatus !== 'all') && (
           <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
             {searchTerm && (
@@ -564,7 +749,7 @@ export default function ContactsPage() {
         )}
       </div>
 
-      {/* Table */}
+      {/* Tableau */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -574,10 +759,10 @@ export default function ContactsPage() {
                   {getText('Date', 'Daty')}
                 </th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  {getText('Expéditeur', 'Mpandefa')}
+                  {getText('Expediteur', 'Mpandefa')}
                 </th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  {getText('Sujet', 'Lohahevitra')}
+                  {getText('Sujet / Message', 'Lohahevitra / Hafatra')}
                 </th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   {getText('Statut', 'Sata')}
@@ -593,7 +778,7 @@ export default function ContactsPage() {
                   <td colSpan={5} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Mail className="w-12 h-12 text-gray-300" />
-                      <p className="text-gray-500 font-medium">{getText('Aucun message trouvé', 'Tsy misy hafatra hita')}</p>
+                      <p className="text-gray-500 font-medium">{getText('Aucun message trouve', 'Tsy misy hafatra hita')}</p>
                       <p className="text-sm text-gray-400">{getText('Modifiez vos filtres', 'Hanova ny sivanao')}</p>
                     </div>
                   </td>
@@ -611,7 +796,15 @@ export default function ContactsPage() {
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <p className="text-sm text-gray-700 max-w-xs truncate">{message.subject}</p>
+                      <div className="max-w-xs">
+                        <p className="text-sm text-gray-700 font-medium truncate">{message.subject}</p>
+                        <div 
+                          className="text-xs text-gray-500 truncate"
+                          dangerouslySetInnerHTML={{ 
+                            __html: getExcerpt(message.message, 60)
+                          }}
+                        />
+                      </div>
                     </td>
                     <td className="px-5 py-4">
                       <StatusBadge status={message.status} />
@@ -620,7 +813,7 @@ export default function ContactsPage() {
                       <button 
                         onClick={() => { setSelectedMessage(message); setShowDetailModal(true); }} 
                         className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition"
-                        title={getText('Voir le détail', 'Jereo ny antsipirihany')}
+                        title={getText('Voir le detail', 'Jereo ny antsipirihany')}
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -674,7 +867,7 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* Modal Détail */}
+      {/* Modal Detail */}
       {showDetailModal && selectedMessage && (
         <MessageDetailModal
           message={selectedMessage}
@@ -682,6 +875,8 @@ export default function ContactsPage() {
           onUpdateStatus={updateStatus}
           onDelete={deleteMessage}
           formatDate={formatDate}
+          getText={getText}
+          onSendReply={sendReply}
         />
       )}
     </div>

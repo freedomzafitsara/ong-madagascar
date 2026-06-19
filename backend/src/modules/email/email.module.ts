@@ -1,7 +1,8 @@
-import { Module, Global } from '@nestjs/common';
+// backend/src/modules/email/email.module.ts
+
+import { Module } from '@nestjs/common';
 import { EmailService } from './email.service';
 
-@Global()
 @Module({
   providers: [EmailService],
   exports: [EmailService],

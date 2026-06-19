@@ -1,6 +1,8 @@
+// backend/src/modules/email/email.service.ts
+
 import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class EmailService {
@@ -8,7 +10,6 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private isConnected = false;
 
-  // Durée de validité du token (doit correspondre à AuthService)
   private readonly TOKEN_EXPIRY_MINUTES = 1;
 
   constructor(private configService: ConfigService) {
@@ -16,17 +17,15 @@ export class EmailService {
   }
 
   private initializeTransporter() {
-    const host = this.configService.get<string>('SMTP_HOST');
-    const port = this.configService.get<number>('SMTP_PORT');
-    const secure = this.configService.get<boolean>('SMTP_SECURE');
-    const user = this.configService.get<string>('SMTP_USER');
+    const host = this.configService.get<string>('SMTP_HOST', 'smtp.sendgrid.net');
+    const port = this.configService.get<number>('SMTP_PORT', 587);
+    const user = this.configService.get<string>('SMTP_USER', 'apikey');
     const pass = this.configService.get<string>('SMTP_PASS');
 
-    // Vérification de la présence de la clé API
     if (!pass || pass === 'votre-mot-de-passe' || pass.includes('SG.')) {
-      this.logger.warn('Clé API SendGrid manquante ou invalide dans le fichier .env');
-      this.logger.warn('Veuillez créer une nouvelle clé sur https://app.sendgrid.com');
-      this.logger.warn('Allez dans Settings → API Keys → Create API Key');
+      this.logger.warn('Cle API SendGrid manquante ou invalide dans le fichier .env');
+      this.logger.warn('Veuillez creer une nouvelle cle sur https://app.sendgrid.com');
+      this.logger.warn('Allez dans Settings - API Keys - Create API Key');
     }
 
     this.logger.log(`Configuration SMTP: ${host}:${port}`);
@@ -61,9 +60,9 @@ export class EmailService {
       this.logger.error(`   ${error.message}`);
 
       if (error.message.includes('535')) {
-        this.logger.error('   La clé API est invalide ou a expire.');
-        this.logger.error('   Solution: Creez une nouvelle clé sur https://app.sendgrid.com');
-        this.logger.error('   Allez dans Settings → API Keys → Create API Key');
+        this.logger.error('   La cle API est invalide ou a expire.');
+        this.logger.error('   Solution: Creez une nouvelle cle sur https://app.sendgrid.com');
+        this.logger.error('   Allez dans Settings - API Keys - Create API Key');
       } else if (error.message.includes('ETIMEDOUT')) {
         this.logger.error('   Connexion impossible. Verifiez votre firewall.');
       } else if (error.message.includes('ECONNREFUSED')) {
@@ -71,10 +70,6 @@ export class EmailService {
       }
     }
   }
-
-  // ============================================================
-  // VERIFICATION DE LA CONNEXION
-  // ============================================================
 
   private async ensureConnected(): Promise<void> {
     if (!this.isConnected) {
@@ -86,16 +81,143 @@ export class EmailService {
   }
 
   // ============================================================
+  // ✅ ENVOI D'EMAIL DE REPONSE AUX MESSAGES DE CONTACT
+  // ============================================================
+
+  async sendReplyEmail(
+    to: string,
+    clientName: string,
+    subject: string,
+    originalMessage: string,
+    adminReply: string
+  ): Promise<void> {
+    await this.ensureConnected();
+
+    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
+
+    const emailSubject = `RE: ${subject} - Y-MaD Association`;
+    const html = this.getReplyEmailHtml(clientName, originalMessage, adminReply);
+    const text = this.getReplyEmailText(clientName, originalMessage, adminReply);
+
+    try {
+      const info = await this.transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject: emailSubject,
+        html,
+        text,
+      });
+
+      this.logger.log(`Email de reponse envoye a ${to}`);
+      this.logger.log(`   Message ID: ${info.messageId}`);
+    } catch (error) {
+      this.logger.error(`Erreur envoi email de reponse a ${to}:`, error.message);
+      throw new Error('Erreur lors de l\'envoi de la reponse');
+    }
+  }
+
+  // ============================================================
+  // TEMPLATE DE REPONSE (HTML)
+  // ============================================================
+
+  private getReplyEmailHtml(clientName: string, originalMessage: string, adminReply: string): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Reponse Y-MaD</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+          .header p { margin: 5px 0 0; opacity: 0.9; font-size: 16px; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; }
+          .reply-box { background: #dbeafe; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3B82F6; }
+          .reply-box .label { font-weight: bold; color: #1E3A8A; margin-bottom: 8px; }
+          .original-box { background: #f1f5f9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1E3A8A; }
+          .original-box .label { font-weight: bold; color: #64748b; margin-bottom: 8px; }
+          .footer { text-align: center; font-size: 12px; color: #94a3b8; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px; }
+          .signature { color: #64748b; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Y-MaD</h1>
+          <p>Young for Madagascar Development</p>
+        </div>
+        <div class="content">
+          <p style="font-size: 18px;">Bonjour ${clientName},</p>
+          
+          <p>Nous vous remercions pour votre message. Voici la reponse de notre equipe :</p>
+          
+          <div class="reply-box">
+            <div class="label">📩 Reponse de l'equipe Y-MaD</div>
+            <p>${adminReply}</p>
+          </div>
+          
+          <div class="original-box">
+            <div class="label">📝 Votre message original</div>
+            <p>${originalMessage}</p>
+          </div>
+          
+          <p class="signature">
+            L'equipe Y-MaD reste a votre disposition pour toute question supplementaire.
+          </p>
+          <p style="color: #64748b;">L'equipe Y-MaD</p>
+        </div>
+        <div class="footer">
+          <p>© 2025 Y-MaD Association - Young for Madagascar Development</p>
+          <p>Carion, Antananarivo, Madagascar • +261 32 04 856 97</p>
+          <p style="font-size: 11px; color: #94a3b8;">Cet email a ete envoye automatiquement, merci de ne pas y repondre.</p>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  // ============================================================
+  // TEMPLATE DE REPONSE (TEXTE)
+  // ============================================================
+
+  private getReplyEmailText(clientName: string, originalMessage: string, adminReply: string): string {
+    return `
+Bonjour ${clientName},
+
+Nous vous remercions pour votre message. Voici la reponse de notre equipe :
+
+--- REPONSE DE L'EQUIPE Y-MaD ---
+${adminReply}
+----------------------------------
+
+--- VOTRE MESSAGE ORIGINAL ---
+${originalMessage}
+-----------------------------
+
+L'equipe Y-MaD reste a votre disposition pour toute question supplementaire.
+
+L'equipe Y-MaD
+
+---
+Y-MaD Association - Young for Madagascar Development
+Carion, Antananarivo, Madagascar
+Email: ymad.mg@gmail.com
+Tel: +261 32 04 856 97
+    `;
+  }
+
+  // ============================================================
   // ENVOI D'EMAIL DE REINITIALISATION DU MOT DE PASSE
   // ============================================================
 
   async sendResetPasswordEmail(to: string, token: string, firstName?: string): Promise<void> {
     await this.ensureConnected();
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
     const resetLink = `${frontendUrl}/reset-password?token=${token}`;
-    const fromEmail = this.configService.get<string>('SMTP_FROM') || 'ymad.mg@gmail.com';
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME') || 'Y-MaD Association';
+    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
 
     const subject = 'Reinitialisation de votre mot de passe - Y-MaD';
     const html = this.getResetPasswordEmailHtml(resetLink, firstName);
@@ -114,11 +236,9 @@ export class EmailService {
       this.logger.log(`   Message ID: ${info.messageId}`);
     } catch (error) {
       this.logger.error(`Erreur envoi email a ${to}:`, error.message);
-
       if (error.message.includes('535')) {
-        this.logger.error('   La clé API est invalide. Creez une nouvelle clé SendGrid.');
+        this.logger.error('   La cle API est invalide. Creez une nouvelle cle SendGrid.');
       }
-
       throw new Error('Erreur lors de l\'envoi de l\'email');
     }
   }
@@ -130,8 +250,8 @@ export class EmailService {
   async sendResetConfirmationEmail(to: string, firstName: string): Promise<void> {
     await this.ensureConnected();
 
-    const fromEmail = this.configService.get<string>('SMTP_FROM') || 'ymad.mg@gmail.com';
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME') || 'Y-MaD Association';
+    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
 
     const subject = 'Confirmation - Votre mot de passe a ete reinitialise';
     const html = this.getResetConfirmationHtml(firstName);
@@ -159,8 +279,8 @@ export class EmailService {
   async sendWelcomeEmail(to: string, firstName: string): Promise<void> {
     await this.ensureConnected();
 
-    const fromEmail = this.configService.get<string>('SMTP_FROM') || 'ymad.mg@gmail.com';
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME') || 'Y-MaD Association';
+    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
 
     const subject = 'Bienvenue chez Y-MaD - Votre inscription est confirmee';
     const html = this.getWelcomeEmailHtml(firstName);
@@ -185,15 +305,11 @@ export class EmailService {
   // ENVOI D'EMAIL DE CONFIRMATION DE CANDIDATURE
   // ============================================================
 
-  async sendApplicationConfirmationEmail(
-    to: string,
-    firstName: string,
-    jobTitle: string
-  ): Promise<void> {
+  async sendApplicationConfirmationEmail(to: string, firstName: string, jobTitle: string): Promise<void> {
     await this.ensureConnected();
 
-    const fromEmail = this.configService.get<string>('SMTP_FROM') || 'ymad.mg@gmail.com';
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME') || 'Y-MaD Association';
+    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
 
     const subject = 'Confirmation de votre candidature - Y-MaD';
     const html = this.getApplicationConfirmationEmailHtml(firstName, jobTitle);
@@ -218,16 +334,11 @@ export class EmailService {
   // ENVOI D'EMAIL DE STATUT DE CANDIDATURE
   // ============================================================
 
-  async sendApplicationStatusEmail(
-    to: string,
-    firstName: string,
-    jobTitle: string,
-    status: string
-  ): Promise<void> {
+  async sendApplicationStatusEmail(to: string, firstName: string, jobTitle: string, status: string): Promise<void> {
     await this.ensureConnected();
 
-    const fromEmail = this.configService.get<string>('SMTP_FROM') || 'ymad.mg@gmail.com';
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME') || 'Y-MaD Association';
+    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
 
     const subject = 'Mise a jour de votre candidature - Y-MaD';
     const html = this.getApplicationStatusEmailHtml(firstName, jobTitle, status);
@@ -249,7 +360,7 @@ export class EmailService {
   }
 
   // ============================================================
-  // TEMPLATE - REINITIALISATION DU MOT DE PASSE (HTML)
+  // TEMPLATES - REINITIALISATION
   // ============================================================
 
   private getResetPasswordEmailHtml(resetLink: string, firstName?: string): string {
@@ -263,69 +374,15 @@ export class EmailService {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Reinitialisation du mot de passe - Y-MaD</title>
         <style>
-          body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-          }
-          .header {
-            background: linear-gradient(135deg, #1E3A8A, #3B82F6);
-            color: white;
-            padding: 30px;
-            text-align: center;
-            border-radius: 10px 10px 0 0;
-          }
-          .header h1 {
-            margin: 0;
-            font-size: 28px;
-            font-weight: 700;
-          }
-          .header p {
-            margin: 5px 0 0;
-            opacity: 0.9;
-            font-size: 16px;
-          }
-          .content {
-            background: #f8fafc;
-            padding: 30px;
-            border: 1px solid #e2e8f0;
-            border-top: none;
-            border-radius: 0 0 10px 10px;
-          }
-          .button {
-            display: inline-block;
-            background: linear-gradient(135deg, #1E3A8A, #3B82F6);
-            color: white !important;
-            text-decoration: none;
-            padding: 14px 35px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 16px;
-            margin: 20px 0;
-            transition: background 0.3s;
-          }
-          .button:hover {
-            background: linear-gradient(135deg, #1a3a7a, #2563eb);
-          }
-          .footer {
-            text-align: center;
-            font-size: 12px;
-            color: #94a3b8;
-            padding-top: 20px;
-            border-top: 1px solid #e2e8f0;
-            margin-top: 20px;
-          }
-          .security-note {
-            background: #f1f5f9;
-            padding: 15px;
-            border-radius: 8px;
-            font-size: 14px;
-            color: #475569;
-            margin: 20px 0;
-          }
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+          .header p { margin: 5px 0 0; opacity: 0.9; font-size: 16px; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; }
+          .button { display: inline-block; background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white !important; text-decoration: none; padding: 14px 35px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 20px 0; }
+          .button:hover { background: linear-gradient(135deg, #1a3a7a, #2563eb); }
+          .footer { text-align: center; font-size: 12px; color: #94a3b8; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px; }
+          .security-note { background: #f1f5f9; padding: 15px; border-radius: 8px; font-size: 14px; color: #475569; margin: 20px 0; }
         </style>
       </head>
       <body>
@@ -333,40 +390,27 @@ export class EmailService {
           <h1>Y-MaD</h1>
           <p>Young for Madagascar Development</p>
         </div>
-
         <div class="content">
           <p style="font-size: 18px; color: #1e293b;">${greeting}</p>
-
-          <p>Nous avons reçu une demande de reinitialisation de votre mot de passe pour votre compte Y-MaD.</p>
-
+          <p>Nous avons recu une demande de reinitialisation de votre mot de passe pour votre compte Y-MaD.</p>
           <p>Cliquez sur le bouton ci-dessous pour creer un nouveau mot de passe :</p>
-
           <div style="text-align: center;">
             <a href="${resetLink}" class="button">Reinitialiser mon mot de passe</a>
           </div>
-
           <div class="security-note">
             <strong>Lien securise</strong><br>
             Ce lien est valable pendant <strong>${this.TOKEN_EXPIRY_MINUTES} minute(s)</strong>.<br>
             Si vous n'etes pas a l'origine de cette demande, ignorez simplement cet email.<br>
             Votre mot de passe ne sera pas modifie.
           </div>
-
-          <p style="font-size: 14px; color: #64748b;">
-            Si le bouton ne fonctionne pas, copiez et collez le lien suivant dans votre navigateur :
-          </p>
-          <p style="font-size: 12px; color: #3B82F6; word-break: break-all; background: #eef2ff; padding: 10px; border-radius: 6px;">
-            ${resetLink}
-          </p>
-
+          <p style="font-size: 14px; color: #64748b;">Si le bouton ne fonctionne pas, copiez et collez le lien suivant dans votre navigateur :</p>
+          <p style="font-size: 12px; color: #3B82F6; word-break: break-all; background: #eef2ff; padding: 10px; border-radius: 6px;">${resetLink}</p>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-
           <p style="font-size: 14px; color: #64748b;">
-            Pour toute question, contactez-nous à
+            Pour toute question, contactez-nous a
             <a href="mailto:ymad.mg@gmail.com" style="color: #1E3A8A;">ymad.mg@gmail.com</a>
           </p>
         </div>
-
         <div class="footer">
           <p>© 2025 Y-MaD Association - Young for Madagascar Development</p>
           <p>Carion, Antananarivo, Madagascar • +261 32 04 856 97</p>
@@ -377,17 +421,13 @@ export class EmailService {
     `;
   }
 
-  // ============================================================
-  // TEMPLATE - REINITIALISATION DU MOT DE PASSE (TEXTE)
-  // ============================================================
-
   private getResetPasswordEmailText(resetLink: string, firstName?: string): string {
     const greeting = firstName ? `Bonjour ${firstName},` : 'Bonjour,';
 
     return `
 ${greeting}
 
-Nous avons reçu une demande de reinitialisation de votre mot de passe pour votre compte Y-MaD.
+Nous avons recu une demande de reinitialisation de votre mot de passe pour votre compte Y-MaD.
 
 Pour creer un nouveau mot de passe, veuillez cliquer sur le lien suivant :
 ${resetLink}
@@ -405,7 +445,7 @@ Tel: +261 32 04 856 97
   }
 
   // ============================================================
-  // TEMPLATE - CONFIRMATION DE REINITIALISATION (HTML)
+  // TEMPLATES - CONFIRMATION
   // ============================================================
 
   private getResetConfirmationHtml(firstName: string): string {
@@ -454,11 +494,11 @@ L'equipe Y-MaD
   }
 
   // ============================================================
-  // TEMPLATE - BIENVENUE (HTML)
+  // TEMPLATES - BIENVENUE
   // ============================================================
 
   private getWelcomeEmailHtml(firstName: string): string {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
 
     return `
       <!DOCTYPE html>
@@ -504,12 +544,8 @@ L'equipe Y-MaD
     `;
   }
 
-  // ============================================================
-  // TEMPLATE - BIENVENUE (TEXTE)
-  // ============================================================
-
   private getWelcomeEmailText(firstName: string): string {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
 
     return `
 Bonjour ${firstName},
@@ -528,7 +564,7 @@ L'equipe Y-MaD
   }
 
   // ============================================================
-  // TEMPLATE - CONFIRMATION DE CANDIDATURE (HTML)
+  // TEMPLATES - CANDIDATURE
   // ============================================================
 
   private getApplicationConfirmationEmailHtml(firstName: string, jobTitle: string): string {
@@ -568,10 +604,6 @@ L'equipe Y-MaD
     `;
   }
 
-  // ============================================================
-  // TEMPLATE - CONFIRMATION DE CANDIDATURE (TEXTE)
-  // ============================================================
-
   private getApplicationConfirmationEmailText(firstName: string, jobTitle: string): string {
     return `
 Bonjour ${firstName},
@@ -585,10 +617,6 @@ Nous vous tiendrons informer de l'avancement de votre candidature.
 L'equipe Y-MaD
     `;
   }
-
-  // ============================================================
-  // TEMPLATE - STATUT DE CANDIDATURE (HTML)
-  // ============================================================
 
   private getApplicationStatusEmailHtml(firstName: string, jobTitle: string, status: string): string {
     const statusMessages: Record<string, { fr: string; color: string }> = {
@@ -637,10 +665,6 @@ L'equipe Y-MaD
       </html>
     `;
   }
-
-  // ============================================================
-  // TEMPLATE - STATUT DE CANDIDATURE (TEXTE)
-  // ============================================================
 
   private getApplicationStatusEmailText(firstName: string, jobTitle: string, status: string): string {
     const statusMessages: Record<string, string> = {

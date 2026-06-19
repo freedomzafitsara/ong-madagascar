@@ -15,7 +15,7 @@ import {
   Loader2, RefreshCw, Star, Clock, Trash2,
   ExternalLink, Building, Users, FileCheck, GraduationCap,
   ChevronDown, ChevronUp, FolderOpen, Link as LinkIcon,
-  EyeOff, ThumbsUp, ThumbsDown, Send
+  ThumbsUp, ThumbsDown, Send
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -61,10 +61,10 @@ interface Application {
 
 const statusOptions: { value: ApplicationStatus; label: string; color: string; bg: string; icon: any }[] = [
   { value: 'submitted', label: 'Soumise', color: 'text-gray-700', bg: 'bg-gray-100', icon: Clock },
-  { value: 'reviewing', label: 'En révision', color: 'text-blue-800', bg: 'bg-blue-100', icon: Eye },
-  { value: 'shortlisted', label: 'Préselectionnée', color: 'text-purple-800', bg: 'bg-purple-100', icon: Star },
-  { value: 'accepted', label: 'Acceptée', color: 'text-green-800', bg: 'bg-green-100', icon: CheckCircle },
-  { value: 'rejected', label: 'Refusée', color: 'text-red-800', bg: 'bg-red-100', icon: XCircle },
+  { value: 'reviewing', label: 'En revision', color: 'text-blue-800', bg: 'bg-blue-100', icon: Eye },
+  { value: 'shortlisted', label: 'Preselectionnee', color: 'text-purple-800', bg: 'bg-purple-100', icon: Star },
+  { value: 'accepted', label: 'Acceptee', color: 'text-green-800', bg: 'bg-green-100', icon: CheckCircle },
+  { value: 'rejected', label: 'Refusee', color: 'text-red-800', bg: 'bg-red-100', icon: XCircle },
 ];
 
 const itemsPerPage = 10;
@@ -142,7 +142,7 @@ function StatusBadge({ status }: { status: ApplicationStatus }) {
 }
 
 // ============================================================
-// MODAL DE DÉTAIL
+// MODAL DE DETAIL
 // ============================================================
 
 function ApplicationDetailModal({ 
@@ -183,13 +183,12 @@ function ApplicationDetailModal({
 
   const handleSendReply = async () => {
     if (!replyText.trim()) {
-      toast.error(getText('Veuillez saisir votre réponse', 'Ampidiro ny valinteninao'));
+      toast.error(getText('Veuillez saisir votre reponse', 'Ampidiro ny valinteninao'));
       return;
     }
-    toast.success(getText('Réponse envoyée avec succès', 'Vita ny fandefasana valiny'));
+    toast.success(getText('Reponse envoyee avec succes', 'Vita ny fandefasana valiny'));
     setShowReply(false);
     setReplyText('');
-    await onUpdateStatus(application.id, 'accepted' as ApplicationStatus);
   };
 
   const hasCoverLetter = application.cover_letter || application.cover_letter_url;
@@ -200,13 +199,14 @@ function ApplicationDetailModal({
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         
+        {/* En-tete */}
         <div className="sticky top-0 bg-white px-6 py-5 border-b flex justify-between items-center z-10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-800 rounded-xl flex items-center justify-center">
               <FileCheck className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-800">{getText('Détail de la candidature', 'Antsipirihan\'ny fangatahana')}</h2>
+              <h2 className="text-xl font-bold text-gray-800">{getText('Detail de la candidature', 'Antsipirihan\'ny fangatahana')}</h2>
               <p className="text-sm text-gray-500">
                 {application.jobOffer?.title_fr} • {application.jobOffer?.company || 'Y-MaD'}
               </p>
@@ -224,6 +224,7 @@ function ApplicationDetailModal({
 
         <div className="p-6 space-y-6">
           
+          {/* Statut */}
           <div className="bg-gray-50 rounded-xl p-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -260,6 +261,7 @@ function ApplicationDetailModal({
             </div>
           </div>
 
+          {/* Informations candidat */}
           <div className="flex flex-col md:flex-row gap-6">
             {application.photo_url && (
               <div className="flex-shrink-0">
@@ -279,13 +281,14 @@ function ApplicationDetailModal({
             <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <InfoRow label={getText('Nom complet', 'Anarana feno')} value={application.full_name} icon={User} />
               <InfoRow label="Email" value={application.email} icon={Mail} />
-              <InfoRow label={getText('Téléphone', 'Telefaonina')} value={application.phone} icon={Phone} />
+              <InfoRow label={getText('Telephone', 'Telefaonina')} value={application.phone} icon={Phone} />
               <InfoRow label={getText('Adresse', 'Adiresy')} value={application.address} icon={MapPin} />
-              <InfoRow label={getText('Expérience', 'Traikefa')} value={application.experience_years ? `${application.experience_years} ans` : undefined} icon={Briefcase} />
+              <InfoRow label={getText('Experience', 'Traikefa')} value={application.experience_years ? `${application.experience_years} ans` : undefined} icon={Briefcase} />
               <InfoRow label={getText('Date de candidature', 'Daty nangatahana')} value={formatDate(application.created_at)} icon={Calendar} />
             </div>
           </div>
 
+          {/* Situation professionnelle */}
           {(application.current_position || application.current_company) && (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
@@ -299,6 +302,7 @@ function ApplicationDetailModal({
             </div>
           )}
 
+          {/* Liens */}
           {(application.linkedin_url || application.portfolio_url) && (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
@@ -324,6 +328,7 @@ function ApplicationDetailModal({
             </div>
           )}
 
+          {/* Lettre de motivation */}
           {hasCoverLetter && (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
@@ -331,7 +336,7 @@ function ApplicationDetailModal({
                 {getText('Lettre de motivation', 'Taratra fanolorana')}
               </h3>
               {application.cover_letter_url ? (
-                <DocumentBadge url={application.cover_letter_url} label={getText('Télécharger la lettre', 'Alefaso ny taratasy')} icon={FileText} />
+                <DocumentBadge url={application.cover_letter_url} label={getText('Telecharger la lettre', 'Alefaso ny taratasy')} icon={FileText} />
               ) : application.cover_letter && (
                 <div className="bg-gray-50 rounded-xl p-4">
                   <div className={`text-sm text-gray-600 whitespace-pre-wrap leading-relaxed ${!showFullLetter && isLongText ? 'max-h-32 overflow-hidden relative' : ''}`}>
@@ -351,6 +356,7 @@ function ApplicationDetailModal({
             </div>
           )}
 
+          {/* Documents */}
           {(application.cv_url || application.diploma_url || application.attestation_url) && (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
@@ -359,32 +365,33 @@ function ApplicationDetailModal({
               </h3>
               <div className="flex flex-wrap gap-3">
                 <DocumentBadge url={application.cv_url} label="CV" icon={FileText} />
-                <DocumentBadge url={application.diploma_url} label={getText('Diplôme', 'Diploma')} icon={GraduationCap} />
+                <DocumentBadge url={application.diploma_url} label={getText('Diplome', 'Diploma')} icon={GraduationCap} />
                 <DocumentBadge url={application.attestation_url} label={getText('Attestation', 'Fanamarinana')} icon={FileCheck} />
               </div>
             </div>
           )}
 
+          {/* Envoyer une reponse */}
           {!showReply ? (
             <button
               onClick={() => setShowReply(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition"
             >
               <Send className="w-4 h-4" />
-              {getText('Envoyer une réponse', 'Alefaso valiny')}
+              {getText('Envoyer une reponse', 'Alefaso valiny')}
             </button>
           ) : (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <Send className="w-4 h-4 text-blue-800" />
-                {getText('Réponse au candidat', 'Valiny ho an\'ny mpangataka')}
+                {getText('Reponse au candidat', 'Valiny ho an\'ny mpangataka')}
               </h3>
               <textarea
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 rows={4}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none resize-none text-sm"
-                placeholder={getText('Saisissez votre réponse ici...', 'Ampidiro ny valinteninao eto...')}
+                placeholder={getText('Saisissez votre reponse ici...', 'Ampidiro ny valinteninao eto...')}
               />
               <div className="flex gap-3 mt-3">
                 <button
@@ -404,6 +411,7 @@ function ApplicationDetailModal({
             </div>
           )}
 
+          {/* Notes internes */}
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
               <FileText className="w-4 h-4 text-blue-800" />
@@ -415,7 +423,7 @@ function ApplicationDetailModal({
               onBlur={async () => {
                 if (notes !== application.notes) {
                   await api.patch(`/jobs/applications/${application.id}`, { notes });
-                  toast.success(getText('Notes sauvegardées', 'Vita ny fitehirizana'));
+                  toast.success(getText('Notes sauvegardees', 'Vita ny fitehirizana'));
                 }
               }}
               placeholder={getText('Ajouter des notes internes sur ce candidat...', 'Ampidiro ny fanamarihana...')}
@@ -425,6 +433,7 @@ function ApplicationDetailModal({
           </div>
         </div>
 
+        {/* Pied de modal */}
         <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
             {getText('Fermer', 'Hidy')}
@@ -433,7 +442,7 @@ function ApplicationDetailModal({
             href={`/dashboard/jobs/${application.job_offer_id}`}
             className="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition text-sm font-medium"
           >
-            {getText('Voir l\'offre associée', 'Jereo ny asa mifandraika')}
+            {getText('Voir l\'offre associee', 'Jereo ny asa mifandraika')}
           </Link>
         </div>
       </div>
@@ -460,7 +469,6 @@ export default function CandidaturesPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [exporting, setExporting] = useState(false);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const isMounted = useRef(true);
   const initialFetchDone = useRef(false);
@@ -554,23 +562,20 @@ export default function CandidaturesPage() {
   }, [currentPage, filterStatus, fetchApplications, token]);
 
   const updateStatus = async (applicationId: string, newStatus: ApplicationStatus) => {
-    setUpdatingStatus(true);
     try {
       await api.patch(`/jobs/applications/${applicationId}/status`, { status: newStatus });
-      toast.success(getText('Statut mis à jour', 'Vita ny fanovana sata'));
+      toast.success(getText('Statut mis a jour', 'Vita ny fanovana sata'));
       fetchApplications();
     } catch (error) {
       console.error('Erreur:', error);
-      toast.error(getText('Erreur lors de la mise à jour', 'Nisy hadisoana tamin\'ny fanovana'));
-    } finally {
-      setUpdatingStatus(false);
+      toast.error(getText('Erreur lors de la mise a jour', 'Nisy hadisoana tamin\'ny fanovana'));
     }
   };
 
   const deleteApplication = async (applicationId: string, name: string) => {
     try {
       await api.delete(`/jobs/applications/${applicationId}`);
-      toast.success(getText(`Candidature de ${name} supprimée`, `Voafafa ny fangatahan'i ${name}`));
+      toast.success(getText(`Candidature de ${name} supprimee`, `Voafafa ny fangatahan'i ${name}`));
       fetchApplications();
     } catch (error) {
       console.error('Erreur:', error);
@@ -590,7 +595,7 @@ export default function CandidaturesPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(getText('Export réussi', 'Vita ny fanondrana'));
+      toast.success(getText('Export reussi', 'Vita ny fanondrana'));
     } catch (error) {
       console.error('Erreur:', error);
       toast.error(getText('Erreur lors de l\'export', 'Nisy hadisoana tamin\'ny fanondrana'));
@@ -602,7 +607,7 @@ export default function CandidaturesPage() {
   const handleRefresh = () => {
     fetchJobs();
     fetchApplications();
-    toast.success(getText('Données actualisées', 'Havaozina ny angona'));
+    toast.success(getText('Donnees actualisees', 'Havaozina ny angona'));
   };
 
   const handleQuickAccept = async (id: string) => {
@@ -641,8 +646,8 @@ export default function CandidaturesPage() {
           <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-10 h-10 text-gray-400" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">{getText('Accès non autorisé', 'Tsy manana alalana')}</h1>
-          <p className="text-gray-500 mt-2">{getText('Vous n\'avez pas les droits pour accéder à cette page', 'Tsy manana alalana hiditra ity pejy ity ianao')}</p>
+          <h1 className="text-2xl font-bold text-gray-800">{getText('Acces non autorise', 'Tsy manana alalana')}</h1>
+          <p className="text-gray-500 mt-2">{getText('Vous n\'avez pas les droits pour acceder a cette page', 'Tsy manana alalana hiditra ity pejy ity ianao')}</p>
           <Link href="/dashboard" className="mt-4 inline-block px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition">
             {getText('Retour au tableau de bord', 'Hiverina any amin\'ny fandraisana')}
           </Link>
@@ -663,6 +668,7 @@ export default function CandidaturesPage() {
   return (
     <div className="space-y-6 pb-8">
       
+      {/* En-tete */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-blue-800 rounded-xl flex items-center justify-center shadow-md">
@@ -670,7 +676,7 @@ export default function CandidaturesPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-800">{getText('Gestion des candidatures', 'Fitantanana ny fangatahana')}</h1>
-            <p className="text-gray-500 text-sm">{getText('Consultez, gérez et suivez toutes les candidatures reçues', 'Jereo, tantano ary araho ny fangatahana rehetra')}</p>
+            <p className="text-gray-500 text-sm">{getText('Consultez, gerez et suivez toutes les candidatures recues', 'Jereo, tantano ary araho ny fangatahana rehetra')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -685,15 +691,17 @@ export default function CandidaturesPage() {
         </div>
       </div>
 
+      {/* Statistiques */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard label={getText('Total candidatures', 'Fangatahana rehetra')} value={stats.total} icon={Users} isBlue={true} />
         <StatCard label={getText('Soumises', 'Nalefa')} value={stats.submitted} icon={Clock} />
-        <StatCard label={getText('En révision', 'Dinihina')} value={stats.reviewing} icon={Eye} />
-        <StatCard label={getText('Préselection', 'Voafidy')} value={stats.shortlisted} icon={Star} />
-        <StatCard label={getText('Acceptées', 'Ekena')} value={stats.accepted} icon={CheckCircle} />
-        <StatCard label={getText('Refusées', 'Nolavina')} value={stats.rejected} icon={XCircle} />
+        <StatCard label={getText('En revision', 'Dinihina')} value={stats.reviewing} icon={Eye} />
+        <StatCard label={getText('Preselection', 'Voafidy')} value={stats.shortlisted} icon={Star} />
+        <StatCard label={getText('Acceptees', 'Ekena')} value={stats.accepted} icon={CheckCircle} />
+        <StatCard label={getText('Refusees', 'Nolavina')} value={stats.rejected} icon={XCircle} />
       </div>
 
+      {/* Filtres */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="flex-1 relative">
@@ -722,6 +730,7 @@ export default function CandidaturesPage() {
         </div>
       </div>
 
+      {/* Tableau */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -742,10 +751,10 @@ export default function CandidaturesPage() {
                   <td colSpan={7} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                        <EyeOff className="w-8 h-8 text-gray-400" />
+                        <Eye className="w-8 h-8 text-gray-400" />
                       </div>
-                      <p className="text-gray-500 font-medium">{getText('Aucune candidature trouvée', 'Tsy misy fangatahana hita')}</p>
-                      <p className="text-sm text-gray-400">{getText('Modifiez vos filtres pour voir plus de résultats', 'Hanova ny filtrao mba hahita valiny bebe kokoa')}</p>
+                      <p className="text-gray-500 font-medium">{getText('Aucune candidature trouvee', 'Tsy misy fangatahana hita')}</p>
+                      <p className="text-sm text-gray-400">{getText('Modifiez vos filtres pour voir plus de resultats', 'Hanova ny filtrao mba hahita valiny bebe kokoa')}</p>
                     </div>
                   </td>
                 </tr>
@@ -785,16 +794,16 @@ export default function CandidaturesPage() {
                     <td className="px-5 py-4"><StatusBadge status={app.status} /></td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => { setSelectedApp(app); setShowDetailModal(true); }} className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition">
+                        <button onClick={() => { setSelectedApp(app); setShowDetailModal(true); }} className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" title={getText('Voir les details', 'Jereo ny antsipirihany')}>
                           <Eye className="w-4 h-4" />
                         </button>
                         {app.status !== 'accepted' && (
-                          <button onClick={() => handleQuickAccept(app.id)} className="p-2 text-gray-500 hover:text-green-600 rounded-lg hover:bg-green-50 transition">
+                          <button onClick={() => handleQuickAccept(app.id)} className="p-2 text-gray-500 hover:text-green-600 rounded-lg hover:bg-green-50 transition" title={getText('Accepter', 'Ekeo')}>
                             <ThumbsUp className="w-4 h-4" />
                           </button>
                         )}
                         {app.status !== 'rejected' && (
-                          <button onClick={() => handleQuickReject(app.id)} className="p-2 text-gray-500 hover:text-red-600 rounded-lg hover:bg-red-50 transition">
+                          <button onClick={() => handleQuickReject(app.id)} className="p-2 text-gray-500 hover:text-red-600 rounded-lg hover:bg-red-50 transition" title={getText('Refuser', 'Lavina')}>
                             <ThumbsDown className="w-4 h-4" />
                           </button>
                         )}
@@ -808,6 +817,7 @@ export default function CandidaturesPage() {
         </div>
       </div>
 
+      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center pt-2">
           <div className="text-sm text-gray-500">
@@ -836,6 +846,7 @@ export default function CandidaturesPage() {
         </div>
       )}
 
+      {/* Modal */}
       {showDetailModal && selectedApp && (
         <ApplicationDetailModal
           application={selectedApp}

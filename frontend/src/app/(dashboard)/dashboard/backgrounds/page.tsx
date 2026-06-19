@@ -1,4 +1,4 @@
-// frontend/src/app/(dashboard)/dashboard/backgrounds/page.tsx
+// frontend/src/app/dashboard/backgrounds/page.tsx
 
 'use client';
 
@@ -6,25 +6,24 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { pagesApi } from '@/lib/api';
-import { uploadService, UploadedFile } from '@/services/upload.service';
+import { uploadService } from '@/services/upload.service';
 import {
   Image as ImageIcon,
   Upload,
-  Trash2,
   Eye,
   EyeOff,
   RefreshCw,
   Loader2,
   CheckCircle,
   XCircle,
-  AlertCircle,
-  Settings,
   Save,
   X,
   PenSquare,
   Globe,
-  Move,
-  Search
+  Layers,
+  Shield,
+  Lock,
+  PlusCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -39,8 +38,12 @@ interface PageBackground {
   is_active: boolean;
   overlay_opacity: number;
   position: string;
-  alt_fr?: string;
-  alt_mg?: string;
+  size: string;
+  blur: number;
+  brightness: number;
+  alt_fr: string | null;
+  alt_mg: string | null;
+  updated_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -50,6 +53,9 @@ interface PageBackgroundUpdate {
   is_active?: boolean;
   overlay_opacity?: number;
   position?: string;
+  size?: string;
+  blur?: number;
+  brightness?: number;
   alt_fr?: string;
   alt_mg?: string;
 }
@@ -57,6 +63,17 @@ interface PageBackgroundUpdate {
 // ============================================================
 // CONSTANTES
 // ============================================================
+
+const PAGE_KEYS = [
+  { key: 'home', labelFr: 'Accueil', labelMg: 'Fandraisana' },
+  { key: 'projects', labelFr: 'Projets', labelMg: 'Tetikasa' },
+  { key: 'jobs', labelFr: 'Emploi', labelMg: 'Asa' },
+  { key: 'blog', labelFr: 'Blog', labelMg: 'Blaogy' },
+  { key: 'contact', labelFr: 'Contact', labelMg: 'Fifandraisana' },
+  { key: 'login', labelFr: 'Connexion', labelMg: 'Hiditra' },
+  { key: 'all', labelFr: 'Toutes les pages', labelMg: 'Pejy rehetra' },
+  { key: 'register', labelFr: 'Inscription', labelMg: 'Fisoratana' },
+];
 
 const POSITION_OPTIONS = [
   { value: 'center', labelFr: 'Centre', labelMg: 'Afovoany' },
@@ -70,14 +87,28 @@ const POSITION_OPTIONS = [
   { value: 'bottom-right', labelFr: 'Bas droite', labelMg: 'Ambany havanana' },
 ];
 
-const PAGE_KEYS = [
-  { key: 'home', labelFr: 'Accueil', labelMg: 'Fandraisana' },
-  { key: 'projects', labelFr: 'Projets', labelMg: 'Tetikasa' },
-  { key: 'jobs', labelFr: 'Emploi', labelMg: 'Asa' },
-  { key: 'blog', labelFr: 'Blog', labelMg: 'Blaogy' },
-  { key: 'contact', labelFr: 'Contact', labelMg: 'Fifandraisana' },
-  { key: 'login', labelFr: 'Connexion', labelMg: 'Hiditra' },
+const SIZE_OPTIONS = [
+  { value: 'cover', labelFr: 'Couverture', labelMg: 'Fonona' },
+  { value: 'contain', labelFr: 'Contenir', labelMg: 'Tazona' },
+  { value: 'fill', labelFr: 'Remplir', labelMg: 'Feno' },
+  { value: 'none', labelFr: 'Aucun', labelMg: 'Tsy misy' },
+  { value: 'scale-down', labelFr: 'Reduire', labelMg: 'Ahena' },
 ];
+
+// ============================================================
+// FONCTIONS UTILITAIRES
+// ============================================================
+
+const toBoolean = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    return value === 'true' || value === '1' || value === 'yes' || value === 'on';
+  }
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+  return false;
+};
 
 // ============================================================
 // COMPOSANTS
@@ -102,7 +133,7 @@ function StatusBadge({ isActive }: { isActive: boolean }) {
   );
 }
 
-function ImagePreview({ url, alt, onError }: { url: string; alt: string; onError?: () => void }) {
+function ImagePreview({ url, alt }: { url: string; alt: string }) {
   const [hasError, setHasError] = useState(false);
 
   if (hasError || !url) {
@@ -118,11 +149,27 @@ function ImagePreview({ url, alt, onError }: { url: string; alt: string; onError
       src={url}
       alt={alt}
       className="w-full h-full object-cover"
-      onError={() => {
-        setHasError(true);
-        if (onError) onError();
-      }}
+      onError={() => setHasError(true)}
     />
+  );
+}
+
+function AccessDenied({ message }: { message: string }) {
+  const { language } = useLanguage();
+  const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="text-center max-w-md">
+        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Lock className="w-10 h-10 text-red-600" />
+        </div>
+        <h1 className="text-2xl font-bold text-gray-800">
+          {getText('Acces non autorise', 'Tsy manana alalana')}
+        </h1>
+        <p className="text-gray-500 mt-2">{message}</p>
+      </div>
+    </div>
   );
 }
 
@@ -131,11 +178,13 @@ function ImagePreview({ url, alt, onError }: { url: string; alt: string; onError
 // ============================================================
 
 export default function BackgroundsPage() {
-  const { user, token, isAuthenticated } = useAuth();
+  const { user, token, isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
   const { language } = useLanguage();
   
   const [backgrounds, setBackgrounds] = useState<PageBackground[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [initializing, setInitializing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -143,15 +192,16 @@ export default function BackgroundsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentPageKey = useRef<string>('');
 
-  const hasAccess = user?.role === 'super_admin' || user?.role === 'admin';
-
   const getText = useCallback((fr: string, mg: string) => {
     return language === 'fr' ? fr : mg;
   }, [language]);
 
   const getPageLabel = useCallback((key: string) => {
     const page = PAGE_KEYS.find(p => p.key === key);
-    return page ? getText(page.labelFr, page.labelMg) : key;
+    if (page) {
+      return getText(page.labelFr, page.labelMg);
+    }
+    return key;
   }, [language, getText]);
 
   const getPositionLabel = useCallback((value: string) => {
@@ -159,33 +209,107 @@ export default function BackgroundsPage() {
     return pos ? getText(pos.labelFr, pos.labelMg) : value;
   }, [language, getText]);
 
+  const getSizeLabel = useCallback((value: string) => {
+    const size = SIZE_OPTIONS.find(p => p.value === value);
+    return size ? getText(size.labelFr, size.labelMg) : value;
+  }, [language, getText]);
+
   // ============================================================
   // CHARGEMENT DES DONNEES
   // ============================================================
 
   const fetchBackgrounds = useCallback(async () => {
-    if (!token || !isAuthenticated) return;
+    if (!token || !isAuthenticated || !isAdmin) {
+      setLoading(false);
+      return;
+    }
     
     setLoading(true);
+    setError(null);
+    
     try {
       const response = await pagesApi.getAllBackgrounds();
-      setBackgrounds(response || []);
-    } catch (error) {
-      console.error('Erreur chargement fonds d\'ecran:', error);
-      toast.error(getText('Erreur de chargement', 'Nisy hadisoana tamin\'ny fampidirana'));
+      
+      let backgroundsData: PageBackground[] = [];
+      
+      if (Array.isArray(response)) {
+        backgroundsData = response;
+      } else if (response && typeof response === 'object') {
+        if ('data' in response && Array.isArray((response as any).data)) {
+          backgroundsData = (response as any).data;
+        } else if ('items' in response && Array.isArray((response as any).items)) {
+          backgroundsData = (response as any).items;
+        } else if ('id' in response) {
+          backgroundsData = [response as PageBackground];
+        }
+      }
+      
+      backgroundsData = backgroundsData.map(bg => ({
+        ...bg,
+        is_active: toBoolean(bg.is_active),
+        overlay_opacity: typeof bg.overlay_opacity === 'number' ? bg.overlay_opacity : 35,
+        size: bg.size || 'cover',
+        blur: bg.blur || 0,
+        brightness: bg.brightness || 100,
+        alt_fr: bg.alt_fr || null,
+        alt_mg: bg.alt_mg || null,
+      }));
+      
+      setBackgrounds(backgroundsData);
+      
+      if (backgroundsData.length === 0) {
+        setError('Aucun fond d\'ecran trouve dans la base de donnees');
+      }
+      
+    } catch (err) {
+      console.error('Erreur chargement:', err);
+      setError('Erreur de chargement des donnees');
+      setBackgrounds([]);
     } finally {
       setLoading(false);
     }
-  }, [token, isAuthenticated, getText]);
+  }, [token, isAuthenticated, isAdmin]);
 
   useEffect(() => {
-    if (isAuthenticated && hasAccess) {
+    if (isAuthenticated && isAdmin) {
       fetchBackgrounds();
+    } else {
+      setLoading(false);
     }
-  }, [isAuthenticated, hasAccess, fetchBackgrounds]);
+  }, [isAuthenticated, isAdmin, fetchBackgrounds]);
 
   // ============================================================
-  // GESTION DES FICHIERS
+  // INITIALISATION
+  // ============================================================
+
+  const initializePages = async () => {
+    if (!token || !isAuthenticated || !isAdmin) {
+      toast.error(getText('Vous devez etre connecte', 'Mila miditra ianao'));
+      return;
+    }
+
+    setInitializing(true);
+    try {
+      const result = await pagesApi.initializePages();
+      
+      if (result.success) {
+        toast.success(result.message || getText('Pages initialisees avec succes', 'Nahomana ny fanombohana pejy'));
+      } else {
+        toast.error(result.message || getText('Erreur lors de l\'initialisation', 'Nisy hadisoana tamin\'ny fanombohana'));
+      }
+      
+      await fetchBackgrounds();
+      
+    } catch (err: any) {
+      console.error('Erreur initialisation:', err);
+      toast.error(err.response?.data?.message || getText('Erreur lors de l\'initialisation', 'Nisy hadisoana tamin\'ny fanombohana'));
+    } finally {
+      setInitializing(false);
+    }
+  };
+
+  // ============================================================
+  // UPLOAD
   // ============================================================
 
   const handleFileSelect = (pageKey: string) => {
@@ -204,7 +328,7 @@ export default function BackgroundsPage() {
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      toast.error(getText('Format non supporte (JPG, PNG, WEBP, GIF)', 'Tsy tohana ny format (JPG, PNG, WEBP, GIF)'));
+      toast.error(getText('Format non supporte', 'Tsy tohana ny format'));
       return;
     }
 
@@ -222,8 +346,8 @@ export default function BackgroundsPage() {
       
       toast.success(getText('Image uploadee avec succes', 'Nahomana ny fampidirana sary'));
       await fetchBackgrounds();
-    } catch (error) {
-      console.error('Erreur upload:', error);
+    } catch (err) {
+      console.error('Erreur upload:', err);
       toast.error(getText('Erreur lors de l\'upload', 'Nisy hadisoana tamin\'ny fampidirana'));
     } finally {
       setUploading(null);
@@ -234,35 +358,21 @@ export default function BackgroundsPage() {
   };
 
   // ============================================================
-  // ACTIONS SUR LES FONDS D'ECRAN
+  // ACTIONS
   // ============================================================
 
-  // ✅ CORRECTION: Utiliser page_key pour le toggle
-  const toggleActive = async (pageKey: string, currentStatus: boolean) => {
+  const toggleActive = async (pageKey: string) => {
     try {
       await pagesApi.toggleBackground(pageKey);
       toast.success(getText('Statut mis a jour', 'Vita ny fanovana sata'));
       await fetchBackgrounds();
-    } catch (error) {
-      console.error('Erreur:', error);
+    } catch (err) {
+      console.error('Erreur:', err);
       toast.error(getText('Erreur lors de la mise a jour', 'Nisy hadisoana'));
     }
   };
 
-  const deleteBackground = async (id: string, pageKey: string) => {
-    if (!confirm(getText(`Supprimer le fond d'ecran de la page "${getPageLabel(pageKey)}" ?`, `Hofafana ny sary fonony ho an'ny pejy "${getPageLabel(pageKey)}" ?`))) {
-      return;
-    }
-
-    try {
-      await pagesApi.deleteBackground(id);
-      toast.success(getText('Fond d\'ecran supprime', 'Vita ny fanafoanana'));
-      await fetchBackgrounds();
-    } catch (error) {
-      console.error('Erreur:', error);
-      toast.error(getText('Erreur lors de la suppression', 'Nisy hadisoana'));
-    }
-  };
+  // ✅ SUPPRESSION DU BOUTON SUPPRIMER - FONCTION RETIREE
 
   const updateBackground = async (id: string, data: PageBackgroundUpdate) => {
     setSaving(true);
@@ -271,8 +381,8 @@ export default function BackgroundsPage() {
       toast.success(getText('Fond d\'ecran mis a jour', 'Vita ny fanovana'));
       await fetchBackgrounds();
       setEditingId(null);
-    } catch (error) {
-      console.error('Erreur:', error);
+    } catch (err) {
+      console.error('Erreur mise a jour:', err);
       toast.error(getText('Erreur lors de la mise a jour', 'Nisy hadisoana'));
     } finally {
       setSaving(false);
@@ -283,23 +393,7 @@ export default function BackgroundsPage() {
   // RENDU
   // ============================================================
 
-  if (!isAuthenticated || !hasAccess) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-800">
-            {getText('Acces non autorise', 'Tsy manana alalana')}
-          </h1>
-          <p className="text-gray-500 mt-2">
-            {getText('Vous devez etre administrateur pour acceder a cette page', 'Mila manana alalana admin ianao')}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <Loader2 className="w-12 h-12 text-blue-800 animate-spin" />
@@ -307,13 +401,36 @@ export default function BackgroundsPage() {
     );
   }
 
+  if (!isAuthenticated) {
+    return (
+      <AccessDenied 
+        message={getText(
+          'Veuillez vous connecter pour acceder a cette page',
+          'Mila miditra ianao vao mahazo miditra amin\'ity pejy ity'
+        )}
+      />
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <AccessDenied 
+        message={getText(
+          'Cette page est reservee aux administrateurs',
+          'Ity pejy ity dia ho an\'ny mpitantana ihany'
+        )}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6 pb-8">
-      {/* Header */}
+      
+      {/* En-tete */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-blue-800 rounded-xl flex items-center justify-center shadow-sm">
-            <ImageIcon className="w-6 h-6 text-white" />
+            <Layers className="w-6 h-6 text-white" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-800">
@@ -322,6 +439,20 @@ export default function BackgroundsPage() {
             <p className="text-gray-500 text-sm">
               {getText('Personnalisez les images de fond pour chaque page du site', 'Amboary ny sary fonony ho an\'ny pejy tsirairay')}
             </p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <Shield className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-xs text-blue-600 font-medium">
+                {getText('Acces administrateur', 'Fidirana mpitantana')}
+              </span>
+            </div>
+            {backgrounds.length > 0 && (
+              <div className="text-xs text-gray-400 mt-1">
+                {backgrounds.length} {getText('fonds d\'ecran charges', 'sary fonony voaray')}
+              </div>
+            )}
+            {error && (
+              <div className="text-xs text-red-500 mt-1">{error}</div>
+            )}
           </div>
         </div>
         <button
@@ -333,7 +464,7 @@ export default function BackgroundsPage() {
         </button>
       </div>
 
-      {/* Input file cache */}
+      {/* Input cache */}
       <input
         ref={fileInputRef}
         type="file"
@@ -342,134 +473,173 @@ export default function BackgroundsPage() {
         onChange={handleFileChange}
       />
 
-      {/* Grille des fonds d'ecran */}
+      {/* Grille */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {backgrounds.map((bg) => (
-          <div
-            key={bg.id}
-            className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
-          >
-            {/* Image */}
-            <div className="relative h-48 bg-gray-100">
-              {uploading === bg.page_key ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                  <Loader2 className="w-10 h-10 text-blue-800 animate-spin" />
+        {backgrounds.length > 0 ? (
+          backgrounds.map((bg) => {
+            const pageLabel = getPageLabel(bg.page_key);
+            const isKnownPage = PAGE_KEYS.some(p => p.key === bg.page_key);
+            
+            return (
+              <div
+                key={bg.id}
+                className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+              >
+                {/* Image */}
+                <div className="relative h-48 bg-gray-100">
+                  {uploading === bg.page_key ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                      <Loader2 className="w-10 h-10 text-blue-800 animate-spin" />
+                    </div>
+                  ) : (
+                    <>
+                      <ImagePreview
+                        url={bg.image_url}
+                        alt={`Fond d'ecran ${pageLabel}`}
+                      />
+                      {!bg.is_active && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <span className="text-white text-sm font-medium px-3 py-1 bg-red-500 rounded-full">
+                            {getText('Desactive', 'Tsy miasa')}
+                          </span>
+                        </div>
+                      )}
+                      {bg.is_active && (
+                        <div className="absolute top-3 left-3">
+                          <StatusBadge isActive={bg.is_active} />
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-              ) : (
-                <>
-                  <ImagePreview
-                    url={bg.image_url}
-                    alt={`Fond d'ecran ${getPageLabel(bg.page_key)}`}
-                  />
-                  {!bg.is_active && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <span className="text-white text-sm font-medium px-3 py-1 bg-red-500 rounded-full">
-                        {getText('Desactive', 'Tsy miasa')}
-                      </span>
-                    </div>
+
+                {/* Informations */}
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-800">
+                      {pageLabel}
+                      {!isKnownPage && (
+                        <span className="ml-2 text-xs text-gray-400 font-normal">
+                          ({bg.page_key})
+                        </span>
+                      )}
+                    </h3>
+                    <span className="text-xs text-gray-400">
+                      {bg.overlay_opacity}% opacite
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>{getPositionLabel(bg.position)}</span>
+                    <span className="text-gray-300">|</span>
+                    <span>{getSizeLabel(bg.size)}</span>
+                    {bg.blur > 0 && (
+                      <>
+                        <span className="text-gray-300">|</span>
+                        <span>Flou: {bg.blur}px</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* ✅ Boutons sans Supprimer */}
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      onClick={() => handleFileSelect(bg.page_key)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition text-sm font-medium"
+                    >
+                      <Upload className="w-4 h-4" />
+                      {getText('Uploader', 'Alefaso')}
+                    </button>
+
+                    <button
+                      onClick={() => toggleActive(bg.page_key)}
+                      className={`p-2 rounded-lg transition ${
+                        bg.is_active
+                          ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          : 'bg-green-100 text-green-600 hover:bg-green-200'
+                      }`}
+                      title={bg.is_active ? getText('Desactiver', 'Ajanony') : getText('Activer', 'Ampiasao')}
+                    >
+                      {bg.is_active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+
+                    <button
+                      onClick={() => setEditingId(editingId === bg.id ? null : bg.id)}
+                      className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition"
+                      title={getText('Modifier', 'Hanova')}
+                    >
+                      <PenSquare className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Formulaire d'edition */}
+                  {editingId === bg.id && (
+                    <EditForm
+                      background={bg}
+                      onSave={updateBackground}
+                      onCancel={() => setEditingId(null)}
+                      saving={saving}
+                      getText={getText}
+                    />
                   )}
-                  {bg.is_active && (
-                    <div className="absolute top-3 left-3">
-                      <StatusBadge isActive={bg.is_active} />
-                    </div>
-                  )}
-                </>
-              )}
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          /* Etat vide */
+          <div className="col-span-full bg-white rounded-xl border border-gray-200 p-12 text-center">
+            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ImageIcon className="w-10 h-10 text-blue-800" />
             </div>
-
-            {/* Contenu */}
-            <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-gray-800">
-                  {getPageLabel(bg.page_key)}
-                </h3>
-                <span className="text-xs text-gray-400">
-                  {bg.overlay_opacity}% {getText('opacite', 'opacity')}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <Globe className="w-3.5 h-3.5" />
-                <span>{getPositionLabel(bg.position)}</span>
-              </div>
-
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
-                <button
-                  onClick={() => handleFileSelect(bg.page_key)}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition text-sm font-medium"
-                >
-                  <Upload className="w-4 h-4" />
-                  {getText('Uploader', 'Alefaso')}
-                </button>
-
-                {/* ✅ CORRECTION: Utiliser page_key pour le toggle */}
-                <button
-                  onClick={() => toggleActive(bg.page_key, bg.is_active)}
-                  className={`p-2 rounded-lg transition ${
-                    bg.is_active
-                      ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      : 'bg-green-100 text-green-600 hover:bg-green-200'
-                  }`}
-                  title={bg.is_active ? getText('Desactiver', 'Ajanony') : getText('Activer', 'Ampiasao')}
-                >
-                  {bg.is_active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-
-                <button
-                  onClick={() => setEditingId(editingId === bg.id ? null : bg.id)}
-                  className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition"
-                  title={getText('Modifier', 'Hanova')}
-                >
-                  <PenSquare className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => deleteBackground(bg.id, bg.page_key)}
-                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition"
-                  title={getText('Supprimer', 'Hamafa')}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Formulaire d'edition */}
-              {editingId === bg.id && (
-                <EditForm
-                  background={bg}
-                  onSave={updateBackground}
-                  onCancel={() => setEditingId(null)}
-                  saving={saving}
-                  getText={getText}
-                />
+            <h3 className="text-lg font-semibold text-gray-700">
+              {getText('Aucun fond d\'ecran configure', 'Tsy misy sary fonony napetraka')}
+            </h3>
+            <p className="text-gray-500 mt-2 max-w-md mx-auto">
+              {error || getText(
+                'Aucun fond d\'ecran n\'a ete configure pour les pages.',
+                'Mbola tsy misy sary fonony ho an\'ny pejy.'
               )}
+            </p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={initializePages}
+                disabled={initializing}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition disabled:opacity-50 text-sm font-medium"
+              >
+                {initializing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    {getText('Initialisation...', 'Fanombohana...')}
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="w-5 h-5" />
+                    {getText('Initialiser les pages', 'Atombohy ny pejy')}
+                  </>
+                )}
+              </button>
+              <button
+                onClick={fetchBackgrounds}
+                className="inline-flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition text-sm"
+              >
+                <RefreshCw className="w-4 h-4" />
+                {getText('Recharger', 'Avereno')}
+              </button>
             </div>
           </div>
-        ))}
+        )}
       </div>
 
-      {/* Aucun fond d'ecran */}
-      {backgrounds.length === 0 && !loading && (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <ImageIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700">
-            {getText('Aucun fond d\'ecran', 'Tsy misy sary fonony')}
-          </h3>
-          <p className="text-gray-500 mt-2">
-            {getText('Aucun fond d\'ecran n\'a ete configure pour les pages.', 'Mbola tsy misy sary fonony ho an\'ny pejy.')}
-          </p>
-          <button
-            onClick={() => {
-              pagesApi.initializePages().then(() => {
-                toast.success(getText('Pages initialisees', 'Vita ny fanombohana'));
-                fetchBackgrounds();
-              }).catch(() => {
-                toast.error(getText('Erreur', 'Nisy hadisoana'));
-              });
-            }}
-            className="mt-4 px-6 py-2.5 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition"
-          >
-            {getText('Initialiser les pages', 'Atombohy ny pejy')}
-          </button>
+      {/* Statistiques */}
+      {backgrounds.length > 0 && (
+        <div className="text-sm text-gray-500 text-center border-t border-gray-100 pt-4">
+          {getText('Total:', 'Rehetra:')} {backgrounds.length} {getText('fonds d\'ecran', 'sary fonony')}
+          {' - '}
+          {backgrounds.filter(b => b.is_active).length} {getText('actifs', 'miasa')}
+          {' - '}
+          {backgrounds.filter(b => !b.is_active).length} {getText('inactifs', 'tsy miasa')}
         </div>
       )}
     </div>
@@ -493,8 +663,11 @@ function EditForm({
   saving: boolean;
   getText: (fr: string, mg: string) => string;
 }) {
-  const [opacity, setOpacity] = useState(background.overlay_opacity || 40);
-  const [position, setPosition] = useState(background.position || 'center');
+  const [opacity, setOpacity] = useState(background.overlay_opacity);
+  const [position, setPosition] = useState(background.position);
+  const [size, setSize] = useState(background.size);
+  const [blur, setBlur] = useState(background.blur);
+  const [brightness, setBrightness] = useState(background.brightness);
   const [altFr, setAltFr] = useState(background.alt_fr || '');
   const [altMg, setAltMg] = useState(background.alt_mg || '');
 
@@ -502,6 +675,9 @@ function EditForm({
     onSave(background.id, {
       overlay_opacity: opacity,
       position: position,
+      size: size,
+      blur: blur,
+      brightness: brightness,
       alt_fr: altFr || undefined,
       alt_mg: altMg || undefined,
     });
@@ -509,6 +685,8 @@ function EditForm({
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+      
+      {/* Opacite */}
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">
           {getText('Opacite du voile', 'Opacity')}
@@ -524,6 +702,7 @@ function EditForm({
         />
       </div>
 
+      {/* Position */}
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">
           {getText('Position', 'Toerana')}
@@ -541,6 +720,57 @@ function EditForm({
         </select>
       </div>
 
+      {/* Taille */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          {getText('Taille', 'Habeny')}
+        </label>
+        <select
+          value={size}
+          onChange={(e) => setSize(e.target.value)}
+          className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none bg-white"
+        >
+          {SIZE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {getText(opt.labelFr, opt.labelMg)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Flou */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          {getText('Flou', 'Manjavozavo')}
+          <span className="ml-2 text-gray-400">{blur}px</span>
+        </label>
+        <input
+          type="range"
+          min="0"
+          max="20"
+          value={blur}
+          onChange={(e) => setBlur(parseInt(e.target.value))}
+          className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-800"
+        />
+      </div>
+
+      {/* Luminosite */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          {getText('Luminosite', 'Hazavana')}
+          <span className="ml-2 text-gray-400">{brightness}%</span>
+        </label>
+        <input
+          type="range"
+          min="0"
+          max="200"
+          value={brightness}
+          onChange={(e) => setBrightness(parseInt(e.target.value))}
+          className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-800"
+        />
+      </div>
+
+      {/* Alt FR */}
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">
           {getText('Texte alternatif (FR)', 'Sary fanoloana (FR)')}
@@ -554,6 +784,7 @@ function EditForm({
         />
       </div>
 
+      {/* Alt MG */}
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">
           {getText('Texte alternatif (MG)', 'Sary fanoloana (MG)')}
@@ -567,6 +798,7 @@ function EditForm({
         />
       </div>
 
+      {/* Boutons */}
       <div className="flex gap-2 pt-1">
         <button
           onClick={handleSave}

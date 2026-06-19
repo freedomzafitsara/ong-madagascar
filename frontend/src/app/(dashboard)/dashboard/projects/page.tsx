@@ -67,10 +67,44 @@ const REGIONS = [
 ];
 
 const STATUS_LABELS: Record<string, { label: string; bg: string; text: string; icon: any }> = {
-  active: { label: 'En cours', bg: 'bg-blue-100', text: 'text-blue-800', icon: CheckCircle },
-  completed: { label: 'Terminé', bg: 'bg-gray-100', text: 'text-gray-600', icon: CheckCircle },
-  paused: { label: 'En pause', bg: 'bg-gray-100', text: 'text-gray-600', icon: Clock },
-  draft: { label: 'Brouillon', bg: 'bg-gray-100', text: 'text-gray-500', icon: AlertCircle }
+  active: { label: 'En cours', bg: 'bg-blue-100', text: 'text-blue-800', icon: TrendingUp },
+  completed: { label: 'Termine', bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle },
+  paused: { label: 'En pause', bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock },
+  draft: { label: 'Brouillon', bg: 'bg-gray-100', text: 'text-gray-600', icon: AlertCircle }
+};
+
+// ============================================================
+// FONCTIONS UTILITAIRES
+// ============================================================
+
+/**
+ * Supprime les balises HTML d'un texte
+ */
+const stripHtml = (html: string): string => {
+  if (!html) return '';
+  // Supprimer les balises HTML
+  let cleaned = html.replace(/<[^>]*>/g, ' ');
+  // Remplacer les entites HTML communes
+  cleaned = cleaned
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/?p>/gi, ' ');
+  // Supprimer les espaces multiples
+  return cleaned.replace(/\s+/g, ' ').trim();
+};
+
+/**
+ * Extrait un extrait de texte pour l'affichage
+ */
+const getExcerpt = (html: string, maxLength: number = 120): string => {
+  const text = stripHtml(html);
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
 };
 
 // ============================================================
@@ -153,11 +187,11 @@ export default function ProjectsPage() {
       }
     } catch (error) {
       console.error('Erreur chargement projets:', error);
-      toast.error('Erreur de chargement des projets');
+      toast.error(getText('Erreur de chargement des projets', 'Nisy hadisoana tamin\'ny fampidirana ny tetikasa'));
     } finally {
       setLoading(false);
     }
-  }, [currentPage, filterStatus, filterRegion, searchTerm, token]);
+  }, [currentPage, filterStatus, filterRegion, searchTerm, token, getText]);
 
   // Chargement des statistiques
   const fetchStats = useCallback(async () => {
@@ -193,11 +227,16 @@ export default function ProjectsPage() {
 
   // Suppression d'un projet
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(getText(`Supprimer le projet "${title}" ? Cette action est irréversible.`, `Hofafana ny tetikasa "${title}" ? Tsy azo averina izany.`))) return;
+    const confirmMsg = getText(
+      `Supprimer le projet "${title}" ? Cette action est irreversible.`,
+      `Hofafana ny tetikasa "${title}" ? Tsy azo averina izany.`
+    );
+    
+    if (!confirm(confirmMsg)) return;
     
     try {
       await api.delete(`/projects/${id}`);
-      toast.success(getText('Projet supprimé avec succès', 'Vita ny fanafoanana ny tetikasa'));
+      toast.success(getText('Projet supprime avec succes', 'Vita ny fanafoanana ny tetikasa'));
       fetchProjects();
       fetchStats();
     } catch (error) {
@@ -213,7 +252,7 @@ export default function ProjectsPage() {
       const response = await api.get('/projects', { params: { limit: 1000 } });
       const allProjects = response.data?.data || [];
 
-      const headers = ['Titre FR', 'Titre MG', 'Région', 'Statut', 'Budget (Ar)', 'Bénéficiaires', 'Emplois créés', 'Progression', 'Date création'];
+      const headers = ['Titre FR', 'Titre MG', 'Region', 'Statut', 'Budget (Ar)', 'Beneficiaires', 'Emplois crees', 'Progression', 'Date creation'];
       const rows = allProjects.map((p: Project) => [
         p.title_fr,
         p.title_mg || '',
@@ -233,7 +272,7 @@ export default function ProjectsPage() {
       link.download = `projets_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
       URL.revokeObjectURL(link.href);
-      toast.success(getText('Export CSV réussi', 'Vita ny fanondrana CSV'));
+      toast.success(getText('Export CSV reussi', 'Vita ny fanondrana CSV'));
     } catch (error) {
       console.error('Erreur export:', error);
       toast.error(getText('Erreur lors de l\'export', 'Nisy hadisoana tamin\'ny fanondrana'));
@@ -245,7 +284,7 @@ export default function ProjectsPage() {
   const handleRefresh = () => {
     fetchProjects();
     fetchStats();
-    toast.success(getText('Données actualisées', 'Havaozina ny angona'));
+    toast.success(getText('Donnees actualisees', 'Havaozina ny angona'));
   };
 
   const formatCurrency = (amount?: number) => {
@@ -277,7 +316,7 @@ export default function ProjectsPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-800">{getText('Projets', 'Tetikasa')}</h1>
-            <p className="text-gray-500 text-sm">{getText('Gérez les projets et activités de l\'association', 'Fitantanana ny tetikasa sy ny asan\'ny fikambanana')}</p>
+            <p className="text-gray-500 text-sm">{getText('Gerez les projets et activites de l\'association', 'Fitantanana ny tetikasa sy ny asan\'ny fikambanana')}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -309,12 +348,12 @@ export default function ProjectsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label={getText('Total projets', 'Tetikasa rehetra')} value={stats.total} icon={FolderOpen} isBlue={true} />
         <StatCard label={getText('En cours', 'Mandeha')} value={stats.active} icon={TrendingUp} />
-        <StatCard label={getText('Terminés', 'Vita')} value={stats.completed} icon={CheckCircle} />
+        <StatCard label={getText('Termines', 'Vita')} value={stats.completed} icon={CheckCircle} />
         <StatCard label={getText('En pause', 'Mijanona')} value={stats.paused} icon={Clock} />
         <StatCard label={getText('Budget total', 'Tetibola')} value={formatCurrency(stats.totalBudget)} icon={DollarSign} />
-        <StatCard label={getText('Bénéficiaires', 'Mpandray anjara')} value={stats.totalBeneficiaries} icon={Users} />
-        <StatCard label={getText('Emplois créés', 'Asa noforonina')} value={stats.totalJobsCreated} icon={Target} />
-        <StatCard label={getText('Taux réalisation', 'Tahan\'ny fahavitana')} value={`${stats.totalBudget ? Math.round((stats.totalSpent / stats.totalBudget) * 100) : 0}%`} icon={TrendingUp} />
+        <StatCard label={getText('Beneficiaires', 'Mpandray anjara')} value={stats.totalBeneficiaries} icon={Users} />
+        <StatCard label={getText('Emplois crees', 'Asa noforonina')} value={stats.totalJobsCreated} icon={Target} />
+        <StatCard label={getText('Taux realisation', 'Tahan\'ny fahavitana')} value={`${stats.totalBudget ? Math.round((stats.totalSpent / stats.totalBudget) * 100) : 0}%`} icon={TrendingUp} />
       </div>
 
       {/* FILTRES */}
@@ -337,7 +376,7 @@ export default function ProjectsPage() {
           >
             <option value="all">{getText('Tous statuts', 'Sata rehetra')}</option>
             <option value="active">{getText('En cours', 'Mandeha')}</option>
-            <option value="completed">{getText('Terminés', 'Vita')}</option>
+            <option value="completed">{getText('Termines', 'Vita')}</option>
             <option value="paused">{getText('En pause', 'Mijanona')}</option>
             <option value="draft">{getText('Brouillons', 'Volavola')}</option>
           </select>
@@ -346,7 +385,7 @@ export default function ProjectsPage() {
             onChange={(e) => { setFilterRegion(e.target.value); setCurrentPage(1); }}
             className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none bg-white min-w-[160px]"
           >
-            <option value="all">{getText('Toutes régions', 'Faritra rehetra')}</option>
+            <option value="all">{getText('Toutes regions', 'Faritra rehetra')}</option>
             {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           {(searchTerm || filterStatus !== 'all' || filterRegion !== 'all') && (
@@ -365,80 +404,96 @@ export default function ProjectsPage() {
         {projects.length === 0 ? (
           <div className="col-span-3 text-center py-12 bg-white rounded-xl border border-gray-200">
             <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 font-medium">{getText('Aucun projet trouvé', 'Tsy misy tetikasa hita')}</p>
-            <p className="text-sm text-gray-400 mt-1">{getText('Modifiez vos filtres ou créez un nouveau projet', 'Hanova ny filtrao na mamorona tetikasa vaovao')}</p>
+            <p className="text-gray-500 font-medium">{getText('Aucun projet trouve', 'Tsy misy tetikasa hita')}</p>
+            <p className="text-sm text-gray-400 mt-1">{getText('Modifiez vos filtres ou creez un nouveau projet', 'Hanova ny filtrao na mamorona tetikasa vaovao')}</p>
             {hasEditRights && (
               <Link href="/dashboard/projects/new" className="mt-4 inline-flex items-center gap-2 text-blue-800 hover:underline">
-                <Plus className="w-4 h-4" /> {getText('Créer un projet', 'Mamorona tetikasa')}
+                <Plus className="w-4 h-4" /> {getText('Creer un projet', 'Mamorona tetikasa')}
               </Link>
             )}
           </div>
         ) : (
-          projects.map((project) => (
-            <div key={project.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow group">
-              {/* Image */}
-              <div className="relative h-48 bg-gray-100">
-                {project.image_url ? (
-                  <img src={project.image_url} alt={project.title_fr} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <FolderOpen className="w-16 h-16 text-gray-300" />
-                  </div>
-                )}
-                {project.is_featured && (
-                  <div className="absolute top-3 right-3 bg-blue-800 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                    <Award className="w-3 h-3" /> {getText('À la une', 'Voasongadina')}
-                  </div>
-                )}
-                <div className="absolute bottom-3 left-3">
-                  <StatusBadge status={project.status} />
-                </div>
-              </div>
-              
-              {/* Contenu */}
-              <div className="p-4">
-                <h3 className="text-lg font-bold text-gray-800 mb-2 line-clamp-1">
-                  {language === 'fr' ? project.title_fr : (project.title_mg || project.title_fr)}
-                </h3>
-                <p className="text-sm text-gray-500 mb-3 line-clamp-2">
-                  {language === 'fr' ? project.description_fr : (project.description_mg || project.description_fr)}
-                </p>
-                
-                <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
-                  {project.location && (
-                    <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{project.location}</span>
+          projects.map((project) => {
+            //  Obtention de la description nettoyee
+            const descriptionText = language === 'fr' 
+              ? project.description_fr 
+              : (project.description_mg || project.description_fr);
+            const cleanDescription = getExcerpt(descriptionText, 120);
+            
+            return (
+              <div key={project.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow group">
+                {/* Image */}
+                <div className="relative h-48 bg-gray-100">
+                  {project.image_url ? (
+                    <img src={project.image_url} alt={project.title_fr} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <FolderOpen className="w-16 h-16 text-gray-300" />
+                    </div>
                   )}
-                  <span className="flex items-center gap-1"><Users className="w-3 h-3" />{project.beneficiaries_count || 0} {getText('bénéf.', 'mpandray')}</span>
-                  <span className="flex items-center gap-1"><Target className="w-3 h-3" />{project.jobs_created || 0} {getText('emplois', 'asa')}</span>
-                </div>
-                
-                {/* Budget */}
-                <div className="mb-3">
-                  <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>{getText('Budget', 'Tetibola')}</span>
-                    <span className="font-semibold text-blue-800">{formatCurrency(project.budget)}</span>
+                  {project.is_featured && (
+                    <div className="absolute top-3 right-3 bg-blue-800 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                      <Award className="w-3 h-3" /> {getText('A la une', 'Voasongadina')}
+                    </div>
+                  )}
+                  <div className="absolute bottom-3 left-3">
+                    <StatusBadge status={project.status} />
                   </div>
                 </div>
                 
-                {/* Actions */}
-                <div className="flex justify-end items-center gap-2 pt-2 border-t border-gray-100">
-                  <Link href={`/dashboard/projects/${project.id}`} className="p-1.5 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" title={getText('Voir', 'Jereo')}>
-                    <Eye className="w-4 h-4" />
-                  </Link>
-                  {hasEditRights && (
-                    <Link href={`/dashboard/projects/${project.id}/edit`} className="p-1.5 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" title={getText('Modifier', 'Hanova')}>
-                      <Edit className="w-4 h-4" />
+                {/* Contenu */}
+                <div className="p-4">
+                  <h3 className="text-lg font-bold text-gray-800 mb-2 line-clamp-1">
+                    {language === 'fr' ? project.title_fr : (project.title_mg || project.title_fr)}
+                  </h3>
+                  
+                  {/* ✅ DESCRIPTION CORRIGEE - Sans balises HTML */}
+                  <p className="text-sm text-gray-500 mb-3 line-clamp-2">
+                    {cleanDescription}
+                  </p>
+                  
+                  <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
+                    {project.location && (
+                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{project.location}</span>
+                    )}
+                    <span className="flex items-center gap-1"><Users className="w-3 h-3" />{project.beneficiaries_count || 0} {getText('benef.', 'mpandray')}</span>
+                    <span className="flex items-center gap-1"><Target className="w-3 h-3" />{project.jobs_created || 0} {getText('emplois', 'asa')}</span>
+                  </div>
+                  
+                  {/* Progression */}
+                  <div className="mb-3">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>{getText('Progression', 'Fandrosoana')}</span>
+                      <span className="font-semibold text-blue-800">{project.progress || 0}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-800 rounded-full h-2 transition-all duration-500" 
+                        style={{ width: `${Math.min(project.progress || 0, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Actions */}
+                  <div className="flex justify-end items-center gap-2 pt-2 border-t border-gray-100">
+                    <Link href={`/dashboard/projects/${project.id}`} className="p-1.5 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" title={getText('Voir', 'Jereo')}>
+                      <Eye className="w-4 h-4" />
                     </Link>
-                  )}
-                  {isSuperAdmin && (
-                    <button onClick={() => handleDelete(project.id, project.title_fr)} className="p-1.5 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition" title={getText('Supprimer', 'Hamafa')}>
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                    {hasEditRights && (
+                      <Link href={`/dashboard/projects/${project.id}/edit`} className="p-1.5 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" title={getText('Modifier', 'Hanova')}>
+                        <Edit className="w-4 h-4" />
+                      </Link>
+                    )}
+                    {isSuperAdmin && (
+                      <button onClick={() => handleDelete(project.id, project.title_fr)} className="p-1.5 text-gray-500 hover:text-red-600 rounded-lg hover:bg-red-50 transition" title={getText('Supprimer', 'Hamafa')}>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

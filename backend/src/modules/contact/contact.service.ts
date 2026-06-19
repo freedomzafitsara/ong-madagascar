@@ -2,9 +2,10 @@
 
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { Repository, Like, FindOptionsWhere } from 'typeorm';
 import { Contact } from './entities/contact.entity';
-import { CreateContactDto, UpdateContactStatusDto, ContactQueryDto } from './dto/create-contact.dto';
+import { CreateContactDto } from './dto/create-contact.dto';
+import { UpdateContactStatusDto } from './dto/update-contact-status.dto';
 
 @Injectable()
 export class ContactService {
@@ -15,63 +16,56 @@ export class ContactService {
     private contactRepository: Repository<Contact>,
   ) {}
 
-  async create(createDto: CreateContactDto, ipAddress: string): Promise<Contact> {
-    try {
-      const contact = this.contactRepository.create({
-        name: createDto.name,  // Changé: full_name -> name
-        email: createDto.email,
-        phone: createDto.phone || null,
-        subject: createDto.subject,
-        message: createDto.message,
-        ip_address: ipAddress,
-        status: 'unread',
-      });
+  // ============================================================
+  // CREATION D'UN MESSAGE
+  // ============================================================
 
-      const saved = await this.contactRepository.save(contact);
-      this.logger.log(`Nouveau message de contact: ${saved.email} - ${saved.subject}`);
-      return saved;
-    } catch (error) {
-      this.logger.error(`Erreur lors de la creation: ${error.message}`);
-      throw new BadRequestException(`Erreur lors de l'envoi: ${error.message}`);
+  async createMessage(createDto: CreateContactDto, ipAddress?: string): Promise<Contact> {
+    // ✅ Utiliser full_name ou name
+    const name = createDto.full_name || createDto.name || '';
+    
+    if (!name) {
+      throw new BadRequestException('Le nom est requis');
     }
+
+    this.logger.log(`Nouveau message de ${name} (${createDto.email})`);
+
+    const message = this.contactRepository.create({
+      name: name,
+      email: createDto.email,
+      phone: createDto.phone || null,
+      subject: createDto.subject,
+      message: createDto.message,
+      status: 'unread', // ✅ Utiliser 'unread' au lieu de 'new'
+      ip_address: ipAddress || null,
+    });
+
+    const saved = await this.contactRepository.save(message);
+    this.logger.log(`Message enregistre avec l'ID: ${saved.id}`);
+    
+    return saved;
   }
 
-  async findAll(queryDto: ContactQueryDto): Promise<{
-    data: Contact[];
-    total: number;
-    page: number;
-    totalPages: number;
-    limit: number;
-  }> {
-    const page = queryDto.page || 1;
-    const limit = queryDto.limit || 10;
+  // ============================================================
+  // RECUPERATION DES MESSAGES
+  // ============================================================
+
+  async findAll(
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+    search?: string,
+  ): Promise<{ data: Contact[]; total: number; page: number; totalPages: number }> {
     const skip = (page - 1) * limit;
+    const where: FindOptionsWhere<Contact> = {};
 
-    const where: any = {};
-
-    if (queryDto.status && queryDto.status !== 'all') {
-      where.status = queryDto.status;
+    if (status && status !== 'all') {
+      where.status = status;
     }
 
-    if (queryDto.search) {
-      const [data, total] = await this.contactRepository.findAndCount({
-        where: [
-          { name: Like(`%${queryDto.search}%`) },
-          { email: Like(`%${queryDto.search}%`) },
-          { subject: Like(`%${queryDto.search}%`) },
-        ],
-        order: { created_at: 'DESC' },
-        skip,
-        take: limit,
-      });
-
-      return {
-        data,
-        total,
-        page,
-        totalPages: Math.ceil(total / limit),
-        limit,
-      };
+    if (search) {
+      // Recherche par nom, email ou sujet
+      where.name = Like(`%${search}%`);
     }
 
     const [data, total] = await this.contactRepository.findAndCount({
@@ -86,37 +80,12 @@ export class ContactService {
       total,
       page,
       totalPages: Math.ceil(total / limit),
-      limit,
     };
   }
 
-  async findOne(id: string): Promise<Contact> {
-    const contact = await this.contactRepository.findOne({ where: { id } });
-    if (!contact) {
-      throw new NotFoundException(`Message ${id} non trouve`);
-    }
-    return contact;
-  }
-
-  async updateStatus(id: string, status: string, userId?: string): Promise<Contact> {
-    const contact = await this.findOne(id);
-    contact.status = status;
-    
-    if (status === 'replied' && userId) {
-      contact.replied_at = new Date();
-      contact.replied_by_id = userId;
-    }
-    
-    const updated = await this.contactRepository.save(contact);
-    this.logger.log(`Statut du message mis a jour: ${id} -> ${status}`);
-    return updated;
-  }
-
-  async remove(id: string): Promise<void> {
-    const contact = await this.findOne(id);
-    await this.contactRepository.remove(contact);
-    this.logger.log(`Message supprime: ${id}`);
-  }
+  // ============================================================
+  // STATISTIQUES
+  // ============================================================
 
   async getStats(): Promise<{
     total: number;
@@ -132,5 +101,69 @@ export class ContactService {
     const archived = await this.contactRepository.count({ where: { status: 'archived' } });
 
     return { total, unread, read, replied, archived };
+  }
+
+  // ============================================================
+  // MISE A JOUR DU STATUT
+  // ============================================================
+
+  async updateStatus(id: string, updateDto: UpdateContactStatusDto): Promise<Contact> {
+    const message = await this.findOne(id);
+    
+    if (updateDto.status === 'replied' && message.status !== 'replied') {
+      message.replied_at = new Date();
+    }
+
+    message.status = updateDto.status;
+    
+    if (updateDto.admin_notes !== undefined) {
+      message.admin_notes = updateDto.admin_notes;
+    }
+
+    await this.contactRepository.save(message);
+    this.logger.log(`Statut du message ${id} mis a jour: ${updateDto.status}`);
+    
+    return message;
+  }
+
+  // ============================================================
+  // EXPORT
+  // ============================================================
+
+  async exportMessages(status?: string): Promise<any[]> {
+    const where: FindOptionsWhere<Contact> = {};
+    if (status && status !== 'all') {
+      where.status = status;
+    }
+
+    const messages = await this.contactRepository.find({
+      where,
+      order: { created_at: 'DESC' },
+    });
+
+    return messages.map(msg => ({
+      'ID': msg.id,
+      'Nom': msg.name,
+      'Email': msg.email,
+      'Telephone': msg.phone || '',
+      'Sujet': msg.subject,
+      'Message': msg.message,
+      'Statut': msg.status,
+      'Date': msg.created_at,
+    }));
+  }
+
+  async findOne(id: string): Promise<Contact> {
+    const message = await this.contactRepository.findOne({ where: { id } });
+    if (!message) {
+      throw new NotFoundException(`Message avec ID ${id} non trouve`);
+    }
+    return message;
+  }
+
+  async deleteMessage(id: string): Promise<void> {
+    const message = await this.findOne(id);
+    await this.contactRepository.remove(message);
+    this.logger.log(`Message ${id} supprime`);
   }
 }

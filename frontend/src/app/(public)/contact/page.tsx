@@ -3,16 +3,60 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { 
   Mail, Phone, MapPin, Clock, Send, Heart, Loader2, 
   CheckCircle, Sparkles, ArrowRight, Globe, Award, 
-  Users, TrendingUp, Target, X
+  Users, TrendingUp, Target, X, Eye, EyeOff,
+  Bold, Italic, Underline, List, Link as LinkIcon,
+  Image as ImageIcon, Code, Quote, AlignLeft,
+  AlignCenter, AlignRight, FileText
 } from 'lucide-react';
 import { FaFacebook, FaTwitter, FaInstagram, FaLinkedin } from 'react-icons/fa';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { pageService, PageBackground } from '@/services/page.service';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+
+// Import dynamique de ReactQuill
+const ReactQuill = dynamic(() => import('react-quill'), { 
+  ssr: false,
+  loading: () => (
+    <div className="h-64 bg-gray-100 animate-pulse rounded-xl flex items-center justify-center">
+      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+    </div>
+  )
+});
+
+import 'react-quill/dist/quill.snow.css';
+
+// ============================================================
+// CONFIGURATION DE L'EDITEUR WORD
+// ============================================================
+
+const QUILL_MODULES = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'color': [] }, { 'background': [] }],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'list': 'check' }],
+    [{ 'indent': '-1'}, { 'indent': '+1' }],
+    [{ 'align': [] }],
+    ['blockquote', 'code-block'],
+    ['link', 'image', 'video'],
+    ['clean']
+  ],
+  clipboard: {
+    matchVisual: false,
+  }
+};
+
+const QUILL_FORMATS = [
+  'header', 'bold', 'italic', 'underline', 'strike',
+  'color', 'background', 'list', 'bullet', 'check',
+  'indent', 'align', 'blockquote', 'code-block',
+  'link', 'image', 'video'
+];
 
 // ============================================================
 // CONSTANTES
@@ -21,7 +65,7 @@ import toast from 'react-hot-toast';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
 // ============================================================
-// COMPOSANT INFO (ICONE PERSONNALISEE)
+// COMPOSANT INFO
 // ============================================================
 
 function Info(props: any) {
@@ -44,6 +88,8 @@ export default function ContactPage() {
   // État du formulaire
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [charCount, setCharCount] = useState(0);
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
@@ -97,9 +143,9 @@ export default function ContactPage() {
       newErrors.subject = getText('Le sujet est requis', 'Ilaina ny lohahevitra');
     }
     
-    if (!formData.message.trim()) {
+    if (!formData.message.trim() || formData.message === '<p><br></p>') {
       newErrors.message = getText('Le message est requis', 'Ilaina ny hafatra');
-    } else if (formData.message.length < 10) {
+    } else if (formData.message.replace(/<[^>]*>/g, '').length < 10) {
       newErrors.message = getText('Le message doit contenir au moins 10 caracteres', 'Ny hafatra dia tsy maintsy 10 soratra farafahakeliny');
     }
     
@@ -111,11 +157,20 @@ export default function ContactPage() {
   // GESTION DU FORMULAIRE
   // ============================================================
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleMessageChange = (value: string) => {
+    const cleanText = value.replace(/<[^>]*>/g, '');
+    setCharCount(cleanText.length);
+    setFormData(prev => ({ ...prev, message: value }));
+    if (errors.message) {
+      setErrors(prev => ({ ...prev, message: '' }));
     }
   };
 
@@ -138,7 +193,7 @@ export default function ContactPage() {
           email: formData.email,
           phone: formData.phone || undefined,
           subject: formData.subject,
-          message: formData.message
+          message: formData.message // ✅ Envoi du HTML formaté
         })
       });
 
@@ -146,6 +201,7 @@ export default function ContactPage() {
         setSubmitted(true);
         toast.success(getText('Message envoye avec succes !', 'Voaefa tsara ny hafatra !'));
         setFormData({ full_name: "", email: "", phone: "", subject: "", message: "" });
+        setCharCount(0);
         setTimeout(() => setSubmitted(false), 5000);
       } else {
         const error = await response.json();
@@ -170,7 +226,7 @@ export default function ContactPage() {
   ];
 
   // ============================================================
-  // STYLES DU FOND D'ECRAN - PLEIN ECRAN
+  // STYLES DU FOND D'ECRAN
   // ============================================================
 
   const heroBackgroundStyle = pageBackground?.image_url && pageBackground.is_active ? {
@@ -192,9 +248,7 @@ export default function ContactPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       
-      {/* ============================================================
-      SECTION HERO - PLEIN ECRAN (100vh) AVEC FOND D'ECRAN DYNAMIQUE
-      ============================================================ */}
+      {/* SECTION HERO */}
       <section className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
           {pageBackground?.image_url && pageBackground.is_active ? (
@@ -208,27 +262,19 @@ export default function ContactPage() {
         </div>
 
         <div className="relative z-10 text-center px-4 max-w-4xl mx-auto animate-fadeInUp">
-          
-          {/* Badge de reconnaissance */}
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-5 py-2 mb-6">
             <Heart className="w-4 h-4 text-blue-200" />
             <span className="text-sm font-medium text-white">Y-MaD Madagascar</span>
           </div>
-          
-          {/* Titre principal */}
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 drop-shadow-2xl">
             {getText('Contactez-nous', 'Mifandraisa aminay')}
           </h1>
-          
-          {/* Sous-titre */}
           <p className="text-lg md:text-xl lg:text-2xl text-blue-100 max-w-2xl mx-auto">
             {getText(
               'Une question ? N\'hesitez pas a nous contacter',
               'Manana fanontaniana? Aza misalasala mifandraisa aminay'
             )}
           </p>
-          
-          {/* Indicateur de défilement */}
           <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
             <div className="w-7 h-11 border-2 border-white/40 rounded-full flex justify-center">
               <div className="w-1.5 h-2.5 bg-white rounded-full mt-2 animate-pulse"></div>
@@ -237,9 +283,7 @@ export default function ContactPage() {
         </div>
       </section>
 
-      {/* ============================================================
-      SECTION PRINCIPALE - FORMULAIRE ET INFORMATIONS
-      ============================================================ */}
+      {/* SECTION PRINCIPALE */}
       <div className="bg-white rounded-t-3xl shadow-2xl -mt-10 relative z-20">
         <div className="py-16">
           <div className="max-w-7xl mx-auto px-4">
@@ -259,13 +303,10 @@ export default function ContactPage() {
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               
-              {/* ============================================================
-              FORMULAIRE DE CONTACT
-              ============================================================ */}
+              {/* FORMULAIRE */}
               <div className="lg:col-span-2">
                 <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 border border-gray-200">
                   
-                  {/* Message de succès */}
                   {submitted && (
                     <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
                       <div className="flex items-center gap-3">
@@ -359,27 +400,66 @@ export default function ContactPage() {
                       </div>
                     </div>
                     
-                    {/* Message */}
+                    {/* Message - EDITEUR WORD */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {getText('Message', 'Hafatra')} <span className="text-red-500">*</span>
-                      </label>
-                      <textarea 
-                        name="message"
-                        placeholder={getText('Decrivez votre demande...', 'Hazavay ny fangatahanao...')} 
-                        rows={5} 
-                        value={formData.message} 
-                        onChange={handleInputChange} 
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition resize-y ${
-                          errors.message ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                      />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-sm font-medium text-gray-700">
+                          {getText('Message', 'Hafatra')} <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-gray-400">
+                            {charCount}/5000 {getText('caracteres', 'litera')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowPreview(!showPreview)}
+                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 transition"
+                          >
+                            {showPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            {showPreview ? getText('Modifier', 'Hanova') : getText('Apercu', 'Topi-maso')}
+                          </button>
+                        </div>
+                      </div>
+                      
                       {errors.message && (
-                        <p className="text-xs text-red-500 mt-1">{errors.message}</p>
+                        <p className="text-xs text-red-500 mb-1">{errors.message}</p>
                       )}
-                      <p className="text-xs text-gray-400 mt-1 text-right">
-                        {formData.message.length}/5000
-                      </p>
+
+                      {showPreview ? (
+                        <div className="min-h-[200px] p-4 bg-gray-50 rounded-xl border border-gray-200 prose max-w-none">
+                          {formData.message && formData.message !== '<p><br></p>' ? (
+                            <div dangerouslySetInnerHTML={{ __html: formData.message }} />
+                          ) : (
+                            <p className="text-gray-400 italic">{getText('Aucun contenu', 'Tsy misy votoaty')}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="quill-editor">
+                          <ReactQuill
+                            theme="snow"
+                            value={formData.message}
+                            onChange={handleMessageChange}
+                            modules={QUILL_MODULES}
+                            formats={QUILL_FORMATS}
+                            placeholder={getText(
+                              'Decrivez votre demande... (gras, italique, listes, liens, images)',
+                              'Hazavay ny fangatahanao... (maitso, lisitra, rohy, sary)'
+                            )}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Barre d'outils de formatage */}
+                      <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-400">
+                        <span className="flex items-center gap-1"><Bold className="w-3 h-3" /> Gras</span>
+                        <span className="flex items-center gap-1"><Italic className="w-3 h-3" /> Italique</span>
+                        <span className="flex items-center gap-1"><Underline className="w-3 h-3" /> Souligne</span>
+                        <span className="flex items-center gap-1"><List className="w-3 h-3" /> Listes</span>
+                        <span className="flex items-center gap-1"><LinkIcon className="w-3 h-3" /> Liens</span>
+                        <span className="flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Images</span>
+                        <span className="flex items-center gap-1"><AlignLeft className="w-3 h-3" /> Alignement</span>
+                        <span className="flex items-center gap-1"><Quote className="w-3 h-3" /> Citation</span>
+                      </div>
                     </div>
                     
                     {/* Bouton d'envoi */}
@@ -404,9 +484,7 @@ export default function ContactPage() {
                 </div>
               </div>
 
-              {/* ============================================================
-              INFORMATIONS DE CONTACT
-              ============================================================ */}
+              {/* INFORMATIONS DE CONTACT */}
               <div>
                 <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                   <div className="flex items-center gap-2 mb-5">
@@ -419,7 +497,6 @@ export default function ContactPage() {
                   </div>
                   
                   <div className="space-y-5">
-                    {/* Adresse */}
                     <div className="flex gap-3 items-start group">
                       <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-800 transition-colors">
                         <MapPin className="text-blue-800 group-hover:text-white transition-colors" size={18} />
@@ -430,7 +507,6 @@ export default function ContactPage() {
                       </div>
                     </div>
                     
-                    {/* Téléphone */}
                     <div className="flex gap-3 items-start group">
                       <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-800 transition-colors">
                         <Phone className="text-blue-800 group-hover:text-white transition-colors" size={18} />
@@ -443,7 +519,6 @@ export default function ContactPage() {
                       </div>
                     </div>
                     
-                    {/* Email */}
                     <div className="flex gap-3 items-start group">
                       <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-800 transition-colors">
                         <Mail className="text-blue-800 group-hover:text-white transition-colors" size={18} />
@@ -456,7 +531,6 @@ export default function ContactPage() {
                       </div>
                     </div>
                     
-                    {/* Horaires */}
                     <div className="flex gap-3 items-start group">
                       <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-800 transition-colors">
                         <Clock className="text-blue-800 group-hover:text-white transition-colors" size={18} />
@@ -523,9 +597,7 @@ export default function ContactPage() {
         </div>
       </div>
 
-      {/* ============================================================
-      SECTION APPEL A L'ACTION
-      ============================================================ */}
+      {/* SECTION APPEL A L'ACTION */}
       <div className="bg-gradient-to-r from-blue-800 to-blue-900 py-12 mt-8">
         <div className="max-w-4xl mx-auto text-center px-4">
           <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -557,28 +629,111 @@ export default function ContactPage() {
         </div>
       </div>
 
-      {/* Styles globaux */}
+      {/* STYLES */}
       <style jsx global>{`
         @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fadeInUp {
-          animation: fadeInUp 0.8s ease-out;
-        }
+        .animate-fadeInUp { animation: fadeInUp 0.8s ease-out; }
         @keyframes bounce {
           0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
           40% { transform: translateY(-20px); }
           60% { transform: translateY(-10px); }
         }
-        .animate-bounce {
-          animation: bounce 2s infinite;
+        .animate-bounce { animation: bounce 2s infinite; }
+        
+        /* Quill Editor */
+        .quill-editor .ql-container {
+          min-height: 200px;
+          font-size: 15px;
+          border-radius: 0 0 12px 12px;
+          font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        .quill-editor .ql-editor {
+          min-height: 200px;
+        }
+        .quill-editor .ql-toolbar {
+          border-radius: 12px 12px 0 0;
+          border-color: #e5e7eb;
+          background-color: #f9fafb;
+        }
+        .quill-editor .ql-container {
+          border-color: #e5e7eb;
+        }
+        .quill-editor .ql-editor.ql-blank::before {
+          font-style: italic;
+          color: #9ca3af;
+        }
+        .quill-editor .ql-toolbar .ql-formats {
+          margin-right: 4px;
+        }
+        .quill-editor .ql-toolbar button {
+          border-radius: 4px;
+          padding: 2px 4px;
+        }
+        .quill-editor .ql-toolbar button:hover {
+          background-color: #e5e7eb;
+        }
+        .quill-editor .ql-toolbar button.ql-active {
+          background-color: #dbeafe;
+          color: #1E3A8A;
+        }
+        
+        .prose {
+          max-width: none;
+        }
+        .prose h1, .prose h2, .prose h3, .prose h4 {
+          font-weight: bold;
+          margin: 0.5rem 0;
+        }
+        .prose p {
+          margin: 0.5rem 0;
+        }
+        .prose ul, .prose ol {
+          margin: 0.5rem 0 0.5rem 1.5rem;
+        }
+        .prose li {
+          margin: 0.2rem 0;
+        }
+        .prose blockquote {
+          border-left: 4px solid #1E3A8A;
+          padding-left: 1rem;
+          margin: 0.5rem 0;
+          color: #4b5563;
+        }
+        .prose code {
+          background-color: #f3f4f6;
+          padding: 0.2rem 0.4rem;
+          border-radius: 4px;
+          font-family: monospace;
+          font-size: 0.9em;
+        }
+        .prose a {
+          color: #1E3A8A;
+          text-decoration: underline;
+        }
+        .prose img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 8px;
+        }
+        .prose iframe {
+          max-width: 100%;
+          border-radius: 8px;
+        }
+        .prose table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: 0.5rem 0;
+        }
+        .prose table td, .prose table th {
+          border: 1px solid #e5e7eb;
+          padding: 0.3rem 0.6rem;
+        }
+        .prose table th {
+          background-color: #f3f4f6;
+          font-weight: bold;
         }
       `}</style>
     </div>

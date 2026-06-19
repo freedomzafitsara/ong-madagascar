@@ -1,4 +1,5 @@
 ﻿// frontend/src/app/layout.tsx
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -6,6 +7,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { ThemeProvider } from "@/contexts/ThemeContext"; // ✅ AJOUT
 import { Toaster } from "react-hot-toast";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -26,24 +28,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning> {/* ✅ AJOUT suppressHydrationWarning */}
       <body className={`${inter.className} antialiased`}>
-        <AuthProvider>
-          <LanguageProvider>
-            <Toaster 
-              position="top-right"
-              toastOptions={{
-                duration: 4000,
-                style: { background: '#363636', color: '#fff' },
-                success: { duration: 3000, iconTheme: { primary: '#22c55e', secondary: '#fff' } },
-                error: { duration: 4000, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
-              }}
-            />
-            <Header />
-            <main className="min-h-screen">{children}</main>
-            <Footer />
-          </LanguageProvider>
-        </AuthProvider>
+        {/* ✅ ThemeProvider DOIT etre en premier */}
+        <ThemeProvider>
+          <AuthProvider>
+            <LanguageProvider>
+              <Toaster 
+                position="top-right"
+                toastOptions={{
+                  duration: 4000,
+                  style: { background: '#363636', color: '#fff' },
+                  success: { duration: 3000, iconTheme: { primary: '#22c55e', secondary: '#fff' } },
+                  error: { duration: 4000, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+                }}
+              />
+              <Header />
+              <main className="min-h-screen">{children}</main>
+              <Footer />
+            </LanguageProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -5,8 +5,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PageContent, HeroSection } from '../../entities/page-content.entity';
 import { PageBackground } from '../../entities/page-background.entity';
-import { UpdatePageContentDto } from './dto/create-page-content.dto';
-import { UpdatePageBackgroundDto } from './dto/create-page-background.dto';
+import { UpdatePageContentDto } from './dto/update-page-content.dto';
+import { UpdatePageBackgroundDto } from './dto/update-page-background.dto';
 
 @Injectable()
 export class PagesService {
@@ -85,7 +85,7 @@ export class PagesService {
 
     if (content) {
       await this.pageContentRepository.update(content.id, updateData);
-      this.logger.log(`Contenu mis a jour pour la page: ${pageKey} par ${userId}`);
+      this.logger.log(`Contenu mis a jour pour la page: ${pageKey}`);
       return this.getPageForAdmin(pageKey, userRole);
     } else {
       const newContent = this.pageContentRepository.create({
@@ -106,7 +106,7 @@ export class PagesService {
         updated_by: userId,
       });
       
-      this.logger.log(`Nouveau contenu cree pour la page: ${pageKey} par ${userId}`);
+      this.logger.log(`Nouveau contenu cree pour la page: ${pageKey}`);
       return this.pageContentRepository.save(newContent);
     }
   }
@@ -119,9 +119,13 @@ export class PagesService {
     if (userRole !== 'super_admin' && userRole !== 'admin') {
       throw new ForbiddenException('Acces non autorise');
     }
-    return this.pageBackgroundRepository.find({
+    
+    const result = await this.pageBackgroundRepository.find({
       order: { page_key: 'ASC' },
     });
+    
+    this.logger.log(`getAllBackgrounds: ${result.length} backgrounds found`);
+    return result;
   }
 
   async getBackgroundByPage(pageKey: string): Promise<PageBackground | null> {
@@ -129,9 +133,8 @@ export class PagesService {
       where: { page_key: pageKey, is_active: true },
     });
     
-    // ✅ Si le fond d'ecran n'existe pas, le créer automatiquement
     if (!background) {
-      this.logger.log(`Fond d'ecran non trouve pour ${pageKey}, creation automatique`);
+      this.logger.log(`Background not found for ${pageKey}, creating default`);
       
       const defaultImages: Record<string, string> = {
         home: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&h=600&fit=crop',
@@ -150,10 +153,13 @@ export class PagesService {
         position: 'center',
         alt_fr: `Image de fond ${pageKey}`,
         alt_mg: `Sary fototra ${pageKey}`,
+        size: 'cover',
+        blur: 0,
+        brightness: 100,
       });
       
       background = await this.pageBackgroundRepository.save(newBackground);
-      this.logger.log(`Fond d'ecran cree automatiquement pour ${pageKey}`);
+      this.logger.log(`Background created for ${pageKey}`);
     }
     
     return background;
@@ -190,12 +196,15 @@ export class PagesService {
     if (updateDto.is_active !== undefined) updateData.is_active = updateDto.is_active;
     if (updateDto.overlay_opacity !== undefined) updateData.overlay_opacity = updateDto.overlay_opacity;
     if (updateDto.position !== undefined) updateData.position = updateDto.position;
+    if (updateDto.size !== undefined) updateData.size = updateDto.size;
+    if (updateDto.blur !== undefined) updateData.blur = updateDto.blur;
+    if (updateDto.brightness !== undefined) updateData.brightness = updateDto.brightness;
     if (updateDto.alt_fr !== undefined) updateData.alt_fr = updateDto.alt_fr;
     if (updateDto.alt_mg !== undefined) updateData.alt_mg = updateDto.alt_mg;
 
     if (background) {
       await this.pageBackgroundRepository.update(background.id, updateData);
-      this.logger.log(`Fond d'ecran mis a jour pour la page: ${pageKey} par ${userId}`);
+      this.logger.log(`Background updated for page: ${pageKey}`);
       return this.pageBackgroundRepository.findOne({ where: { id: background.id } });
     } else {
       const newBackground = this.pageBackgroundRepository.create({
@@ -204,12 +213,15 @@ export class PagesService {
         is_active: updateData.is_active !== undefined ? updateData.is_active : true,
         overlay_opacity: updateData.overlay_opacity !== undefined ? updateData.overlay_opacity : 40,
         position: updateData.position !== undefined ? updateData.position : 'center',
+        size: updateData.size || 'cover',
+        blur: updateData.blur || 0,
+        brightness: updateData.brightness || 100,
         alt_fr: updateData.alt_fr || null,
         alt_mg: updateData.alt_mg || null,
         updated_by: userId,
       });
       
-      this.logger.log(`Nouveau fond d'ecran cree pour la page: ${pageKey} par ${userId}`);
+      this.logger.log(`New background created for page: ${pageKey}`);
       return this.pageBackgroundRepository.save(newBackground);
     }
   }
@@ -233,7 +245,7 @@ export class PagesService {
         image_url: imageUrl,
         updated_by: userId,
       });
-      this.logger.log(`Image mise a jour pour la page: ${pageKey} par ${userId}`);
+      this.logger.log(`Image updated for page: ${pageKey}`);
       return this.pageBackgroundRepository.findOne({ where: { id: background.id } });
     } else {
       const newBackground = this.pageBackgroundRepository.create({
@@ -243,20 +255,15 @@ export class PagesService {
         is_active: true,
         overlay_opacity: 40,
         position: 'center',
+        size: 'cover',
+        blur: 0,
+        brightness: 100,
         alt_fr: '',
         alt_mg: '',
       });
-      this.logger.log(`Nouvelle image creee pour la page: ${pageKey} par ${userId}`);
+      this.logger.log(`New image created for page: ${pageKey}`);
       return this.pageBackgroundRepository.save(newBackground);
     }
-  }
-
-  async deleteBackground(id: string, userRole: string): Promise<void> {
-    if (userRole !== 'super_admin' && userRole !== 'admin') {
-      throw new ForbiddenException('Seul un administrateur peut supprimer des fonds d\'ecran');
-    }
-    await this.pageBackgroundRepository.delete(id);
-    this.logger.log(`Fond d'ecran supprime: ${id}`);
   }
 
   async toggleBackgroundActive(
@@ -273,52 +280,45 @@ export class PagesService {
     });
 
     if (!background) {
-      throw new NotFoundException(`Fond d'ecran non trouve pour la page: ${pageKey}`);
+      throw new NotFoundException(`Background not found for page: ${pageKey}`);
     }
 
     background.is_active = !background.is_active;
     background.updated_by = userId;
     await this.pageBackgroundRepository.save(background);
     
-    this.logger.log(`Fond d'ecran ${background.is_active ? 'active' : 'desactive'} pour: ${pageKey}`);
+    this.logger.log(`Background ${background.is_active ? 'activated' : 'deactivated'} for: ${pageKey}`);
     return background;
   }
 
-  async toggleBackgroundById(
-    id: string,
-    userId: string,
-    userRole: string
-  ): Promise<PageBackground> {
+  async deleteBackground(id: string, userRole: string): Promise<void> {
     if (userRole !== 'super_admin' && userRole !== 'admin') {
-      throw new ForbiddenException('Seul un administrateur peut modifier les fonds d\'ecran');
+      throw new ForbiddenException('Seul un administrateur peut supprimer des fonds d\'ecran');
     }
-
-    const background = await this.pageBackgroundRepository.findOne({
-      where: { id }
-    });
-
-    if (!background) {
-      throw new NotFoundException(`Fond d'ecran avec ID ${id} non trouve`);
-    }
-
-    background.is_active = !background.is_active;
-    background.updated_by = userId;
-    await this.pageBackgroundRepository.save(background);
     
-    this.logger.log(`Fond d'ecran ${background.is_active ? 'active' : 'desactive'} pour: ${background.page_key}`);
-    return background;
+    const background = await this.pageBackgroundRepository.findOne({ where: { id } });
+    if (!background) {
+      throw new NotFoundException(`Background with ID ${id} not found`);
+    }
+    
+    await this.pageBackgroundRepository.delete(id);
+    this.logger.log(`Background deleted: ${id} (page: ${background.page_key})`);
   }
 
   // ============================================================
   // INITIALISATION DES PAGES PAR DEFAUT
   // ============================================================
 
-  async initializeDefaultPages(userId: string, userRole: string): Promise<{ success: boolean; message: string }> {
+  async initializeDefaultPages(userId: string, userRole: string): Promise<{ success: boolean; message: string; data?: any }> {
     if (userRole !== 'super_admin') {
       throw new ForbiddenException('Seul un super administrateur peut initialiser les pages');
     }
 
-    const pages = ['home', 'projects', 'jobs', 'blog', 'contact', 'login'];
+    const pages = ['home', 'projects', 'jobs', 'blog', 'contact', 'login', 'all', 'register'];
+    const results = {
+      contents: [] as string[],
+      backgrounds: [] as string[],
+    };
     
     for (const pageKey of pages) {
       const contentExists = await this.pageContentRepository.findOne({ 
@@ -330,7 +330,8 @@ export class PagesService {
           ...defaultContent,
           updated_by: userId,
         });
-        this.logger.log(`Contenu par defaut cree pour: ${pageKey}`);
+        results.contents.push(pageKey);
+        this.logger.log(`Default content created for: ${pageKey}`);
       }
 
       const backgroundExists = await this.pageBackgroundRepository.findOne({
@@ -342,12 +343,21 @@ export class PagesService {
           ...defaultBackground,
           updated_by: userId,
         });
-        this.logger.log(`Fond d'ecran par defaut cree pour: ${pageKey}`);
+        results.backgrounds.push(pageKey);
+        this.logger.log(`Default background created for: ${pageKey}`);
       }
     }
 
-    return { success: true, message: 'Pages initialisees avec succes' };
+    return { 
+      success: true, 
+      message: `Pages initialisees. ${results.contents.length} contenus et ${results.backgrounds.length} fonds d'ecran.`,
+      data: results
+    };
   }
+
+  // ============================================================
+  // METHODES PRIVEES
+  // ============================================================
 
   private getDefaultContentForPage(pageKey: string): Partial<PageContent> {
     const contents: Record<string, { fr: string; mg: string }> = {
@@ -357,6 +367,8 @@ export class PagesService {
       blog: { fr: 'Actualites', mg: 'Vaovao' },
       contact: { fr: 'Contactez-nous', mg: 'Mifandraisa aminay' },
       login: { fr: 'Connexion Admin', mg: 'Fidirana Admin' },
+      all: { fr: 'Toutes les pages', mg: 'Pejy rehetra' },
+      register: { fr: 'Inscription', mg: 'Fisoratana' },
     };
 
     const heroSection: HeroSection = {
@@ -388,6 +400,8 @@ export class PagesService {
       blog: { fr: 'Actualites et evenements', mg: 'Vaovao sy hetsika' },
       contact: { fr: 'Nous sommes a votre ecoute', mg: 'Mihainoa anay' },
       login: { fr: 'Acces reserve a l\'administration', mg: 'Fidirana ho an\'ny Admin' },
+      all: { fr: 'Voir toutes les pages', mg: 'Hijery ny pejy rehetra' },
+      register: { fr: 'Creer un compte', mg: 'Mamorona kaonty' },
     };
     return subtitles[pageKey]?.[lang] || (lang === 'fr' ? 'Description de la page' : 'Famaritana pejy');
   }
@@ -400,6 +414,8 @@ export class PagesService {
       blog: 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=1200&h=600&fit=crop',
       contact: 'https://images.unsplash.com/photo-1423666639041-f56000c27a9a?w=1200&h=600&fit=crop',
       login: 'https://images.unsplash.com/photo-1507208773393-40d9fc670acf?w=1200&h=600&fit=crop',
+      all: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&h=600&fit=crop',
+      register: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&h=600&fit=crop',
     };
 
     const titles: Record<string, { fr: string; mg: string }> = {
@@ -409,6 +425,8 @@ export class PagesService {
       blog: { fr: 'Image de fond - Blog', mg: 'Sary fototra - Blaogy' },
       contact: { fr: 'Image de fond - Contact', mg: 'Sary fototra - Fifandraisana' },
       login: { fr: 'Image de fond - Connexion', mg: 'Sary fototra - Fidirana' },
+      all: { fr: 'Image de fond - Toutes les pages', mg: 'Sary fototra - Pejy rehetra' },
+      register: { fr: 'Image de fond - Inscription', mg: 'Sary fototra - Fisoratana' },
     };
 
     return {
@@ -419,6 +437,9 @@ export class PagesService {
       is_active: true,
       overlay_opacity: 30,
       position: 'center',
+      size: 'cover',
+      blur: 0,
+      brightness: 100,
     };
   }
 }

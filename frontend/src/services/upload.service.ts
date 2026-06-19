@@ -44,7 +44,7 @@ class UploadService {
 
   async uploadImage(
     file: File, 
-    entityType: EntityType = 'job', 
+    entityType: EntityType = 'background', 
     entityId?: string, 
     isMain: boolean = false
   ): Promise<UploadedFile> {
@@ -103,7 +103,7 @@ class UploadService {
 
       const data = await response.json();
       
-      // Convertir la réponse en UploadedFile
+      // Convertir la reponse en UploadedFile
       const uploadedFile: UploadedFile = {
         id: data.id,
         url: this.getImageUrl(data.id),
@@ -116,11 +116,11 @@ class UploadService {
         createdAt: data.createdAt || new Date().toISOString(),
       };
       
-      console.log('Fichier stocke:', uploadedFile.id);
+      console.log('Fichier uploade avec succes:', uploadedFile.id);
       
       return uploadedFile;
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('Erreur upload:', error);
       throw error;
     }
   }
@@ -248,5 +248,8 @@ class UploadService {
   }
 }
 
+//  EXPORT DE L'INSTANCE UNIQUE
 export const uploadService = new UploadService();
+
+//  EXPORT PAR DEFAUT (pour compatibilite)
 export default uploadService;

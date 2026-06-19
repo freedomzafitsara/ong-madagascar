@@ -18,7 +18,10 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// Composant InfoItem
+// ============================================================
+// COMPOSANTS
+// ============================================================
+
 function InfoItem({ icon: Icon, label, value, highlight = false }: { icon: any; label: string; value: string; highlight?: boolean }) {
   return (
     <div className={`flex items-start gap-3 p-3 rounded-xl transition-all ${highlight ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
@@ -33,9 +36,8 @@ function InfoItem({ icon: Icon, label, value, highlight = false }: { icon: any; 
   );
 }
 
-// Composant StatCard
 function StatCard({ label, value, icon: Icon, color, onClick }: { label: string; value: number; icon: any; color: string; onClick?: () => void }) {
-  const colors = {
+  const colors: Record<string, string> = {
     blue: 'bg-blue-50 border-blue-200 text-blue-700',
     green: 'bg-green-50 border-green-200 text-green-700',
     orange: 'bg-orange-50 border-orange-200 text-orange-700',
@@ -47,7 +49,7 @@ function StatCard({ label, value, icon: Icon, color, onClick }: { label: string;
   return (
     <div 
       onClick={onClick}
-      className={`rounded-xl border p-4 transition-all hover:shadow-md cursor-pointer ${colors[color as keyof typeof colors] || colors.gray}`}
+      className={`rounded-xl border p-4 transition-all hover:shadow-md cursor-pointer ${colors[color] || colors.gray}`}
     >
       <div className="flex items-center justify-between">
         <div>
@@ -61,6 +63,21 @@ function StatCard({ label, value, icon: Icon, color, onClick }: { label: string;
     </div>
   );
 }
+
+// Icone Archive definie une seule fois
+function ArchiveIcon(props: any) {
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="5" x="2" y="3" rx="1" />
+      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+      <path d="M10 12h4" />
+    </svg>
+  );
+}
+
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
 
 export default function JobDetailPage() {
   const params = useParams();
@@ -90,6 +107,7 @@ export default function JobDetailPage() {
     setLoading(true);
     try {
       const response = await jobService.getOfferById(params.id as string);
+      console.log('Job data:', response);
       setJob(response);
       setError('');
     } catch (error: any) {
@@ -233,16 +251,6 @@ export default function JobDetailPage() {
     if (diffDays <= 7) return { text: getText(`Plus que ${diffDays} jours`, `${diffDays} andro sisa`), color: 'text-orange-600', bg: 'bg-orange-50' };
     return { text: getText(`${diffDays} jours restants`, `${diffDays} andro sisa`), color: 'text-green-600', bg: 'bg-green-50' };
   };
-
-  function ArchiveIcon(props: any) {
-    return (
-      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect width="20" height="5" x="2" y="3" rx="1" />
-        <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-        <path d="M10 12h4" />
-      </svg>
-    );
-  }
 
   if (loading) {
     return (
@@ -411,7 +419,7 @@ export default function JobDetailPage() {
               {/* Resume rapide */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-gray-100">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-gray-800">{job.applications_count}</p>
+                  <p className="text-2xl font-bold text-gray-800">{job.applications_count || 0}</p>
                   <p className="text-xs text-gray-500">{getText('Candidatures', 'Fangatahana')}</p>
                 </div>
                 <div className="text-center">
@@ -447,7 +455,7 @@ export default function JobDetailPage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition font-medium text-sm"
             >
               <Users className="w-4 h-4" /> {getText('Candidatures', 'Fangatahana')}
-              <span className="ml-1 px-1.5 py-0.5 bg-gray-200 rounded-full text-xs">{job.applications_count}</span>
+              <span className="ml-1 px-1.5 py-0.5 bg-gray-200 rounded-full text-xs">{job.applications_count || 0}</span>
             </Link>
             <button
               onClick={handleToggleStatus}
@@ -479,7 +487,7 @@ export default function JobDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard 
           label={getText('Total candidatures', 'Fitambarany fangatahana')} 
-          value={job.applications_count} 
+          value={job.applications_count || 0} 
           icon={Users} 
           color="blue"
           onClick={() => router.push(`/dashboard/jobs/${job.id}/applications`)}
@@ -510,7 +518,7 @@ export default function JobDetailPage() {
         {/* Colonne de gauche - Description */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Description en francais */}
+          {/* Description en francais - CORRIGEE */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="border-b border-gray-200 px-6 py-4 bg-gradient-to-r from-gray-50 to-white">
               <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
@@ -520,13 +528,15 @@ export default function JobDetailPage() {
               </h2>
             </div>
             <div className="p-6">
-              <div className="prose prose-sm max-w-none text-gray-600 whitespace-pre-wrap leading-relaxed">
-                {job.description_fr}
-              </div>
+              {/* ✅ CORRIGE : Affichage correct du HTML */}
+              <div 
+                className="prose prose-sm max-w-none text-gray-600 leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: job.description_fr }}
+              />
             </div>
           </div>
 
-          {/* Description en malagasy */}
+          {/* Description en malagasy - CORRIGEE */}
           {job.description_mg && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="border-b border-gray-200 px-6 py-4 bg-gradient-to-r from-gray-50 to-white">
@@ -537,9 +547,11 @@ export default function JobDetailPage() {
                 </h2>
               </div>
               <div className="p-6">
-                <div className="prose prose-sm max-w-none text-gray-600 whitespace-pre-wrap leading-relaxed">
-                  {job.description_mg}
-                </div>
+                {/* ✅ CORRIGE : Affichage correct du HTML */}
+                <div 
+                  className="prose prose-sm max-w-none text-gray-600 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: job.description_mg }}
+                />
               </div>
             </div>
           )}
@@ -612,7 +624,7 @@ export default function JobDetailPage() {
             <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <Users className="w-8 h-8" />
             </div>
-            <p className="text-4xl font-bold">{job.applications_count}</p>
+            <p className="text-4xl font-bold">{job.applications_count || 0}</p>
             <p className="text-blue-100 text-sm mt-1">{getText('candidature(s) recues', 'fangatahana voaray')}</p>
             <Link 
               href={`/dashboard/jobs/${job.id}/applications`} 

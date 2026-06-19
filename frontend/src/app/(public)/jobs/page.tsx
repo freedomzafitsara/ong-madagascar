@@ -10,31 +10,94 @@ import {
   LayoutGrid, List, Star, Loader2, Heart
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { pageService, PageBackground } from '@/services/page.service';
-import { jobService, JobOffer, ContractType, JobStatus } from '@/services/job.service';
+import api from '@/lib/api';
 import toast from 'react-hot-toast';
 
 // ============================================================
+// TYPES
+// ============================================================
+
+type ContractType = 'CDI' | 'CDD' | 'STAGE' | 'FREELANCE' | 'ALTERNANCE' | 'TEMPORARY';
+type JobStatus = 'draft' | 'published' | 'closed' | 'archived';
+
+interface JobOffer {
+  id: string;
+  title_fr: string;
+  title_mg?: string;
+  description_fr: string;
+  description_mg?: string;
+  company?: string;
+  location?: string;
+  contract_type: ContractType;
+  status: JobStatus;
+  is_published: boolean;
+  deadline?: string;
+  image_url?: string;
+  created_at: string;
+}
+
+interface PageBackground {
+  id: string;
+  page_key: string;
+  image_url: string;
+  is_active: boolean;
+  overlay_opacity: number;
+  position: string;
+  alt_fr?: string;
+  alt_mg?: string;
+}
+
+// ============================================================
 // CONFIGURATION DES TYPES DE CONTRAT
-// Couleurs Y-MaD: Bleu (#1E3A8A) et Gris (#6B7280)
 // ============================================================
 
 const CONTRACT_LABELS: Record<ContractType, { fr: string; mg: string }> = {
-  [ContractType.CDI]: { fr: 'CDI', mg: 'CDI' },
-  [ContractType.CDD]: { fr: 'CDD', mg: 'CDD' },
-  [ContractType.STAGE]: { fr: 'Stage', mg: 'Fiofanana' },
-  [ContractType.FREELANCE]: { fr: 'Freelance', mg: 'Freelance' },
-  [ContractType.ALTERNANCE]: { fr: 'Alternance', mg: 'Fiofanana mifandimby' },
-  [ContractType.TEMPORARY]: { fr: 'Temporaire', mg: 'Vonjimaika' }
+  CDI: { fr: 'CDI', mg: 'CDI' },
+  CDD: { fr: 'CDD', mg: 'CDD' },
+  STAGE: { fr: 'Stage', mg: 'Fiofanana' },
+  FREELANCE: { fr: 'Freelance', mg: 'Freelance' },
+  ALTERNANCE: { fr: 'Alternance', mg: 'Fiofanana mifandimby' },
+  TEMPORARY: { fr: 'Temporaire', mg: 'Vonjimaika' }
 };
 
 const CONTRACT_COLORS: Record<ContractType, string> = {
-  [ContractType.CDI]: 'bg-blue-800 text-white',
-  [ContractType.CDD]: 'bg-gray-600 text-white',
-  [ContractType.STAGE]: 'bg-blue-800 text-white',
-  [ContractType.FREELANCE]: 'bg-gray-600 text-white',
-  [ContractType.ALTERNANCE]: 'bg-blue-800 text-white',
-  [ContractType.TEMPORARY]: 'bg-gray-600 text-white'
+  CDI: 'bg-blue-800 text-white',
+  CDD: 'bg-gray-600 text-white',
+  STAGE: 'bg-blue-800 text-white',
+  FREELANCE: 'bg-gray-600 text-white',
+  ALTERNANCE: 'bg-blue-800 text-white',
+  TEMPORARY: 'bg-gray-600 text-white'
+};
+
+// ============================================================
+// FONCTIONS UTILITAIRES
+// ============================================================
+
+/**
+ * Supprime les balises HTML d'un texte
+ */
+const stripHtml = (html: string): string => {
+  if (!html) return '';
+  let cleaned = html.replace(/<[^>]*>/g, ' ');
+  cleaned = cleaned
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/?p>/gi, ' ');
+  return cleaned.replace(/\s+/g, ' ').trim();
+};
+
+/**
+ * Extrait un extrait de texte pour l'affichage
+ */
+const getExcerpt = (html: string, maxLength: number = 120): string => {
+  const text = stripHtml(html);
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
 };
 
 // ============================================================
@@ -44,17 +107,17 @@ const CONTRACT_COLORS: Record<ContractType, string> = {
 export default function JobsPublicPage() {
   const { language } = useLanguage();
   
-  // État des offres d'emploi
+  // Etat des offres d'emploi
   const [jobs, setJobs] = useState<JobOffer[]>([]);
   const [filteredJobs, setFilteredJobs] = useState<JobOffer[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // État des filtres
+  // Etat des filtres
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
-  // État du fond d'écran
+  // Etat du fond d'ecran
   const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
   
   // Statistiques
@@ -73,7 +136,9 @@ export default function JobsPublicPage() {
 
   const loadPageBackground = async () => {
     try {
-      const background = await pageService.getPageBackground('jobs');
+      // ✅ Utilisation directe de l'API
+      const response = await api.get('/pages/backgrounds/jobs');
+      const background = response.data;
       if (background && background.is_active && background.image_url) {
         setPageBackground(background);
       }
@@ -85,12 +150,14 @@ export default function JobsPublicPage() {
   const fetchJobs = async () => {
     setLoading(true);
     try {
-      const response = await jobService.getPublishedOffers({ page: 1, limit: 100 });
+      // ✅ Utilisation directe de l'API
+      const response = await api.get('/jobs/offers/public', { params: { limit: 100 } });
       
       if (response && response.data) {
-        // Filtrer les offres actives: publiées et non expirées
-        const activeJobs = response.data.filter(job => {
-          const isPublished = job.status === JobStatus.PUBLISHED && job.is_published === true;
+        let jobsData = response.data.data || response.data || [];
+        // Filtrer les offres actives: publiees et non expirees
+        const activeJobs = jobsData.filter((job: JobOffer) => {
+          const isPublished = job.status === 'published' && job.is_published === true;
           const isNotExpired = !job.deadline || new Date(job.deadline) > new Date();
           return isPublished && isNotExpired;
         });
@@ -144,12 +211,12 @@ export default function JobsPublicPage() {
   // ============================================================
 
   const contractTypes = [
-    { value: ContractType.CDI, labelFr: 'CDI', labelMg: 'CDI' },
-    { value: ContractType.CDD, labelFr: 'CDD', labelMg: 'CDD' },
-    { value: ContractType.STAGE, labelFr: 'Stage', labelMg: 'Fiofanana' },
-    { value: ContractType.FREELANCE, labelFr: 'Freelance', labelMg: 'Freelance' },
-    { value: ContractType.ALTERNANCE, labelFr: 'Alternance', labelMg: 'Fiofanana mifandimby' },
-    { value: ContractType.TEMPORARY, labelFr: 'Temporaire', labelMg: 'Vonjimaika' },
+    { value: 'CDI' as ContractType, labelFr: 'CDI', labelMg: 'CDI' },
+    { value: 'CDD' as ContractType, labelFr: 'CDD', labelMg: 'CDD' },
+    { value: 'STAGE' as ContractType, labelFr: 'Stage', labelMg: 'Fiofanana' },
+    { value: 'FREELANCE' as ContractType, labelFr: 'Freelance', labelMg: 'Freelance' },
+    { value: 'ALTERNANCE' as ContractType, labelFr: 'Alternance', labelMg: 'Fiofanana mifandimby' },
+    { value: 'TEMPORARY' as ContractType, labelFr: 'Temporaire', labelMg: 'Vonjimaika' },
   ];
 
   // ============================================================
@@ -395,13 +462,13 @@ export default function JobsPublicPage() {
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredJobs.map((job) => (
-                <JobCard key={job.id} job={job} language={language} />
+                <JobCard key={job.id} job={job} language={language} getText={getText} />
               ))}
             </div>
           ) : (
             <div className="space-y-4">
               {filteredJobs.map((job) => (
-                <JobListItem key={job.id} job={job} language={language} />
+                <JobListItem key={job.id} job={job} language={language} getText={getText} />
               ))}
             </div>
           )}
@@ -445,14 +512,25 @@ export default function JobsPublicPage() {
 // COMPOSANT : CARTE OFFRE (VUE GRILLE)
 // ============================================================
 
-function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
+function JobCard({ 
+  job, 
+  language, 
+  getText 
+}: { 
+  job: JobOffer; 
+  language: 'fr' | 'mg';
+  getText: (fr: string, mg: string) => string;
+}) {
   const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
   const contractType = job.contract_type as ContractType;
-  const contractColor = CONTRACT_COLORS[contractType] || CONTRACT_COLORS[ContractType.CDI];
-  const contractLabel = CONTRACT_LABELS[contractType] || CONTRACT_LABELS[ContractType.CDI];
+  const contractColor = CONTRACT_COLORS[contractType] || CONTRACT_COLORS.CDI;
+  const contractLabel = CONTRACT_LABELS[contractType] || CONTRACT_LABELS.CDI;
   const title = language === 'fr' ? job.title_fr : (job.title_mg || job.title_fr);
   const description = language === 'fr' ? job.description_fr : (job.description_mg || job.description_fr);
-  const isFeatured = job.status === JobStatus.PUBLISHED && job.is_published === true;
+  const isFeatured = job.status === 'published' && job.is_published === true;
+  
+  //  Nettoyer la description
+  const cleanDescription = getExcerpt(description, 100);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -466,7 +544,7 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
   return (
     <div className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-200">
       
-      {/* Image d'en-tête */}
+      {/* Image d'en-tete */}
       <div className="relative h-40 overflow-hidden bg-gradient-to-r from-blue-800 to-blue-900">
         {job.image_url ? (
           <img 
@@ -532,8 +610,9 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
           </div>
         )}
         
+        {/*  Description sans balises HTML */}
         <p className="text-gray-600 line-clamp-2 mb-3 text-xs leading-relaxed">
-          {description}
+          {cleanDescription}
         </p>
         
         {job.deadline && !isExpired && (
@@ -551,14 +630,25 @@ function JobCard({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
 // COMPOSANT : LIGNE OFFRE (VUE LISTE)
 // ============================================================
 
-function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }) {
+function JobListItem({ 
+  job, 
+  language, 
+  getText 
+}: { 
+  job: JobOffer; 
+  language: 'fr' | 'mg';
+  getText: (fr: string, mg: string) => string;
+}) {
   const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
   const contractType = job.contract_type as ContractType;
-  const contractColor = CONTRACT_COLORS[contractType] || CONTRACT_COLORS[ContractType.CDI];
-  const contractLabel = CONTRACT_LABELS[contractType] || CONTRACT_LABELS[ContractType.CDI];
+  const contractColor = CONTRACT_COLORS[contractType] || CONTRACT_COLORS.CDI;
+  const contractLabel = CONTRACT_LABELS[contractType] || CONTRACT_LABELS.CDI;
   const title = language === 'fr' ? job.title_fr : (job.title_mg || job.title_fr);
   const description = language === 'fr' ? job.description_fr : (job.description_mg || job.description_fr);
-  const isFeatured = job.status === JobStatus.PUBLISHED && job.is_published === true;
+  const isFeatured = job.status === 'published' && job.is_published === true;
+  
+  //  Nettoyer la description
+  const cleanDescription = getExcerpt(description, 150);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -606,8 +696,8 @@ function JobListItem({ job, language }: { job: JobOffer; language: 'fr' | 'mg' }
               )}
             </div>
             
-            {/* Description */}
-            <p className="text-gray-600 line-clamp-2 text-xs leading-relaxed">{description}</p>
+            {/*  Description sans balises HTML */}
+            <p className="text-gray-600 line-clamp-2 text-xs leading-relaxed">{cleanDescription}</p>
           </div>
           
           {/* Bouton d'action */}

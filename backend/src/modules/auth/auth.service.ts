@@ -1,32 +1,30 @@
-﻿import { 
+﻿// backend/src/modules/auth/auth.service.ts
+
+import { 
   Injectable, 
   BadRequestException, 
   NotFoundException, 
   UnauthorizedException, 
   ForbiddenException, 
-  Logger 
+  Logger,
+  ConflictException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Like } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { User, UserRole } from '../../entities/user.entity';
 import * as bcrypt from 'bcrypt';
-import { UploadService } from '../upload/upload.service';
-import { EmailService } from '../email/email.service';
 import { randomBytes } from 'crypto';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  // Durée de validité du token en minutes
-  private readonly TOKEN_EXPIRY_MINUTES = 1;
-
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private jwtService: JwtService,
-    private uploadService: UploadService,
     private emailService: EmailService,
   ) {}
 
@@ -34,28 +32,19 @@ export class AuthService {
   // INSCRIPTION
   // ============================================================
 
-  async register(registerDto: any): Promise<{ success: boolean; message: string; user?: any }> {
+  async register(registerDto: any): Promise<any> {
     const { email, password, first_name, last_name, phone, role } = registerDto;
 
-    // Vérifier si l'email existe déjà
     const existingUser = await this.userRepository.findOne({ where: { email } });
     if (existingUser) {
-      throw new BadRequestException('Cet email est deja utilise');
+      throw new ConflictException('Cet email est deja utilise');
     }
 
-    // Déterminer le rôle
-    let userRole = UserRole.VISITOR;
-    
-    // Empêcher la création de comptes admin via l'inscription
+    let userRole = UserRole.USER;
     if (role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Vous ne pouvez pas creer un compte administrateur');
     }
-    
-    if (role === UserRole.CANDIDATE) {
-      userRole = UserRole.CANDIDATE;
-    }
 
-    // Créer l'utilisateur
     const user = this.userRepository.create({
       email,
       password,
@@ -64,30 +53,34 @@ export class AuthService {
       phone: phone || null,
       role: userRole,
       is_active: true,
+      // Preferences par defaut
+      preferred_language: 'fr',
+      theme: 'light',
+      font_size: 'medium',
+      density: 'comfortable',
+      sidebar_collapsed: false,
+      animations_enabled: true,
+      timezone: 'Indian/Antananarivo',
+      email_notifications: true,
+      push_notifications: true,
+      job_alerts: true,
+      project_updates: true,
+      blog_updates: false,
+      system_updates: true,
     });
 
     await this.userRepository.save(user);
-    
-    this.logger.log(`Nouvel utilisateur cree: ${email} (${userRole})`);
+    this.logger.log(`Nouvel utilisateur cree: ${email}`);
 
-    // Envoyer l'email de bienvenue
-    try {
-      await this.emailService.sendWelcomeEmail(email, first_name);
-      this.logger.log(`Email de bienvenue envoye a ${email}`);
-    } catch (error) {
-      this.logger.error(`Erreur envoi email de bienvenue: ${error.message}`);
-    }
-    
-    return { 
-      success: true, 
-      message: 'Inscription reussie. Un email de confirmation vous a ete envoye.',
+    return {
+      success: true,
+      message: 'Inscription reussie',
       user: {
         id: user.id,
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
         role: user.role,
-        avatar_url: user.avatar_url,
       }
     };
   }
@@ -96,7 +89,7 @@ export class AuthService {
   // CONNEXION
   // ============================================================
 
-  async login(loginDto: any): Promise<{ access_token: string; user: any }> {
+  async login(loginDto: any): Promise<any> {
     const { email, password } = loginDto;
 
     const user = await this.userRepository.findOne({ where: { email } });
@@ -105,50 +98,64 @@ export class AuthService {
     }
 
     if (!user.is_active) {
-      throw new UnauthorizedException('Votre compte est desactive. Contactez l\'administrateur.');
+      throw new UnauthorizedException('Votre compte est desactive');
     }
 
-    const isPasswordValid = await user.validatePassword(password);
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
 
-    // Mettre à jour la dernière connexion
     user.last_login = new Date();
     await this.userRepository.save(user);
 
-    // Générer le token JWT
-    const payload = { 
-      sub: user.id, 
-      email: user.email, 
+    const payload = {
+      sub: user.id,
+      email: user.email,
       role: user.role,
       first_name: user.first_name,
-      last_name: user.last_name
+      last_name: user.last_name,
+      preferences: {
+        theme: user.theme,
+        font_size: user.font_size,
+        preferred_language: user.preferred_language,
+        sidebar_collapsed: user.sidebar_collapsed,
+        animations_enabled: user.animations_enabled,
+        density: user.density,
+      }
     };
 
     const token = this.jwtService.sign(payload);
 
-    // Données utilisateur retournées
-    const userData = {
-      id: user.id,
-      email: user.email,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      phone: user.phone,
-      role: user.role,
-      avatar_url: user.avatar_url,
-      is_active: user.is_active,
-      isAdmin: user.isAdmin(),
-      isCandidate: user.isCandidate(),
-      canPostulate: user.canPostulate(),
-      canAccessDashboard: user.canAccessDashboard(),
-    };
+    this.logger.log(`Utilisateur connecte: ${email}`);
 
-    this.logger.log(`Utilisateur connecte: ${email} (${user.role})`);
-    
     return {
       access_token: token,
-      user: userData,
+      user: {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone: user.phone,
+        role: user.role,
+        is_active: user.is_active,
+        last_login: user.last_login,
+        preferences: {
+          theme: user.theme,
+          font_size: user.font_size,
+          preferred_language: user.preferred_language,
+          sidebar_collapsed: user.sidebar_collapsed,
+          animations_enabled: user.animations_enabled,
+          density: user.density,
+          timezone: user.timezone,
+          email_notifications: user.email_notifications,
+          push_notifications: user.push_notifications,
+          job_alerts: user.job_alerts,
+          project_updates: user.project_updates,
+          blog_updates: user.blog_updates,
+          system_updates: user.system_updates,
+        }
+      },
     };
   }
 
@@ -169,20 +176,26 @@ export class AuthService {
       last_name: user.last_name,
       phone: user.phone,
       role: user.role,
-      avatar_url: user.avatar_url,
       is_active: user.is_active,
       last_login: user.last_login,
       created_at: user.created_at,
-      isAdmin: user.isAdmin(),
-      isCandidate: user.isCandidate(),
-      canPostulate: user.canPostulate(),
-      canAccessDashboard: user.canAccessDashboard(),
+      preferences: {
+        theme: user.theme,
+        font_size: user.font_size,
+        preferred_language: user.preferred_language,
+        sidebar_collapsed: user.sidebar_collapsed,
+        animations_enabled: user.animations_enabled,
+        density: user.density,
+        timezone: user.timezone,
+        email_notifications: user.email_notifications,
+        push_notifications: user.push_notifications,
+        job_alerts: user.job_alerts,
+        project_updates: user.project_updates,
+        blog_updates: user.blog_updates,
+        system_updates: user.system_updates,
+      }
     };
   }
-
-  // ============================================================
-  // MISE A JOUR DU PROFIL
-  // ============================================================
 
   async updateProfile(userId: string, updateDto: any): Promise<any> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
@@ -199,11 +212,7 @@ export class AuthService {
     return this.getProfile(userId);
   }
 
-  // ============================================================
-  // CHANGEMENT DE MOT DE PASSE
-  // ============================================================
-
-  async changePassword(userId: string, changePasswordDto: any): Promise<{ success: boolean; message: string }> {
+  async changePassword(userId: string, changePasswordDto: any): Promise<any> {
     const { currentPassword, newPassword } = changePasswordDto;
 
     const user = await this.userRepository.findOne({ where: { id: userId } });
@@ -211,48 +220,30 @@ export class AuthService {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
-    const isPasswordValid = await user.validatePassword(currentPassword);
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
     if (!isPasswordValid) {
       throw new BadRequestException('Mot de passe actuel incorrect');
     }
 
-    // Validation de la force du mot de passe
     if (newPassword.length < 6) {
-      throw new BadRequestException('Le nouveau mot de passe doit contenir au moins 6 caracteres');
-    }
-
-    const hasUppercase = /[A-Z]/.test(newPassword);
-    const hasLowercase = /[a-z]/.test(newPassword);
-    const hasNumber = /[0-9]/.test(newPassword);
-    
-    if (!hasUppercase || !hasLowercase || !hasNumber) {
-      throw new BadRequestException(
-        'Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre'
-      );
+      throw new BadRequestException('Le mot de passe doit contenir au moins 6 caracteres');
     }
 
     user.password = newPassword;
-    user.must_change_password = false;
     await this.userRepository.save(user);
 
-    this.logger.log(`Mot de passe modifie pour l'utilisateur ${user.email}`);
-    
+    this.logger.log(`Mot de passe modifie pour ${user.email}`);
+
     return { success: true, message: 'Mot de passe modifie avec succes' };
   }
 
-  // ============================================================
-  // UPLOAD AVATAR
-  // ============================================================
-
-  async uploadAvatar(userId: string, file: Express.Multer.File): Promise<{ avatar_url: string }> {
+  async uploadAvatar(userId: string, file: Express.Multer.File): Promise<any> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
-    const uploadedFile = await this.uploadService.uploadFile(file, 'profile', userId);
-    const avatarUrl = this.uploadService.getImageUrl(uploadedFile.id);
-
+    const avatarUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
     user.avatar_url = avatarUrl;
     await this.userRepository.save(user);
 
@@ -260,70 +251,43 @@ export class AuthService {
   }
 
   // ============================================================
-  // MOT DE PASSE OUBLIE - AVEC ENVOI D'EMAIL ET TOKEN 1 MINUTE
+  // MOT DE PASSE OUBLIE
   // ============================================================
 
-  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
-    // Vérifier si l'utilisateur existe
+  async forgotPassword(email: string): Promise<any> {
     const user = await this.userRepository.findOne({ where: { email } });
-    
+
     if (!user) {
-      // Ne pas révéler que l'email n'existe pas (sécurité)
-      return { 
-        success: true, 
-        message: 'Si l\'email existe, un lien de reinitialisation a ete envoye' 
+      return {
+        success: true,
+        message: 'Si l\'email existe, un lien de reinitialisation a ete envoye'
       };
     }
 
-    // Générer un token de réinitialisation
     const resetToken = randomBytes(32).toString('hex');
     const resetTokenExpires = new Date();
-    
-    // ✅ TOKEN VALABLE 1 MINUTE
-    resetTokenExpires.setMinutes(resetTokenExpires.getMinutes() + this.TOKEN_EXPIRY_MINUTES);
+    resetTokenExpires.setMinutes(resetTokenExpires.getMinutes() + 1);
 
-    // Sauvegarder le token dans la base de données
     user.reset_token = resetToken;
     user.reset_token_expires = resetTokenExpires;
     await this.userRepository.save(user);
 
-    this.logger.log(`Token genere pour ${email}, expire dans ${this.TOKEN_EXPIRY_MINUTES} minute(s)`);
-
-    // Envoyer l'email avec le lien de réinitialisation
     try {
-      await this.emailService.sendResetPasswordEmail(
-        email,
-        resetToken,
-        user.first_name
-      );
-
+      await this.emailService.sendResetPasswordEmail(email, resetToken, user.first_name);
       this.logger.log(`Email de reinitialisation envoye a ${email}`);
-
-      return { 
-        success: true, 
-        message: 'Un lien de reinitialisation a ete envoye a votre email' 
-      };
-
     } catch (error) {
       this.logger.error(`Erreur envoi email a ${email}:`, error.message);
-      
-      // Si l'email ne peut pas être envoyé, on retourne quand même un succès
-      // pour ne pas révéler l'existence de l'email (sécurité)
-      return { 
-        success: true, 
-        message: 'Un lien de reinitialisation a ete envoye a votre email' 
-      };
     }
+
+    return {
+      success: true,
+      message: 'Un lien de reinitialisation a ete envoye a votre email'
+    };
   }
 
-  // ============================================================
-  // REINITIALISATION DU MOT DE PASSE
-  // ============================================================
-
-  async resetPassword(resetDto: any): Promise<{ success: boolean; message: string }> {
+  async resetPassword(resetDto: any): Promise<any> {
     const { token, newPassword } = resetDto;
 
-    // Vérifier la présence du token
     if (!token) {
       throw new BadRequestException('Token requis');
     }
@@ -332,82 +296,252 @@ export class AuthService {
       throw new BadRequestException('Nouveau mot de passe requis');
     }
 
-    // Rechercher l'utilisateur avec le token valide
     const user = await this.userRepository.findOne({
-      where: {
-        reset_token: token,
-      },
+      where: { reset_token: token },
     });
 
     if (!user) {
       throw new BadRequestException('Token invalide ou expire');
     }
 
-    // Vérifier si le token n'a pas expiré (1 minute)
     if (user.reset_token_expires && new Date() > user.reset_token_expires) {
-      throw new BadRequestException(
-        `Le token a expire. Veuillez refaire une demande. (Duree de validite: ${this.TOKEN_EXPIRY_MINUTES} minute(s))`
-      );
+      throw new BadRequestException('Le token a expire. Veuillez refaire une demande.');
     }
 
-    // Valider la force du nouveau mot de passe
     if (newPassword.length < 6) {
       throw new BadRequestException('Le mot de passe doit contenir au moins 6 caracteres');
     }
 
-    const hasUppercase = /[A-Z]/.test(newPassword);
-    const hasLowercase = /[a-z]/.test(newPassword);
-    const hasNumber = /[0-9]/.test(newPassword);
-    
-    if (!hasUppercase || !hasLowercase || !hasNumber) {
-      throw new BadRequestException(
-        'Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre'
-      );
-    }
-
-    // Mettre à jour le mot de passe
     user.password = newPassword;
     user.reset_token = null;
     user.reset_token_expires = null;
-    user.must_change_password = false;
     await this.userRepository.save(user);
 
     this.logger.log(`Mot de passe reinitialise pour ${user.email}`);
 
-    // Envoyer un email de confirmation
-    try {
-      await this.emailService.sendResetConfirmationEmail(user.email, user.first_name);
-      this.logger.log(`Email de confirmation envoye a ${user.email}`);
-    } catch (error) {
-      this.logger.error(`Erreur envoi email de confirmation: ${error.message}`);
-    }
-
-    return { 
-      success: true, 
-      message: 'Mot de passe reinitialise avec succes' 
+    return {
+      success: true,
+      message: 'Mot de passe reinitialise avec succes'
     };
   }
 
   // ============================================================
-  // ADMIN - GESTION DES UTILISATEURS
+  // GESTION DES PREFERENCES UTILISATEUR
   // ============================================================
 
-  async getAllUsers(): Promise<any[]> {
-    const users = await this.userRepository.find({
-      select: ['id', 'email', 'first_name', 'last_name', 'phone', 'role', 'is_active', 'last_login', 'created_at'],
-      order: { created_at: 'DESC' },
-    });
-    
-    return users;
-  }
-
-  async updateUserRole(userId: string, role: UserRole): Promise<{ success: boolean; message: string }> {
+  async getPreferences(userId: string): Promise<any> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
-    // Empêcher la modification du rôle SUPER_ADMIN
+    return {
+      preferred_language: user.preferred_language || 'fr',
+      timezone: user.timezone || 'Indian/Antananarivo',
+      theme: user.theme || 'light',
+      font_size: user.font_size || 'medium',
+      sidebar_collapsed: user.sidebar_collapsed || false,
+      animations_enabled: user.animations_enabled !== false,
+      density: user.density || 'comfortable',
+      email_notifications: user.email_notifications !== false,
+      push_notifications: user.push_notifications !== false,
+      job_alerts: user.job_alerts !== false,
+      project_updates: user.project_updates !== false,
+      blog_updates: user.blog_updates || false,
+      system_updates: user.system_updates !== false,
+    };
+  }
+
+  async updatePreferences(userId: string, preferencesDto: any): Promise<any> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouve');
+    }
+
+    // Mettre a jour les preferences
+    if (preferencesDto.preferred_language !== undefined) {
+      user.preferred_language = preferencesDto.preferred_language;
+    }
+    if (preferencesDto.timezone !== undefined) {
+      user.timezone = preferencesDto.timezone;
+    }
+    if (preferencesDto.theme !== undefined) {
+      user.theme = preferencesDto.theme;
+    }
+    if (preferencesDto.font_size !== undefined) {
+      user.font_size = preferencesDto.font_size;
+    }
+    if (preferencesDto.sidebar_collapsed !== undefined) {
+      user.sidebar_collapsed = preferencesDto.sidebar_collapsed;
+    }
+    if (preferencesDto.animations_enabled !== undefined) {
+      user.animations_enabled = preferencesDto.animations_enabled;
+    }
+    if (preferencesDto.density !== undefined) {
+      user.density = preferencesDto.density;
+    }
+    if (preferencesDto.email_notifications !== undefined) {
+      user.email_notifications = preferencesDto.email_notifications;
+    }
+    if (preferencesDto.push_notifications !== undefined) {
+      user.push_notifications = preferencesDto.push_notifications;
+    }
+    if (preferencesDto.job_alerts !== undefined) {
+      user.job_alerts = preferencesDto.job_alerts;
+    }
+    if (preferencesDto.project_updates !== undefined) {
+      user.project_updates = preferencesDto.project_updates;
+    }
+    if (preferencesDto.blog_updates !== undefined) {
+      user.blog_updates = preferencesDto.blog_updates;
+    }
+    if (preferencesDto.system_updates !== undefined) {
+      user.system_updates = preferencesDto.system_updates;
+    }
+
+    await this.userRepository.save(user);
+    this.logger.log(`Preferences mises a jour pour l'utilisateur ${user.email}`);
+
+    return {
+      success: true,
+      message: 'Preferences mises a jour avec succes',
+      preferences: {
+        preferred_language: user.preferred_language,
+        timezone: user.timezone,
+        theme: user.theme,
+        font_size: user.font_size,
+        sidebar_collapsed: user.sidebar_collapsed,
+        animations_enabled: user.animations_enabled,
+        density: user.density,
+        email_notifications: user.email_notifications,
+        push_notifications: user.push_notifications,
+        job_alerts: user.job_alerts,
+        project_updates: user.project_updates,
+        blog_updates: user.blog_updates,
+        system_updates: user.system_updates,
+      }
+    };
+  }
+
+  // ============================================================
+  // GESTION DES UTILISATEURS - ADMIN
+  // ============================================================
+
+  async getAllUsers(): Promise<any[]> {
+    return this.userRepository.find({
+      select: ['id', 'email', 'first_name', 'last_name', 'phone', 'role', 'is_active', 'last_login', 'created_at', 'updated_at'],
+      order: { created_at: 'DESC' },
+    });
+  }
+
+  async getUsersPaginated(
+    page: number = 1,
+    limit: number = 10,
+    role?: string,
+    status?: string,
+    search?: string,
+  ): Promise<{ data: any[]; total: number; page: number; totalPages: number }> {
+    const skip = (page - 1) * limit;
+    const where: any = {};
+
+    if (role && role !== 'all') {
+      where.role = role;
+    }
+
+    if (status === 'active') {
+      where.is_active = true;
+    } else if (status === 'inactive') {
+      where.is_active = false;
+    }
+
+    if (search) {
+      where.email = Like(`%${search}%`);
+    }
+
+    const [data, total] = await this.userRepository.findAndCount({
+      where,
+      select: ['id', 'email', 'first_name', 'last_name', 'phone', 'role', 'is_active', 'last_login', 'created_at', 'updated_at'],
+      order: { created_at: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getUsersStats(): Promise<any> {
+    const total = await this.userRepository.count();
+    const active = await this.userRepository.count({ where: { is_active: true } });
+    const inactive = await this.userRepository.count({ where: { is_active: false } });
+    const super_admin = await this.userRepository.count({ where: { role: UserRole.SUPER_ADMIN } });
+    const admin = await this.userRepository.count({ where: { role: UserRole.ADMIN } });
+    const user = await this.userRepository.count({ where: { role: UserRole.USER } });
+    const candidate = await this.userRepository.count({ where: { role: UserRole.CANDIDATE } });
+    const visitor = await this.userRepository.count({ where: { role: UserRole.VISITOR } });
+
+    return { total, active, inactive, super_admin, admin, user, candidate, visitor };
+  }
+
+  async getUserById(id: string): Promise<any> {
+    const user = await this.userRepository.findOne({
+      where: { id },
+      select: ['id', 'email', 'first_name', 'last_name', 'phone', 'role', 'is_active', 'last_login', 'created_at', 'updated_at'],
+    });
+    
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouve');
+    }
+    
+    return user;
+  }
+
+  async updateUser(id: string, updateDto: any): Promise<any> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouve');
+    }
+
+    if (updateDto.first_name) user.first_name = updateDto.first_name;
+    if (updateDto.last_name) user.last_name = updateDto.last_name;
+    if (updateDto.phone) user.phone = updateDto.phone;
+
+    await this.userRepository.save(user);
+    
+    return {
+      id: user.id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      phone: user.phone,
+      role: user.role,
+      is_active: user.is_active,
+    };
+  }
+
+  async getUsersForExport(role?: string): Promise<any[]> {
+    const where: any = {};
+    if (role && role !== 'all') {
+      where.role = role;
+    }
+
+    return this.userRepository.find({
+      where,
+      select: ['id', 'email', 'first_name', 'last_name', 'phone', 'role', 'is_active', 'created_at', 'last_login'],
+      order: { created_at: 'DESC' },
+    });
+  }
+
+  async updateUserRole(userId: string, role: UserRole): Promise<any> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouve');
+    }
+
     if (user.role === UserRole.SUPER_ADMIN && role !== UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Impossible de modifier le role du Super Admin');
     }
@@ -416,17 +550,16 @@ export class AuthService {
     await this.userRepository.save(user);
 
     this.logger.log(`Role modifie pour ${user.email}: ${role}`);
-    
+
     return { success: true, message: 'Role modifie avec succes' };
   }
 
-  async toggleUserStatus(userId: string): Promise<{ success: boolean; message: string }> {
+  async toggleUserStatus(userId: string): Promise<any> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
-    // Empêcher la désactivation du SUPER_ADMIN
     if (user.role === UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Impossible de desactiver le Super Admin');
     }
@@ -435,21 +568,37 @@ export class AuthService {
     await this.userRepository.save(user);
 
     this.logger.log(`Statut modifie pour ${user.email}: ${user.is_active ? 'actif' : 'inactif'}`);
-    
-    return { 
-      success: true, 
-      message: `Utilisateur ${user.is_active ? 'active' : 'desactive'} avec succes` 
+
+    return {
+      success: true,
+      message: `Utilisateur ${user.is_active ? 'active' : 'desactive'} avec succes`
     };
   }
 
+  async deleteUser(userId: string): Promise<any> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouve');
+    }
+
+    if (user.role === UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Impossible de supprimer le Super Admin');
+    }
+
+    await this.userRepository.delete(userId);
+    this.logger.log(`Utilisateur supprime: ${user.email}`);
+
+    return { success: true, message: 'Utilisateur supprime avec succes' };
+  }
+
   // ============================================================
-  // CREATION DU SUPER ADMIN UNIQUE
+  // CREATION DU SUPER ADMIN
   // ============================================================
 
   async seedSuperAdmin(): Promise<void> {
     const adminEmail = process.env.SUPER_ADMIN_EMAIL || 'admin@ymad.mg';
-    const existingAdmin = await this.userRepository.findOne({ 
-      where: { email: adminEmail } 
+    const existingAdmin = await this.userRepository.findOne({
+      where: { email: adminEmail }
     });
 
     if (!existingAdmin) {
@@ -460,6 +609,19 @@ export class AuthService {
         last_name: process.env.SUPER_ADMIN_LAST_NAME || 'Y-MaD',
         role: UserRole.SUPER_ADMIN,
         is_active: true,
+        preferred_language: 'fr',
+        theme: 'light',
+        font_size: 'medium',
+        density: 'comfortable',
+        sidebar_collapsed: false,
+        animations_enabled: true,
+        timezone: 'Indian/Antananarivo',
+        email_notifications: true,
+        push_notifications: true,
+        job_alerts: true,
+        project_updates: true,
+        blog_updates: false,
+        system_updates: true,
       });
 
       await this.userRepository.save(admin);

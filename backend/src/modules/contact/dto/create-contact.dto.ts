@@ -1,53 +1,42 @@
 // backend/src/modules/contact/dto/create-contact.dto.ts
 
-import { IsString, IsEmail, IsOptional, MaxLength, MinLength, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsString, IsOptional, MinLength, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreateContactDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Le nom complet est requis' })
-  @MinLength(2, { message: 'Le nom doit contenir au moins 2 caractères' })
-  @MaxLength(255, { message: 'Le nom ne doit pas dépasser 255 caractères' })
-  name: string;  // Changé: full_name -> name
+  @MinLength(2, { message: 'Le nom doit contenir au moins 2 caracteres' })
+  @MaxLength(255, { message: 'Le nom ne doit pas depasser 255 caracteres' })
+  @Transform(({ value }) => value?.trim())
+  full_name?: string;
 
-  @IsEmail({}, { message: 'Veuillez fournir une adresse email valide' })
-  @IsNotEmpty({ message: 'L\'email est requis' })
-  @MaxLength(255, { message: 'L\'email ne doit pas dépasser 255 caractères' })
+  @IsOptional()
+  @IsString()
+  @MinLength(2, { message: 'Le nom doit contenir au moins 2 caracteres' })
+  @MaxLength(255, { message: 'Le nom ne doit pas depasser 255 caracteres' })
+  @Transform(({ value }) => value?.trim())
+  name?: string;
+
+  @IsEmail({}, { message: 'Email invalide' })
+  @MaxLength(255, { message: 'L\'email ne doit pas depasser 255 caracteres' })
+  @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(50, { message: 'Le téléphone ne doit pas dépasser 50 caractères' })
+  @MaxLength(50, { message: 'Le telephone ne doit pas depasser 50 caracteres' })
+  @Transform(({ value }) => value?.trim())
   phone?: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'Le sujet est requis' })
-  @MinLength(3, { message: 'Le sujet doit contenir au moins 3 caractères' })
-  @MaxLength(500, { message: 'Le sujet ne doit pas dépasser 500 caractères' })
+  @MinLength(3, { message: 'Le sujet doit contenir au moins 3 caracteres' })
+  @MaxLength(500, { message: 'Le sujet ne doit pas depasser 500 caracteres' })
+  @Transform(({ value }) => value?.trim())
   subject: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'Le message est requis' })
-  @MinLength(10, { message: 'Le message doit contenir au moins 10 caractères' })
-  @MaxLength(5000, { message: 'Le message ne doit pas dépasser 5000 caractères' })
+  @MinLength(10, { message: 'Le message doit contenir au moins 10 caracteres' })
+  @Transform(({ value }) => value?.trim())
   message: string;
-}
-
-export class UpdateContactStatusDto {
-  @IsString()
-  @IsNotEmpty({ message: 'Le statut est requis' })
-  status: string;
-}
-
-export class ContactQueryDto {
-  @IsOptional()
-  page?: number = 1;
-
-  @IsOptional()
-  limit?: number = 10;
-
-  @IsOptional()
-  status?: string;
-
-  @IsOptional()
-  search?: string;
 }

@@ -89,7 +89,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'staff';
+  const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin' ;
 
   useEffect(() => {
     const fetchProject = async () => {

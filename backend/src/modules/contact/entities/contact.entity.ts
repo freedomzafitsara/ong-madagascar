@@ -17,7 +17,7 @@ export class Contact {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'name', length: 255 })  // Changé: full_name -> name
+  @Column({ name: 'name', length: 255 })
   name: string;
 
   @Column({ length: 255 })
@@ -26,7 +26,7 @@ export class Contact {
   @Column({ length: 50, nullable: true })
   phone: string;
 
-  @Column({ length: 500 })
+  @Column({ length: 500, nullable: true })
   subject: string;
 
   @Column({ type: 'text' })
@@ -44,7 +44,8 @@ export class Contact {
   @Column({ name: 'replied_at', nullable: true })
   replied_at: Date;
 
-  @Column({ name: 'replied_by_id', nullable: true })  // Changé: replied_by -> replied_by_id
+  // ✅ CORRIGE : Utiliser le nom exact de la colonne en base
+  @Column({ name: 'replied_by_id', nullable: true })
   replied_by_id: string;
 
   @CreateDateColumn({ name: 'created_at' })

@@ -18,11 +18,11 @@ import {
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 
-// Import dynamique de l'éditeur Quill
+// Import dynamique de l'editeur Quill
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 import 'react-quill/dist/quill.snow.css';
 
-// Configuration de l'éditeur Quill
+// Configuration de l'editeur Quill
 const QUILL_MODULES = {
   toolbar: [
     [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
@@ -82,10 +82,10 @@ const REGIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'active', label: 'En cours', bg: 'bg-blue-100', text: 'text-blue-800' },
-  { value: 'completed', label: 'Terminé', bg: 'bg-gray-100', text: 'text-gray-600' },
-  { value: 'paused', label: 'En pause', bg: 'bg-gray-100', text: 'text-gray-600' },
-  { value: 'draft', label: 'Brouillon', bg: 'bg-gray-100', text: 'text-gray-500' }
+  { value: 'active', labelFr: 'En cours', labelMg: 'Mandeha', bg: 'bg-blue-100', text: 'text-blue-800' },
+  { value: 'completed', labelFr: 'Termine', labelMg: 'Vita', bg: 'bg-green-100', text: 'text-green-800' },
+  { value: 'paused', labelFr: 'En pause', labelMg: 'Mijanona', bg: 'bg-yellow-100', text: 'text-yellow-800' },
+  { value: 'draft', labelFr: 'Brouillon', labelMg: 'Volavola', bg: 'bg-gray-100', text: 'text-gray-600' }
 ];
 
 // ============================================================
@@ -99,6 +99,7 @@ interface ImageUploadProps {
   onUploadStart: () => void;
   onUploadError: (error: string) => void;
   entityId?: string;
+  getText: (fr: string, mg: string) => string;
 }
 
 function ImageUploadComponent({ 
@@ -107,7 +108,8 @@ function ImageUploadComponent({
   isUploading,
   onUploadStart,
   onUploadError,
-  entityId
+  entityId,
+  getText
 }: ImageUploadProps) {
   const { token } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -125,18 +127,18 @@ function ImageUploadComponent({
     onUploadError('');
 
     if (!token) {
-      onUploadError('Vous devez être connecté pour uploader une image');
+      onUploadError(getText('Vous devez etre connecte pour uploader une image', 'Mila miditra ianao vao afaka mampiditra sary'));
       return;
     }
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      onUploadError('Veuillez sélectionner une image (JPG, PNG, WEBP, GIF)');
+      onUploadError(getText('Veuillez selectionner une image (JPG, PNG, WEBP, GIF)', 'Fidio sary (JPG, PNG, WEBP, GIF)'));
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      onUploadError('L\'image ne doit pas dépasser 5 Mo');
+      onUploadError(getText('L\'image ne doit pas depasser 5 Mo', 'Tsy tokony hihoatra 5 Mo ny sary'));
       return;
     }
 
@@ -157,19 +159,21 @@ function ImageUploadComponent({
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      const imageUrl = response.data.url || `/api/upload/image/${response.data.id}`;
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+      const imageUrl = response.data.url || response.data.fileUrl || `${apiBaseUrl}/upload/file/${response.data.id}`;
       
       if (!imageUrl) {
-        throw new Error('URL de l\'image non reçue');
+        throw new Error('URL de l\'image non recue');
       }
       
       onUploadComplete(imageUrl);
-      toast.success('Image uploadée avec succès');
+      toast.success(getText('Image uploadee avec succes', 'Vita ny fampidirana sary'));
     } catch (error) {
       console.error('Upload error:', error);
-      onUploadError(error instanceof Error ? error.message : 'Erreur lors de l\'upload');
+      const errorMsg = error instanceof Error ? error.message : getText('Erreur lors de l\'upload', 'Nisy hadisoana tamin\'ny fampidirana');
+      onUploadError(errorMsg);
       setPreviewUrl(currentImageUrl || null);
-      toast.error('Erreur lors de l\'upload de l\'image');
+      toast.error(errorMsg);
     } finally {
       setLocalUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -179,7 +183,7 @@ function ImageUploadComponent({
   const handleRemove = () => {
     setPreviewUrl(null);
     onUploadComplete('');
-    toast.success('Image supprimée');
+    toast.success(getText('Image supprimee', 'Vita ny fanafoanana ny sary'));
   };
 
   return (
@@ -188,7 +192,7 @@ function ImageUploadComponent({
         <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
           <img 
             src={previewUrl} 
-            alt="Aperçu" 
+            alt={getText('Apercu', 'Topi-maso')} 
             className="w-full h-48 object-cover"
             onError={() => setPreviewUrl(null)}
           />
@@ -197,7 +201,7 @@ function ImageUploadComponent({
               type="button"
               onClick={() => window.open(previewUrl, '_blank')}
               className="p-2 bg-white/90 text-gray-700 rounded-lg hover:bg-white transition shadow-md"
-              title="Voir l'image"
+              title={getText('Voir l\'image', 'Jereo ny sary')}
             >
               <Eye className="w-4 h-4" />
             </button>
@@ -205,7 +209,7 @@ function ImageUploadComponent({
               onClick={handleRemove}
               className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-md"
               type="button"
-              title="Supprimer l'image"
+              title={getText('Supprimer l\'image', 'Fafao ny sary')}
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -215,8 +219,8 @@ function ImageUploadComponent({
         <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition bg-white">
           <div className="flex flex-col items-center justify-center pt-5 pb-6">
             <Upload className="w-10 h-10 text-gray-400 mb-3" />
-            <p className="text-sm text-gray-500 font-medium">Cliquez pour uploader une image</p>
-            <p className="text-xs text-gray-400 mt-1">JPG, PNG, WEBP, GIF (max 5 Mo)</p>
+            <p className="text-sm text-gray-500 font-medium">{getText('Cliquez pour uploader une image', 'Tsindrio mba hampiditra sary')}</p>
+            <p className="text-xs text-gray-400 mt-1">{getText('JPG, PNG, WEBP, GIF (max 5 Mo)', 'JPG, PNG, WEBP, GIF (farany 5 Mo)')}</p>
           </div>
           <input
             ref={fileInputRef}
@@ -231,7 +235,7 @@ function ImageUploadComponent({
       {(localUploading || isUploading) && (
         <div className="flex items-center gap-2 text-sm text-blue-800 bg-blue-50 p-3 rounded-lg">
           <Loader2 className="w-4 h-4 animate-spin" />
-          Upload en cours...
+          {getText('Upload en cours...', 'Fampidirana...')}
         </div>
       )}
     </div>
@@ -256,7 +260,10 @@ export default function EditProjectPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [showPreviewFr, setShowPreviewFr] = useState(false);
   const [showPreviewMg, setShowPreviewMg] = useState(false);
-  const [formData, setFormData] = useState<Partial<ProjectFormData>>({
+  
+  // ✅ CORRECTION : Definir le type correctement
+  const [formData, setFormData] = useState<ProjectFormData>({
+    id: '',
     title_fr: '',
     title_mg: '',
     description_fr: '',
@@ -281,19 +288,19 @@ export default function EditProjectPage() {
 
   const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
 
+  const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin';
+
   if (!isAuthenticated) {
     router.push('/login');
     return null;
   }
-
-  const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin';
 
   if (!hasEditRights) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-800">{getText('Accès non autorisé', 'Tsy manana alalana')}</h1>
+          <h1 className="text-2xl font-bold text-gray-800">{getText('Acces non autorise', 'Tsy manana alalana')}</h1>
           <p className="text-gray-500 mt-2">{getText('Vous n\'avez pas les droits pour modifier ce projet.', 'Tsy manana alalana hanova ity tetikasa ity ianao.')}</p>
           <Link href="/dashboard/projects" className="mt-4 inline-flex items-center gap-2 text-blue-800 hover:underline">
             {getText('Retour aux projets', 'Hiverina any amin\'ny tetikasa')}
@@ -312,8 +319,9 @@ export default function EditProjectPage() {
       
       if (response.data && isMounted.current) {
         const data = response.data;
+        // ✅ CORRECTION : Mettre a jour toutes les proprietes
         setFormData({
-          id: data.id,
+          id: data.id || '',
           title_fr: data.title_fr || '',
           title_mg: data.title_mg || '',
           description_fr: data.description_fr || '',
@@ -337,8 +345,8 @@ export default function EditProjectPage() {
       console.error('Erreur chargement:', error);
       if (isMounted.current) {
         if (error.response?.status === 404) {
-          setError(getText('Projet non trouvé', 'Tsy hita ny tetikasa'));
-          toast.error(getText('Projet non trouvé', 'Tsy hita ny tetikasa'));
+          setError(getText('Projet non trouve', 'Tsy hita ny tetikasa'));
+          toast.error(getText('Projet non trouve', 'Tsy hita ny tetikasa'));
         } else {
           setError(getText('Erreur lors du chargement du projet', 'Nisy hadisoana tamin\'ny fampidirana ny tetikasa'));
           toast.error(getText('Erreur de chargement', 'Nisy hadisoana'));
@@ -412,16 +420,24 @@ export default function EditProjectPage() {
 
       await api.patch(`/projects/${projectId}`, projectData);
       
-      toast.success(getText('Projet modifié avec succès !', 'Vita ny fanovana ny tetikasa !'));
+      toast.success(getText('Projet modifie avec succes !', 'Vita ny fanovana ny tetikasa !'));
       router.push(`/dashboard/projects/${projectId}`);
     } catch (error: any) {
       console.error('Erreur:', error);
-      const errorMessage = error.response?.data?.message || getText('Erreur lors de la mise à jour', 'Nisy hadisoana tamin\'ny fanovana');
+      const errorMessage = error.response?.data?.message || getText('Erreur lors de la mise a jour', 'Nisy hadisoana tamin\'ny fanovana');
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setSaving(false);
     }
+  };
+
+  // ✅ Fonction pour mettre a jour un champ specifique
+  const updateField = <K extends keyof ProjectFormData>(
+    field: K, 
+    value: ProjectFormData[K]
+  ) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   if (loading) {
@@ -450,7 +466,7 @@ export default function EditProjectPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-800">{getText('Modifier le projet', 'Hanova ny tetikasa')}</h1>
-              <p className="text-gray-500 text-sm">{getText('Mettez à jour les informations du projet', 'Havaozy ny mombamomba ny tetikasa')}</p>
+              <p className="text-gray-500 text-sm">{getText('Mettez a jour les informations du projet', 'Havaozy ny mombamomba ny tetikasa')}</p>
             </div>
           </div>
         </div>
@@ -483,9 +499,10 @@ export default function EditProjectPage() {
             onUploadStart={handleImageUploadStart}
             onUploadError={handleImageUploadError}
             entityId={projectId}
+            getText={getText}
           />
           <p className="text-xs text-gray-400 mt-2">
-            {getText('Une image de qualité améliore la visibilité de votre projet', 'Ny sary tsara dia manatsara ny fahitana ny tetikasanao')}
+            {getText('Une image de qualite ameliore la visibilite de votre projet', 'Ny sary tsara dia manatsara ny fahitana ny tetikasanao')}
           </p>
         </div>
 
@@ -495,18 +512,18 @@ export default function EditProjectPage() {
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center">
               <FolderOpen className="w-3.5 h-3.5 text-gray-600" />
             </div>
-            {getText('Informations générales', 'Fampahalalana ankapobeny')}
+            {getText('Informations generales', 'Fampahalalana ankapobeny')}
           </h2>
           <div className="grid grid-cols-1 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {getText('Titre (français)', 'Lohateny (frantsay)')} <span className="text-red-500">*</span>
+                {getText('Titre (francais)', 'Lohateny (frantsay)')} <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={formData.title_fr}
-                onChange={(e) => setFormData({ ...formData, title_fr: e.target.value })}
+                onChange={(e) => updateField('title_fr', e.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition"
                 placeholder={getText('Titre du projet', 'Lohatenin\'ny tetikasa')}
               />
@@ -518,7 +535,7 @@ export default function EditProjectPage() {
               <input
                 type="text"
                 value={formData.title_mg}
-                onChange={(e) => setFormData({ ...formData, title_mg: e.target.value })}
+                onChange={(e) => updateField('title_mg', e.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition"
                 placeholder="Lohatenin'ny tetikasa"
               />
@@ -534,7 +551,7 @@ export default function EditProjectPage() {
                 <Code className="w-3.5 h-3.5 text-gray-600" />
               </div>
               <h2 className="text-lg font-semibold text-gray-800">
-                {getText('Description (français)', 'Famaritana (frantsay)')} <span className="text-red-500">*</span>
+                {getText('Description (francais)', 'Famaritana (frantsay)')} <span className="text-red-500">*</span>
               </h2>
             </div>
             <button
@@ -543,7 +560,7 @@ export default function EditProjectPage() {
               className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-800 transition"
             >
               {showPreviewFr ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              {showPreviewFr ? getText('Modifier', 'Hanova') : getText('Aperçu', 'Topi-maso')}
+              {showPreviewFr ? getText('Modifier', 'Hanova') : getText('Apercu', 'Topi-maso')}
             </button>
           </div>
           
@@ -556,10 +573,10 @@ export default function EditProjectPage() {
               <ReactQuill
                 theme="snow"
                 value={formData.description_fr}
-                onChange={(value) => setFormData({ ...formData, description_fr: value })}
+                onChange={(value) => updateField('description_fr', value || '')}
                 modules={QUILL_MODULES}
                 formats={QUILL_FORMATS}
-                placeholder={getText('Description détaillée du projet...', 'Famaritana feno ny tetikasa...')}
+                placeholder={getText('Description detaillee du projet...', 'Famaritana feno ny tetikasa...')}
                 className="bg-white"
               />
             </div>
@@ -567,7 +584,7 @@ export default function EditProjectPage() {
           
           <div className="mt-2 text-right">
             <span className="text-xs text-gray-400">
-              {formData.description_fr?.length || 0} caractères
+              {formData.description_fr?.length || 0} caracteres
             </span>
           </div>
         </div>
@@ -589,7 +606,7 @@ export default function EditProjectPage() {
               className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-800 transition"
             >
               {showPreviewMg ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              {showPreviewMg ? getText('Modifier', 'Hanova') : getText('Aperçu', 'Topi-maso')}
+              {showPreviewMg ? getText('Modifier', 'Hanova') : getText('Apercu', 'Topi-maso')}
             </button>
           </div>
           
@@ -602,7 +619,7 @@ export default function EditProjectPage() {
               <ReactQuill
                 theme="snow"
                 value={formData.description_mg}
-                onChange={(value) => setFormData({ ...formData, description_mg: value })}
+                onChange={(value) => updateField('description_mg', value || '')}
                 modules={QUILL_MODULES}
                 formats={QUILL_FORMATS}
                 placeholder="Famaritana ny tetikasa..."
@@ -613,7 +630,7 @@ export default function EditProjectPage() {
           
           <div className="mt-2 text-right">
             <span className="text-xs text-gray-400">
-              {formData.description_mg?.length || 0} caractères
+              {formData.description_mg?.length || 0} caracteres
             </span>
           </div>
         </div>
@@ -629,22 +646,22 @@ export default function EditProjectPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {getText('Région', 'Faritra')} <span className="text-red-500">*</span>
+                {getText('Region', 'Faritra')} <span className="text-red-500">*</span>
               </label>
               <select
                 value={formData.region}
-                onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                onChange={(e) => updateField('region', e.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none bg-white"
               >
                 {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Lieu précis', 'Toerana marina')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Lieu precis', 'Toerana marina')}</label>
               <input
                 type="text"
                 value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                onChange={(e) => updateField('location', e.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition"
                 placeholder={getText('Commune, fokontany', 'Kaominina, fokontany')}
               />
@@ -675,11 +692,11 @@ export default function EditProjectPage() {
                   name="status"
                   value={option.value}
                   checked={formData.status === option.value}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                  onChange={(e) => updateField('status', e.target.value as any)}
                   className="w-4 h-4 text-blue-800 focus:ring-blue-800"
                 />
                 <div className={`flex items-center gap-2 px-2 py-0.5 rounded-full text-xs font-medium ${option.bg} ${option.text}`}>
-                  {option.label}
+                  {language === 'fr' ? option.labelFr : option.labelMg}
                 </div>
               </label>
             ))}
@@ -704,13 +721,13 @@ export default function EditProjectPage() {
                   min="0"
                   step="1000"
                   value={formData.budget}
-                  onChange={(e) => setFormData({ ...formData, budget: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => updateField('budget', parseInt(e.target.value) || 0)}
                   className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Dépenses (Ar)', 'Fandaniana (Ar)')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Depenses (Ar)', 'Fandaniana (Ar)')}</label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -718,46 +735,46 @@ export default function EditProjectPage() {
                   min="0"
                   step="1000"
                   value={formData.spent}
-                  onChange={(e) => setFormData({ ...formData, spent: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => updateField('spent', parseInt(e.target.value) || 0)}
                   className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Bénéficiaires', 'Mpandray anjara')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Beneficiaires', 'Mpandray anjara')}</label>
               <div className="relative">
                 <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="number"
                   min="0"
                   value={formData.beneficiaries_count}
-                  onChange={(e) => setFormData({ ...formData, beneficiaries_count: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => updateField('beneficiaries_count', parseInt(e.target.value) || 0)}
                   className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Jeunes impactés', 'Tanora voatahy')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Jeunes impactes', 'Tanora voatahy')}</label>
               <div className="relative">
                 <Target className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="number"
                   min="0"
                   value={formData.youth_impact}
-                  onChange={(e) => setFormData({ ...formData, youth_impact: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => updateField('youth_impact', parseInt(e.target.value) || 0)}
                   className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none"
                 />
               </div>
             </div>
             <div className="lg:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Emplois créés', 'Asa noforonina')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Emplois crees', 'Asa noforonina')}</label>
               <div className="relative">
                 <TrendingUp className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="number"
                   min="0"
                   value={formData.jobs_created}
-                  onChange={(e) => setFormData({ ...formData, jobs_created: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => updateField('jobs_created', parseInt(e.target.value) || 0)}
                   className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none"
                 />
               </div>
@@ -783,7 +800,7 @@ export default function EditProjectPage() {
               min="0"
               max="100"
               value={formData.progress}
-              onChange={(e) => setFormData({ ...formData, progress: parseInt(e.target.value) })}
+              onChange={(e) => updateField('progress', parseInt(e.target.value))}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-800"
             />
             <div className="flex justify-between mt-2 text-xs text-gray-400">
@@ -798,17 +815,17 @@ export default function EditProjectPage() {
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center">
               <Calendar className="w-3.5 h-3.5 text-gray-600" />
             </div>
-            {getText('Période', 'Fotoana')}
+            {getText('Periode', 'Fotoana')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Date de début', 'Daty fanombohana')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{getText('Date de debut', 'Daty fanombohana')}</label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="date"
                   value={formData.start_date}
-                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                  onChange={(e) => updateField('start_date', e.target.value)}
                   className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none"
                 />
               </div>
@@ -820,7 +837,7 @@ export default function EditProjectPage() {
                 <input
                   type="date"
                   value={formData.end_date}
-                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                  onChange={(e) => updateField('end_date', e.target.value)}
                   className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none"
                 />
               </div>
@@ -834,7 +851,7 @@ export default function EditProjectPage() {
             <input
               type="checkbox"
               checked={formData.is_featured}
-              onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })}
+              onChange={(e) => updateField('is_featured', e.target.checked)}
               className="w-5 h-5 text-blue-800 rounded focus:ring-blue-800"
             />
             <div className="flex items-center gap-2">
@@ -876,7 +893,7 @@ export default function EditProjectPage() {
 
       <div className="mt-6 text-center text-xs text-gray-400">
         {getText(
-          'Les données sont stockées dans PostgreSQL via l\'API backend - Connexion sécurisée JWT',
+          'Les donnees sont stockees dans PostgreSQL via l\'API backend - Connexion securisee JWT',
           'Ny angona dia voatahiry ao PostgreSQL amin\'ny alalan\'ny API backend - Fifandraisana voaaro JWT'
         )}
       </div>
