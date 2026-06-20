@@ -2,10 +2,6 @@
 
 Plateforme de gestion des offres d'emploi et de gestion associative pour Y-MaD Madagascar.
 
-## 🌟 À propos
-
-**Y-MaD (Young for Madagascar Development)** est une association dédiée à la jeunesse et au développement durable à Madagascar. Cette plateforme web permet de gérer les offres d'emploi, les projets associatifs, le blog et les candidatures.
-
 ## 🚀 Technologies
 
 | Catégorie | Technologies |
@@ -25,8 +21,8 @@ Plateforme de gestion des offres d'emploi et de gestion associative pour Y-MaD M
 - ✅ Gestion des sessions
 - ✅ Protection des routes
 
-### 💼 Module Offres d'Emploi
-- ✅ CRUD complet des offres
+### 💼 Module Emploi
+- ✅ Offres d'emploi (CRUD complet)
 - ✅ Publication / Dépublier une offre
 - ✅ Types de contrats (CDI, CDD, Stage, Freelance, Alternance, Temporaire)
 - ✅ Candidatures avec CV et lettre de motivation
@@ -76,7 +72,6 @@ Plateforme de gestion des offres d'emploi et de gestion associative pour Y-MaD M
 |------|-------|--------------|
 | Super Admin | admin@ymad.mg | admin123 |
 | Admin | admin@ymad.org | admin123 |
-| Candidat | (à créer) | (à créer) |
 
 ## 📁 Structure du Projet
 
@@ -216,12 +211,12 @@ psql -U postgres -d ymad_db < database/database-schema.sql
 ## 🌍 À propos de Y-MaD
 
 **Y-MaD (Young for Madagascar Development)** est une association qui œuvre pour :
-- La jeunesse malgache
-- Le développement durable
-- L'insertion professionnelle
-- La formation et l'éducation
-- La protection de l'environnement
-- L'innovation sociale
+- 🇲🇬 La jeunesse malgache
+- 🌱 Le développement durable
+- 💼 L'insertion professionnelle
+- 📚 La formation et l'éducation
+- 🌿 La protection de l'environnement
+- 💡 L'innovation sociale
 
 ## 📄 Licence
 
@@ -237,4 +232,4 @@ MIT
 - **Site**: https://ymad.mg (à venir)
 
 ---
-Dernière mise à jour: 20/06/2026 23:52:15
+Dernière mise à jour: 20/06/2026 23:54:29
