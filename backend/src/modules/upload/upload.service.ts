@@ -16,7 +16,6 @@ export class UploadService {
     @InjectRepository(UploadedFile)
     private fileRepository: Repository<UploadedFile>,
   ) {
-    // Créer le dossier uploads s'il n'existe pas
     if (!fs.existsSync(this.uploadsPath)) {
       fs.mkdirSync(this.uploadsPath, { recursive: true });
     }
@@ -43,7 +42,6 @@ export class UploadService {
     }
 
     try {
-      // Générer un nom de fichier unique
       const timestamp = Date.now();
       const uniqueId = Math.random().toString(36).substring(2, 8);
       const ext = this.getExtensionFromMimeType(mimeType);
@@ -51,19 +49,15 @@ export class UploadService {
       const relativePath = `uploads/${entityType}/${finalFileName}`;
       const fullPath = path.join(this.uploadsPath, entityType, finalFileName);
 
-      // Créer le dossier du type d'entité
       const entityDir = path.join(this.uploadsPath, entityType);
       if (!fs.existsSync(entityDir)) {
         fs.mkdirSync(entityDir, { recursive: true });
       }
 
-      // Sauvegarder le fichier sur le disque
       fs.writeFileSync(fullPath, file.buffer);
 
-      // Créer l'URL du fichier
       const fileUrl = `/${relativePath}`;
 
-      // Sauvegarder dans uploaded_files
       const fileEntity = this.fileRepository.create({
         url: fileUrl,
         filePath: relativePath,
@@ -131,7 +125,6 @@ export class UploadService {
   async deleteFile(id: string): Promise<void> {
     const file = await this.getFileById(id);
     
-    // Supprimer le fichier physique
     try {
       const fullPath = path.join(process.cwd(), file.filePath);
       if (fs.existsSync(fullPath)) {
@@ -142,7 +135,6 @@ export class UploadService {
       this.logger.warn(`Impossible de supprimer le fichier physique: ${error.message}`);
     }
     
-    // Supprimer l'entrée en base
     await this.fileRepository.remove(file);
     this.logger.log(`Fichier supprime: ${id}`);
   }

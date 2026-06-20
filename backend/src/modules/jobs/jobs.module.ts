@@ -12,10 +12,10 @@ import { UploadModule } from '../upload/upload.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([JobOffer, JobApplication, User]),
-    UploadModule,  //  Importation du UploadModule
+    UploadModule, 
   ],
   controllers: [JobsController],
   providers: [JobsService],
   exports: [JobsService],
 })
-export class JobsModule {}
+export class JobsModule {} 

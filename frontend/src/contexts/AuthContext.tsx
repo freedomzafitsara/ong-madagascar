@@ -284,7 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json();
       
-      // ✅ Mettre à jour l'avatar
+      //  Mettre à jour l'avatar
       if (user) {
         const newUser: User = {
           ...user,

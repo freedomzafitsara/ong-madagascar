@@ -1,6 +1,10 @@
 // frontend/src/services/job.service.ts
 
-import api from './api';
+import api from '@/lib/api';
+
+// ============================================================
+// ENUMS
+// ============================================================
 
 export enum JobStatus {
   DRAFT = 'draft',
@@ -27,16 +31,24 @@ export enum ApplicationStatus {
   REJECTED = 'rejected'
 }
 
+// ============================================================
+// INTERFACES
+// ============================================================
+
 export interface JobOffer {
   id: string;
   title_fr: string;
   title_mg?: string;
   description_fr: string;
   description_mg?: string;
-  company?: string;
-  location?: string;
+  company: string;
+  company_logo?: string;
+  location: string;
   contract_type: ContractType;
-  deadline?: string;
+  salary_min?: number;
+  salary_max?: number;
+  currency?: string;
+  deadline: string;
   is_published: boolean;
   image_url?: string;
   status: JobStatus;
@@ -45,6 +57,14 @@ export interface JobOffer {
   created_at: string;
   updated_at: string;
   main_image_id?: string;
+  experience_level: string;
+  education_level: string;
+  requirements: string[];
+  benefits: string[];
+  skills: string[];
+  contact_email?: string;
+  contact_phone?: string;
+  website?: string;
 }
 
 export interface JobApplication {
@@ -64,7 +84,7 @@ export interface JobApplication {
   photo_url?: string;
   linkedin_url?: string;
   portfolio_url?: string;
-  status: string;
+  status: ApplicationStatus | string;
   notes?: string;
   created_at: string;
   jobOffer?: JobOffer;
@@ -114,33 +134,101 @@ export interface JobOfferStats {
   pending_applications: number;
 }
 
+// ============================================================
+// SERVICE
+// ============================================================
+
 export const jobService = {
-  // ==================== ROUTES PUBLIQUES ====================
   
-  async getPublishedOffers(params?: { page?: number; limit?: number; contract_type?: ContractType; search?: string }): Promise<PaginatedResponse<JobOffer>> {
-    const response = await api.get("/jobs/offers/public", { params });
-    return response.data;
+  // ============================================================
+  // ROUTES PUBLIQUES - Accessibles sans authentification
+  // ============================================================
+  
+  async getPublishedOffers(params?: { 
+    page?: number; 
+    limit?: number; 
+    contract_type?: ContractType; 
+    search?: string;
+    location?: string;
+    experience_level?: string;
+  }): Promise<PaginatedResponse<JobOffer>> {
+    try {
+      const response = await api.get('/jobs/offers/public', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Erreur chargement offres publiees:', error);
+      throw error;
+    }
   },
 
-  async getFeaturedOffers(): Promise<JobOffer[]> {
-    const response = await api.get("/jobs/offers/featured");
-    return response.data;
+  async getFeaturedOffers(limit: number = 6): Promise<JobOffer[]> {
+    try {
+      const response = await api.get('/jobs/offers/featured', { params: { limit } });
+      return response.data;
+    } catch (error) {
+      console.error('Erreur chargement offres en vedette:', error);
+      throw error;
+    }
   },
 
+  // Route publique pour les details d'une offre
   async getOfferById(id: string): Promise<JobOffer> {
-    const response = await api.get(`/jobs/offers/${id}`);
-    return response.data;
+    try {
+      const response = await api.get(`/jobs/offers/public/${id}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Erreur chargement offre:', error);
+      
+      // Si erreur 403 ou 404, essayer de recuperer depuis la liste
+      if (error.response?.status === 403 || error.response?.status === 404) {
+        try {
+          const offers = await this.getPublishedOffers({ limit: 100 });
+          const found = offers.data.find((item: JobOffer) => item.id === id);
+          if (found) {
+            return found;
+          }
+        } catch (listError) {
+          console.error('Erreur recherche dans la liste:', listError);
+        }
+      }
+      
+      throw error;
+    }
   },
 
-  // ==================== ROUTES ADMIN ====================
+  // ✅ METHODE AJOUTEE pour recuperer depuis la liste publique
+  async getOfferFromPublicList(id: string): Promise<JobOffer | null> {
+    try {
+      const response = await api.get('/jobs/offers/public', { 
+        params: { limit: 100 } 
+      });
+      const offer = response.data.data.find((item: JobOffer) => item.id === id);
+      return offer || null;
+    } catch (error) {
+      console.error('Erreur recherche offre dans liste publique:', error);
+      return null;
+    }
+  },
+
+  // ============================================================
+  // ROUTES PROTEGEES - Authentification requise
+  // ============================================================
   
-  async getAllOffers(params?: { page?: number; limit?: number; status?: string; contract_type?: string; search?: string }): Promise<PaginatedResponse<JobOffer>> {
-    const response = await api.get("/jobs/offers", { params });
+  async getAllOffers(params?: { 
+    page?: number; 
+    limit?: number; 
+    status?: string; 
+    contract_type?: string; 
+    search?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<PaginatedResponse<JobOffer>> {
+    const response = await api.get('/jobs/offers', { params });
     return response.data;
   },
 
   async createOffer(data: Partial<JobOffer>): Promise<JobOffer> {
-    const response = await api.post("/jobs/offers", data);
+    const response = await api.post('/jobs/offers', data);
     return response.data;
   },
 
@@ -159,10 +247,12 @@ export const jobService = {
     return response.data;
   },
 
-  // ==================== STATISTIQUES ====================
+  // ============================================================
+  // STATISTIQUES
+  // ============================================================
   
   async getJobStats(): Promise<JobOfferStats> {
-    const response = await api.get("/jobs/offers/stats");
+    const response = await api.get('/jobs/offers/stats');
     const data = response.data;
     return {
       total: data.total || 0,
@@ -176,20 +266,41 @@ export const jobService = {
     };
   },
 
-  // ==================== CANDIDATURES ====================
+  // ============================================================
+  // CANDIDATURES
+  // ============================================================
   
   async apply(data: CreateJobApplicationDto): Promise<JobApplication> {
-    const response = await api.post("/jobs/apply", data);
+    const response = await api.post('/jobs/applications', data);
     return response.data;
   },
 
-  async getAllApplications(params?: { page?: number; limit?: number; status?: string; job_offer_id?: string }): Promise<PaginatedResponse<JobApplication>> {
-    const response = await api.get("/jobs/applications", { params });
+  async getAllApplications(params?: { 
+    page?: number; 
+    limit?: number; 
+    status?: string; 
+    job_offer_id?: string;
+    search?: string;
+  }): Promise<PaginatedResponse<JobApplication>> {
+    const response = await api.get('/jobs/applications', { params });
     return response.data;
   },
 
-  async getApplicationsByJob(jobId: string, params?: { page?: number; limit?: number; status?: string }): Promise<PaginatedResponse<JobApplication>> {
+  async getApplicationsByJob(jobId: string, params?: { 
+    page?: number; 
+    limit?: number; 
+    status?: string;
+  }): Promise<PaginatedResponse<JobApplication>> {
     const response = await api.get(`/jobs/offers/${jobId}/applications`, { params });
+    return response.data;
+  },
+
+  async getMyApplications(params?: { 
+    page?: number; 
+    limit?: number; 
+    status?: string;
+  }): Promise<PaginatedResponse<JobApplication>> {
+    const response = await api.get('/jobs/applications/my', { params });
     return response.data;
   },
 
@@ -204,16 +315,74 @@ export const jobService = {
   },
 
   async getApplicationStats(): Promise<any> {
-    const response = await api.get("/jobs/applications/stats");
+    const response = await api.get('/jobs/applications/stats');
     return response.data;
   },
 
-  // ==================== EXPORT ====================
+  // ============================================================
+  // FAVORIS
+  // ============================================================
+  
+  async saveJob(jobId: string): Promise<any> {
+    const response = await api.post(`/jobs/saved/${jobId}`);
+    return response.data;
+  },
+
+  async unsaveJob(jobId: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.delete(`/jobs/saved/${jobId}`);
+    return response.data;
+  },
+
+  async getSavedJobs(params?: { page?: number; limit?: number }): Promise<PaginatedResponse<any>> {
+    const response = await api.get('/jobs/saved', { params });
+    return response.data;
+  },
+
+  async checkIfSaved(jobId: string): Promise<boolean> {
+    try {
+      const response = await api.get(`/jobs/saved/${jobId}`);
+      return response.data.saved || false;
+    } catch (error) {
+      return false;
+    }
+  },
+
+  // ============================================================
+  // EXPORT
+  // ============================================================
   
   async exportApplications(jobId?: string): Promise<string> {
-    const response = await api.get("/jobs/applications/export", { params: { jobId } });
+    const response = await api.get('/jobs/applications/export', { 
+      params: { jobId },
+      responseType: 'blob'
+    });
     return response.data;
-  }
+  },
+
+  async exportOffers(params?: { status?: string; contract_type?: string }): Promise<string> {
+    const response = await api.get('/jobs/offers/export', { 
+      params,
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  // ============================================================
+  // UPLOAD DE FICHIERS
+  // ============================================================
+  
+  async uploadFile(file: File, type: 'cv' | 'cover_letter' | 'photo' | 'diploma' | 'attestation'): Promise<{ url: string; filename: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    
+    const response = await api.post('/jobs/uploads', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
 };
 
 export default jobService;

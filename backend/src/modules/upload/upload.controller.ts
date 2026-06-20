@@ -20,6 +20,7 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { UploadService } from './upload.service';
 import { UploadImageDto } from './dto/upload-image.dto';
 import { memoryStorage } from 'multer';
@@ -31,9 +32,9 @@ import { UserRole } from '../auth/entities/user.entity';
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
+  // ✅ RENDRE L'UPLOAD PUBLIC
+  @Public()
   @Post('single')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('file', {
     storage: memoryStorage(),
     limits: { fileSize: 100 * 1024 * 1024 },
@@ -80,6 +81,7 @@ export class UploadController {
     };
   }
 
+  @Public()
   @Get('file/:id')
   async serveFile(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const file = await this.uploadService.getFileById(id);
@@ -99,18 +101,7 @@ export class UploadController {
     return res.sendFile(fullPath);
   }
 
-  private getMimeTypeFromExtension(ext?: string): string {
-    const mimeMap: Record<string, string> = {
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'webp': 'image/webp',
-      'gif': 'image/gif',
-      'pdf': 'application/pdf',
-    };
-    return mimeMap[ext?.toLowerCase() || ''] || 'application/octet-stream';
-  }
-
+  @Public()
   @Get()
   async getFiles(
     @Query('type') type: string,
@@ -140,9 +131,21 @@ export class UploadController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   async deleteFile(@Param('id', ParseUUIDPipe) id: string) {
     await this.uploadService.deleteFile(id);
     return { success: true, message: 'Fichier supprime avec succes' };
+  }
+
+  private getMimeTypeFromExtension(ext?: string): string {
+    const mimeMap: Record<string, string> = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'webp': 'image/webp',
+      'gif': 'image/gif',
+      'pdf': 'application/pdf',
+    };
+    return mimeMap[ext?.toLowerCase() || ''] || 'application/octet-stream';
   }
 }

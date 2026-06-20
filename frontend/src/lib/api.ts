@@ -1,9 +1,20 @@
 // frontend/src/lib/api.ts
 
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { 
+  AxiosInstance, 
+  AxiosError, 
+  InternalAxiosRequestConfig, 
+  AxiosResponse 
+} from 'axios';
+import toast from 'react-hot-toast';
+
+// ============================================================
+// CONFIGURATION
+// ============================================================
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
+// Création de l'instance axios
 export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -11,56 +22,332 @@ export const api: AxiosInstance = axios.create({
     'Accept': 'application/json',
   },
   timeout: 30000,
+  withCredentials: false,
 });
 
-// Intercepteur de requete
+// ============================================================
+// TYPES
+// ============================================================
+
+interface FailedQueueItem {
+  resolve: (value?: any) => void;
+  reject: (reason?: any) => void;
+  config: InternalAxiosRequestConfig;
+}
+
+// ============================================================
+// VARIABLES DE CONTROLE POUR REFRESH TOKEN
+// ============================================================
+
+let isRefreshing: boolean = false;
+let failedQueue: FailedQueueItem[] = [];
+
+// ============================================================
+// FILE D'ATTENTE POUR LE REFRESH TOKEN
+// ============================================================
+
+const processQueue = (error: any = null): void => {
+  failedQueue.forEach((promise) => {
+    if (error) {
+      promise.reject(error);
+    } else {
+      promise.resolve();
+    }
+  });
+  failedQueue = [];
+};
+
+// ============================================================
+// FONCTIONS UTILITAIRES POUR LES TOKENS
+// ============================================================
+
+const getToken = (): string | null => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('access_token') || localStorage.getItem('token');
+  }
+  return null;
+};
+
+const setToken = (token: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('access_token', token);
+    localStorage.setItem('token', token);
+  }
+};
+
+const setRefreshToken = (token: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('refresh_token', token);
+  }
+};
+
+const clearTokens = (): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+  }
+};
+
+const isPublicPage = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname;
+  return (
+    path.includes('/login') ||
+    path === '/' ||
+    path.includes('/jobs') ||
+    path.includes('/offers') ||
+    path.includes('/public') ||
+    path.includes('/register') ||
+    path.includes('/forgot-password')
+  );
+};
+
+// ============================================================
+// INTERCEPTEUR DE REQUETE
+// ============================================================
+
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-      if (token && config.headers) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
+    const token = getToken();
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Debug en développement
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+    }
+    
     return config;
   },
   (error: AxiosError) => {
-    console.error('Erreur de requete:', error.message);
+    console.error('[API] Erreur requête:', error.message);
     return Promise.reject(error);
   }
 );
 
-// Intercepteur de reponse
+// ============================================================
+// INTERCEPTEUR DE REPONSE
+// ============================================================
+
 api.interceptors.response.use(
-  (response: AxiosResponse) => response,
-  (error: AxiosError) => {
-    if (error.response) {
-      const status = error.response.status;
-      const data = error.response.data as any;
+  (response: AxiosResponse) => {
+    // Debug en développement
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[API] ${response.status} ${response.config.url}`);
+    }
+    return response;
+  },
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    
+    // Erreur réseau
+    if (!error.response) {
+      console.error('[API] Erreur réseau:', error.message);
+      if (!isPublicPage()) {
+        toast.error('Impossible de contacter le serveur. Vérifiez votre connexion.');
+      }
+      return Promise.reject(error);
+    }
+    
+    const status = error.response.status;
+    const url = originalRequest?.url || 'inconnu';
+    const data = error.response?.data as any;
+    const message = data?.message || data?.error || error.message;
+
+    // ============================================================
+    // 401 - Non authentifié
+    // ============================================================
+    if (status === 401) {
+      console.warn(`[API] 401 Non autorisé: ${url}`);
       
-      if (status === 401) {
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          window.location.href = '/login';
-        }
+      // Éviter les boucles infinies
+      if (originalRequest?._retry) {
+        console.warn('[API] Tentative de refresh déjà en cours, abandon.');
+        return Promise.reject(error);
       }
       
-      const errorMessage = data?.message || data?.error || `Erreur ${status}`;
-      return Promise.reject(new Error(errorMessage));
+      // Ne pas tenter de refresh sur les routes d'auth
+      if (originalRequest?.url?.includes('/auth/refresh') || 
+          originalRequest?.url?.includes('/auth/login') ||
+          originalRequest?.url?.includes('/auth/register')) {
+        clearTokens();
+        if (!isPublicPage()) {
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+      
+      // Si un refresh est déjà en cours, mettre en file d'attente
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ 
+            resolve, 
+            reject, 
+            config: originalRequest 
+          });
+        }).then(() => {
+          return api(originalRequest);
+        });
+      }
+      
+      originalRequest._retry = true;
+      isRefreshing = true;
+      
+      try {
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (!refreshToken) {
+          throw new Error('Aucun refresh token disponible');
+        }
+        
+        console.log('[API] Tentative de refresh du token...');
+        
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+          refresh_token: refreshToken,
+        });
+        
+        const { access_token, refresh_token } = response.data;
+        
+        if (access_token) {
+          setToken(access_token);
+          if (refresh_token) {
+            setRefreshToken(refresh_token);
+          }
+          
+          console.log('[API] Token rafraîchi avec succès');
+          
+          // Mettre à jour le token dans la requête originale
+          if (originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          }
+          
+          // Traiter la file d'attente
+          processQueue(null);
+          
+          // Réexécuter la requête originale
+          return api(originalRequest);
+        } else {
+          throw new Error('Token non reçu lors du refresh');
+        }
+        
+      } catch (refreshError) {
+        console.error('[API] Échec du refresh token:', refreshError);
+        
+        // Nettoyer les tokens
+        clearTokens();
+        
+        // Traiter la file d'attente avec erreur
+        processQueue(refreshError);
+        
+        // Rediriger vers la page de connexion si pas déjà sur une page publique
+        if (!isPublicPage()) {
+          toast.error('Votre session a expiré. Veuillez vous reconnecter.');
+          window.location.href = '/login';
+        }
+        
+        return Promise.reject(refreshError);
+        
+      } finally {
+        isRefreshing = false;
+      }
     }
-    
-    if (error.request) {
-      return Promise.reject(new Error('Impossible de contacter le serveur. Verifiez votre connexion.'));
+
+    // ============================================================
+    // 403 - Interdit
+    // ============================================================
+    if (status === 403) {
+      console.warn(`[API] 403 Accès interdit: ${url}`, message);
+      
+      // Pour les offres, ne pas afficher d'erreur si on est sur une page publique
+      if (url?.includes('/jobs/offers/') && !url?.includes('/public')) {
+        // L'erreur sera gérée par la page
+        return Promise.reject(error);
+      }
+      
+      // Si c'est une page publique, ne pas afficher de toast
+      if (!isPublicPage()) {
+        toast.error(message || 'Vous n\'avez pas les droits nécessaires.');
+      }
     }
-    
+
+    // ============================================================
+    // 404 - Non trouvé
+    // ============================================================
+    else if (status === 404) {
+      console.warn(`[API] 404 Non trouvé: ${url}`);
+      if (!isPublicPage() && !url?.includes('/public')) {
+        toast.error('Ressource non trouvée.');
+      }
+    }
+
+    // ============================================================
+    // 429 - Trop de requêtes
+    // ============================================================
+    else if (status === 429) {
+      console.warn(`[API] 429 Trop de requêtes: ${url}`);
+      toast.error('Trop de requêtes. Veuillez patienter quelques instants.');
+    }
+
+    // ============================================================
+    // 422 - Erreur de validation
+    // ============================================================
+    else if (status === 422) {
+      console.warn(`[API] 422 Erreur de validation: ${url}`, data);
+      
+      // Afficher les erreurs de validation
+      if (data?.errors) {
+        const errors = data.errors;
+        if (typeof errors === 'object') {
+          Object.values(errors).forEach((err: any) => {
+            if (Array.isArray(err)) {
+              err.forEach((e: string) => toast.error(e));
+            } else if (typeof err === 'string') {
+              toast.error(err);
+            }
+          });
+        }
+      } else {
+        toast.error(message || 'Données invalides.');
+      }
+    }
+
+    // ============================================================
+    // 500+ - Erreur serveur
+    // ============================================================
+    else if (status >= 500) {
+      console.error(`[API] ${status} Erreur serveur: ${url}`, data);
+      if (!isPublicPage()) {
+        toast.error('Erreur interne du serveur. Veuillez réessayer plus tard.');
+      }
+    }
+
+    // ============================================================
+    // Autres erreurs
+    // ============================================================
+    else if (status >= 400) {
+      console.error(`[API] ${status} Erreur client: ${url}`, data);
+      if (!isPublicPage() && !url?.includes('/public')) {
+        toast.error(message || 'Une erreur est survenue.');
+      }
+    }
+
     return Promise.reject(error);
   }
 );
+
+// ============================================================
+// EXPORT DES APIS PAR MODULE
+// ============================================================
+
+// ============================================================
+// AUTH API
+// ============================================================
 
 export interface LoginResponse {
   access_token: string;
+  refresh_token?: string;
   user: {
     id: string;
     email: string;
@@ -71,18 +358,16 @@ export interface LoginResponse {
   };
 }
 
-// ============================================================
-// AUTH API
-// ============================================================
-
 export const authApi = {
   login: async (email: string, password: string): Promise<LoginResponse> => {
     const response = await api.post<LoginResponse>('/auth/login', { email, password });
     const data = response.data;
     
     if (data.access_token) {
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('token', data.access_token);
+      setToken(data.access_token);
+      if (data.refresh_token) {
+        setRefreshToken(data.refresh_token);
+      }
       if (data.user) {
         localStorage.setItem('user', JSON.stringify(data.user));
       }
@@ -96,9 +381,7 @@ export const authApi = {
   },
 
   logout: () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearTokens();
     window.location.href = '/login';
   },
 
@@ -244,6 +527,7 @@ export const jobsApi = {
     return response.data;
   },
 
+  // ✅ CORRECTION: Route publique pour les offres publiées
   getPublic: async (page: number = 1, limit: number = 9, contract_type?: string) => {
     const params = new URLSearchParams();
     params.append('page', page.toString());
@@ -253,9 +537,20 @@ export const jobsApi = {
     return response.data;
   },
 
+  // ✅ CORRECTION: Utiliser la route publique pour les détails
   getOne: async (id: string) => {
-    const response = await api.get(`/jobs/offers/${id}`);
-    return response.data;
+    try {
+      // Essayer la route publique d'abord
+      const response = await api.get(`/jobs/offers/public/${id}`);
+      return response.data;
+    } catch (error: any) {
+      // Si erreur 403, essayer la route normale (avec token)
+      if (error.response?.status === 403) {
+        const response = await api.get(`/jobs/offers/${id}`);
+        return response.data;
+      }
+      throw error;
+    }
   },
 
   getFeatured: async () => {
@@ -279,7 +574,7 @@ export const jobsApi = {
   },
 
   apply: async (data: any) => {
-    const response = await api.post('/jobs/apply', data);
+    const response = await api.post('/jobs/applications', data);
     return response.data;
   },
 
@@ -503,5 +798,9 @@ export const languageApi = {
     return response.data;
   },
 };
+
+// ============================================================
+// EXPORT PAR DEFAUT
+// ============================================================
 
 export default api;

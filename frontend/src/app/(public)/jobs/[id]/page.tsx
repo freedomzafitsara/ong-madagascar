@@ -7,13 +7,10 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { 
-  Briefcase, MapPin, Calendar, Building, Clock, ArrowLeft, 
-  Mail, Phone, Send, CheckCircle, AlertCircle, Loader2,
-  FileText, Award, Globe, Users, Eye, TrendingUp, Printer,
-  Share2, Bookmark, X, Upload, Trash2, User, Linkedin, 
-  Globe as GlobeIcon, Camera, Info, Check, FileCheck,
-  Bold, Italic, Underline, List, ListOrdered, AlignLeft,
-  AlignCenter, AlignRight, Link as LinkIcon, Code
+  Briefcase, MapPin, Calendar, Building, ArrowLeft, 
+  Mail, Phone, Send, AlertCircle, Loader2,
+  FileText, User, X, Upload, Trash2, Linkedin, 
+  Globe as GlobeIcon, Camera, Check, FileCheck
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { jobService, JobOffer, CreateJobApplicationDto, JobStatus } from '@/services/job.service';
@@ -78,26 +75,6 @@ interface FileUploadState {
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 
-// Validation téléphone Madagascar
-const validatePhoneNumber = (phone: string): boolean => {
-  if (!phone) return true;
-  const cleanPhone = phone.replace(/\s/g, '');
-  const phoneRegex = /^(?:\+261|0)(?:32|33|34|37|38)\d{7}$/;
-  return phoneRegex.test(cleanPhone);
-};
-
-const formatPhoneNumber = (phone: string): string => {
-  if (!phone) return '';
-  const clean = phone.replace(/\s/g, '');
-  if (clean.length === 12 && clean.startsWith('+261')) {
-    return `${clean.slice(0, 4)} ${clean.slice(4, 6)} ${clean.slice(6, 8)} ${clean.slice(8, 11)} ${clean.slice(11)}`;
-  }
-  if (clean.length === 10 && clean.startsWith('0')) {
-    return `${clean.slice(0, 3)} ${clean.slice(3, 5)} ${clean.slice(5, 8)} ${clean.slice(8)}`;
-  }
-  return phone;
-};
-
 // ============================================================
 // PAGE PRINCIPALE
 // ============================================================
@@ -108,17 +85,18 @@ export default function JobDetailPage() {
   const { language } = useLanguage();
   const jobId = params?.id as string;
   
-  // État de l'offre
+  // Etat de l'offre
   const [job, setJob] = useState<JobOffer | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   
-  // État du formulaire
+  // Etat du formulaire
   const [applying, setApplying] = useState<boolean>(false);
   const [showApplicationForm, setShowApplicationForm] = useState<boolean>(false);
   const [phoneError, setPhoneError] = useState<string>('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   
-  // État des fichiers uploadés
+  // Etat des fichiers uploades
   const [cvState, setCvState] = useState<FileUploadState>({
     file: null,
     uploading: false,
@@ -136,7 +114,7 @@ export default function JobDetailPage() {
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   
-  // Données du formulaire
+  // Donnees du formulaire
   const [formData, setFormData] = useState<ApplicationFormData>({
     full_name: '',
     email: '',
@@ -150,11 +128,15 @@ export default function JobDetailPage() {
     portfolio_url: ''
   });
 
-  // Références
+  // References
   const cvInputRef = useRef<HTMLInputElement>(null);
   const coverLetterInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+
+  // ============================================================
+  // FONCTIONS UTILITAIRES
+  // ============================================================
 
   const getText = useCallback((fr: string, mg: string): string => {
     return language === 'fr' ? fr : mg;
@@ -165,41 +147,99 @@ export default function JobDetailPage() {
     return emailRegex.test(email);
   }, []);
 
+  const validatePhoneNumber = useCallback((phone: string): boolean => {
+    if (!phone) return true;
+    const cleanPhone = phone.replace(/\s/g, '');
+    const phoneRegex = /^(?:\+261|0)(?:32|33|34|37|38)\d{7}$/;
+    return phoneRegex.test(cleanPhone);
+  }, []);
+
+  const formatPhoneNumber = useCallback((phone: string): string => {
+    if (!phone) return '';
+    const clean = phone.replace(/\s/g, '');
+    if (clean.length === 12 && clean.startsWith('+261')) {
+      return `${clean.slice(0, 4)} ${clean.slice(4, 6)} ${clean.slice(6, 8)} ${clean.slice(8, 11)} ${clean.slice(11)}`;
+    }
+    if (clean.length === 10 && clean.startsWith('0')) {
+      return `${clean.slice(0, 3)} ${clean.slice(3, 5)} ${clean.slice(5, 8)} ${clean.slice(8)}`;
+    }
+    return phone;
+  }, []);
+
   // ============================================================
-  // CHARGEMENT DE L'OFFRE
+  // CHARGEMENT DE L'OFFRE AVEC FALLBACK
   // ============================================================
 
   useEffect(() => {
     if (jobId) {
-      fetchJob();
+      fetchJobWithFallback();
     }
-  }, [jobId]);
-
-  useEffect(() => {
     return () => {
       if (photoPreview) {
         URL.revokeObjectURL(photoPreview);
       }
     };
-  }, [photoPreview]);
+  }, [jobId]);
 
-  const fetchJob = async (): Promise<void> => {
+  const fetchJobWithFallback = async (): Promise<void> => {
     setLoading(true);
+    setError(null);
+    
     try {
-      const data = await jobService.getOfferById(jobId);
+      let jobData: JobOffer | null = null;
       
-      // Vérifier que l'offre est publiée et disponible
-      if (data.status !== JobStatus.PUBLISHED || !data.is_published) {
-        toast.error(getText('Cette offre n\'est pas disponible', 'Tsy misy ity asa ity'));
-        router.push('/jobs');
+      // Tentative 1: Route publique directe
+      try {
+        console.log('Tentative 1: Route publique directe...');
+        jobData = await jobService.getOfferById(jobId);
+        if (jobData) {
+          console.log('Offre trouvee via route publique');
+        }
+      } catch (err: any) {
+        console.log('Route publique echouee:', err.response?.status);
+      }
+      
+      // Si l'offre n'a pas ete trouvee, tentative 2: depuis la liste publique
+      if (!jobData) {
+        try {
+          console.log('Tentative 2: Recuperation depuis la liste publique...');
+          const response = await jobService.getPublishedOffers({ limit: 100 });
+          const found = response.data.find((item: JobOffer) => item.id === jobId);
+          if (found) {
+            jobData = found;
+            console.log('Offre trouvee dans la liste publique');
+          }
+        } catch (listErr) {
+          console.log('Liste publique echouee');
+        }
+      }
+      
+      if (!jobData) {
+        setError(getText(
+          'Cette offre n\'est pas disponible ou a ete supprimee.',
+          'Tsy misy na nesorina ity asa ity.'
+        ));
+        setLoading(false);
         return;
       }
       
-      setJob(data);
+      if (jobData.status !== JobStatus.PUBLISHED || !jobData.is_published) {
+        setError(getText(
+          'Cette offre n\'est pas encore disponible.',
+          'Tsy mbola misy ity asa ity.'
+        ));
+        setLoading(false);
+        return;
+      }
+      
+      setJob(jobData);
+      
     } catch (error) {
-      console.error('Erreur lors du chargement de l\'offre:', error);
-      toast.error(getText('Offre non trouvee', 'Tsy hita ny asa'));
-      router.push('/jobs');
+      console.error('Erreur generale:', error);
+      setError(getText(
+        'Une erreur est survenue lors du chargement de l\'offre.',
+        'Nisy olana tamin\'ny fampidinana ny asa.'
+      ));
     } finally {
       setLoading(false);
     }
@@ -237,8 +277,14 @@ export default function JobDetailPage() {
   };
 
   // ============================================================
-  // GESTION DES FICHIERS
+  // GESTION DES FICHIERS - AVEC VERIFICATION D'AUTHENTIFICATION
   // ============================================================
+
+  const isAuthenticated = useCallback((): boolean => {
+    if (typeof window === 'undefined') return false;
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    return !!token;
+  }, []);
 
   const handleFileUpload = async (
     file: File,
@@ -248,13 +294,41 @@ export default function JobDetailPage() {
     setState(prev => ({ ...prev, uploading: true, error: '' }));
     
     try {
+      // ✅ Vérifier si l'utilisateur est authentifié avant l'upload
+      if (!isAuthenticated()) {
+        const message = getText(
+          'Vous devez être connecté pour uploader des fichiers. Veuillez vous connecter.',
+          'Mila miditra ianao vao afaka mandefa rakitra. Mba midira aloha.'
+        );
+        setState(prev => ({ ...prev, file: null, uploading: false, error: message }));
+        toast.error(message);
+        return null;
+      }
+
       const result = await uploadService.uploadImage(file, type as any, jobId);
       setState(prev => ({ ...prev, file: result, uploading: false, error: '' }));
+      
+      toast.success(getText(
+        'Fichier uploadé avec succès !',
+        'Vita soa aman-tsara ny fampidirana rakitra !'
+      ));
+      
       return result.url || uploadService.getImageUrl(result.id);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erreur lors de l\'upload';
       setState(prev => ({ ...prev, file: null, uploading: false, error: errorMessage }));
-      toast.error(errorMessage);
+      
+      if (errorMessage.includes('connecté') || errorMessage.includes('Session expirée')) {
+        toast.error(getText(
+          'Session expirée. Veuillez vous reconnecter.',
+          'Lasa ny fotoana nidirana. Mba midira indray.'
+        ));
+        setTimeout(() => {
+          router.push('/login');
+        }, 1500);
+      } else {
+        toast.error(errorMessage);
+      }
       return null;
     }
   };
@@ -427,7 +501,7 @@ export default function JobDetailPage() {
   };
 
   // ============================================================
-  // RENDU
+  // RENDU - CHARGEMENT
   // ============================================================
 
   if (loading) {
@@ -438,14 +512,24 @@ export default function JobDetailPage() {
     );
   }
 
-  if (!job) {
+  // ============================================================
+  // RENDU - ERREUR
+  // ============================================================
+
+  if (error || !job) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800">{getText('Offre non trouvee', 'Tsy hita ny asa')}</h2>
-          <Link href="/jobs" className="mt-4 inline-block text-blue-800 hover:underline">
-            {getText('Retour aux offres', 'Hiverina any amin\'ny asa')}
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            {getText('Offre non disponible', 'Tsy misy ny asa')}
+          </h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <Link
+            href="/jobs"
+            className="inline-block px-6 py-2.5 bg-blue-800 text-white rounded-xl hover:bg-blue-900 transition"
+          >
+            {getText('Voir les offres', 'Jereo ny asa')}
           </Link>
         </div>
       </div>
@@ -462,25 +546,18 @@ export default function JobDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       
-      {/* ============================================================
-      EN-TÊTE - RETOUR
-      ============================================================ */}
       <div className="bg-white border-b sticky top-0 z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-4">
           <Link href="/jobs" className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-800 transition">
-            <ArrowLeft className="w-4 h-4" /> {getText('Retour aux offres', 'Hiverina any amin\'ny asa')}
+            <ArrowLeft className="w-4 h-4" />
+            <span>{getText('Retour aux offres', 'Hiverina any amin\'ny asa')}</span>
           </Link>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         
-        {/* ============================================================
-        CARTE DE L'OFFRE
-        ============================================================ */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
-          
-          {/* Image de couverture */}
           {imageUrl && (
             <div className="relative h-72 w-full bg-gradient-to-r from-blue-800 to-blue-900">
               <img 
@@ -495,78 +572,84 @@ export default function JobDetailPage() {
             </div>
           )}
           
-          {/* Contenu de la carte */}
           <div className="p-8">
             <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">{title}</h1>
             
-            {/* Informations clés */}
             <div className="flex flex-wrap gap-4 mb-6">
               {job.company && (
                 <span className="flex items-center gap-2 text-gray-600 text-sm bg-gray-100 px-3 py-1.5 rounded-full">
-                  <Building className="w-4 h-4" /> {job.company}
+                  <Building className="w-4 h-4" />
+                  <span>{job.company}</span>
                 </span>
               )}
               {job.location && (
                 <span className="flex items-center gap-2 text-gray-600 text-sm bg-gray-100 px-3 py-1.5 rounded-full">
-                  <MapPin className="w-4 h-4" /> {job.location}
+                  <MapPin className="w-4 h-4" />
+                  <span>{job.location}</span>
                 </span>
               )}
               {job.contract_type && (
                 <span className="flex items-center gap-2 text-sm bg-blue-100 text-blue-800 px-3 py-1.5 rounded-full">
-                  <Briefcase className="w-4 h-4" /> {job.contract_type}
+                  <Briefcase className="w-4 h-4" />
+                  <span>{job.contract_type}</span>
                 </span>
               )}
               {job.deadline && (
                 <span className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full ${isExpired ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-800'}`}>
-                  <Calendar className="w-4 h-4" /> 
-                  {getText('Date limite:', 'Farany:')} {new Date(job.deadline).toLocaleDateString('fr-FR')}
+                  <Calendar className="w-4 h-4" />
+                  <span>
+                    {getText('Date limite:', 'Farany:')} {new Date(job.deadline).toLocaleDateString('fr-FR')}
+                  </span>
                 </span>
               )}
             </div>
 
-            {/* Bouton postuler */}
             {isAvailable ? (
               <button
                 onClick={() => setShowApplicationForm(true)}
                 className="w-full md:w-auto bg-blue-800 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-900 transition flex items-center justify-center gap-2 shadow-md"
               >
-                <Send className="w-5 h-5" /> {getText('Postuler maintenant', 'Mangataka izao')}
+                <Send className="w-5 h-5" />
+                <span>{getText('Postuler maintenant', 'Mangataka izao')}</span>
               </button>
             ) : (
               <div className="bg-gray-100 text-gray-600 p-4 rounded-xl flex items-center gap-2">
                 <AlertCircle className="w-5 h-5" />
-                {isExpired 
-                  ? getText('Cette offre est expiree', 'Efa lany daty ity asa ity')
-                  : getText('Cette offre n\'est plus disponible', 'Tsy misy intsony ity asa ity')}
+                <span>
+                  {isExpired 
+                    ? getText('Cette offre est expiree', 'Efa lany daty ity asa ity')
+                    : getText('Cette offre n\'est plus disponible', 'Tsy misy intsony ity asa ity')}
+                </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* ============================================================
-        DESCRIPTION DU POSTE
-        ============================================================ */}
         <div className="bg-white rounded-2xl shadow-lg p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <FileText className="w-6 h-6 text-blue-800" />
-            {getText('Description du poste', 'Famaritana ny asa')}
+            <span>{getText('Description du poste', 'Famaritana ny asa')}</span>
           </h2>
           <div className="prose max-w-none text-gray-600 whitespace-pre-wrap leading-relaxed">
             {description}
           </div>
         </div>
 
-        {/* ============================================================
-        FORMULAIRE DE CANDIDATURE (MODAL)
-        ============================================================ */}
         {showApplicationForm && isAvailable && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowApplicationForm(false)}>
-            <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div 
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" 
+            onClick={() => setShowApplicationForm(false)}
+          >
+            <div 
+              className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" 
+              onClick={(e) => e.stopPropagation()}
+            >
               
-              {/* En-tête du modal */}
               <div className="sticky top-0 bg-white border-b p-5 flex justify-between items-center">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-800">{getText('Candidature', 'Fangatahana')}</h2>
+                  <h2 className="text-xl font-bold text-gray-800">
+                    {getText('Candidature', 'Fangatahana')}
+                  </h2>
                   <p className="text-sm text-gray-500">{title}</p>
                 </div>
                 <button 
@@ -577,14 +660,13 @@ export default function JobDetailPage() {
                 </button>
               </div>
               
-              {/* Formulaire */}
               <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6">
                 
                 {/* Photo de profil */}
                 <div className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Camera className="w-5 h-5 text-blue-800" />
-                    {getText('Photo de profil', 'Sary momba anao')}
+                    <span>{getText('Photo de profil', 'Sary momba anao')}</span>
                   </h3>
                   <div className="flex items-center gap-6">
                     <div className="relative">
@@ -632,7 +714,7 @@ export default function JobDetailPage() {
                 <div className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <User className="w-5 h-5 text-blue-800" />
-                    {getText('Informations personnelles', 'Fampahalalana manokana')}
+                    <span>{getText('Informations personnelles', 'Fampahalalana manokana')}</span>
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -712,11 +794,11 @@ export default function JobDetailPage() {
                   </div>
                 </div>
 
-                {/* Expérience professionnelle */}
+                {/* Experience professionnelle */}
                 <div className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Briefcase className="w-5 h-5 text-blue-800" />
-                    {getText('Experience professionnelle', 'Traza')}
+                    <span>{getText('Experience professionnelle', 'Traza')}</span>
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -766,11 +848,12 @@ export default function JobDetailPage() {
                   </div>
                 </div>
 
-                {/* CV Upload */}
+                {/* CV */}
                 <div className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-800" />
-                    {getText('Curriculum Vitae (CV)', 'Curriculum Vitae (CV)')} <span className="text-red-500">*</span>
+                    <span>{getText('Curriculum Vitae (CV)', 'Curriculum Vitae (CV)')}</span>
+                    <span className="text-red-500">*</span>
                     <span className="text-xs text-gray-400 ml-2">(PDF max 100 Mo)</span>
                   </h3>
                   
@@ -827,7 +910,7 @@ export default function JobDetailPage() {
                 <div className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Mail className="w-5 h-5 text-blue-800" />
-                    {getText('Lettre de motivation', 'Taraty fanekena')}
+                    <span>{getText('Lettre de motivation', 'Taraty fanekena')}</span>
                   </h3>
                   
                   <div className="mb-4">
@@ -851,7 +934,9 @@ export default function JobDetailPage() {
                   </div>
                   
                   <div className="mt-4">
-                    <p className="text-sm text-gray-500 mb-2">{getText('Ou uploader un fichier PDF', 'Na alefaso ny rakitra PDF')}</p>
+                    <p className="text-sm text-gray-500 mb-2">
+                      {getText('Ou uploader un fichier PDF', 'Na alefaso ny rakitra PDF')}
+                    </p>
                     <div
                       onClick={() => coverLetterInputRef.current?.click()}
                       className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition"
@@ -883,7 +968,9 @@ export default function JobDetailPage() {
                       ) : (
                         <>
                           <Upload className="w-8 h-8 text-gray-400 mx-auto mb-1" />
-                          <p className="text-xs text-gray-500">{getText('PDF max 100 Mo', 'PDF farany 100 Mo')}</p>
+                          <p className="text-xs text-gray-500">
+                            {getText('PDF max 100 Mo', 'PDF farany 100 Mo')}
+                          </p>
                         </>
                       )}
                     </div>
@@ -895,7 +982,7 @@ export default function JobDetailPage() {
                 <div className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <GlobeIcon className="w-5 h-5 text-blue-800" />
-                    {getText('Liens professionnels', 'Rohy momba ny asa')}
+                    <span>{getText('Liens professionnels', 'Rohy momba ny asa')}</span>
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -964,7 +1051,6 @@ export default function JobDetailPage() {
         )}
       </div>
 
-      {/* Styles de l'éditeur Quill */}
       <style jsx global>{`
         .quill-editor .ql-container {
           min-height: 250px;
@@ -985,7 +1071,7 @@ export default function JobDetailPage() {
           border-color: #e5e7eb;
         }
         .quill-editor .ql-editor p {
-          margin-bottom: 0.5rem;
+          mb-2: 0.5rem;
         }
       `}</style>
     </div>

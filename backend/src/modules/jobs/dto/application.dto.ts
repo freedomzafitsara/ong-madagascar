@@ -14,6 +14,7 @@ import {
   IsNotEmpty,
   IsUrl,
   IsDate,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -76,8 +77,9 @@ export class CreateJobApplicationDto {
   @MaxLength(100, { message: 'L\'entreprise actuelle ne doit pas depasser 100 caracteres' })
   current_company?: string;
 
+  // ✅ CORRECTION: Supprimer @IsUrl() et utiliser @IsString()
   @IsOptional()
-  @IsUrl({}, { message: 'L\'URL du CV doit etre valide' })
+  @IsString({ message: 'Le CV doit etre une chaine de caracteres' })
   @MaxLength(500, { message: 'L\'URL du CV ne doit pas depasser 500 caracteres' })
   cv_url?: string;
 
@@ -86,33 +88,35 @@ export class CreateJobApplicationDto {
   @MaxLength(10000, { message: 'La lettre de motivation ne doit pas depasser 10000 caracteres' })
   cover_letter?: string;
 
+  // ✅ CORRECTION: Supprimer @IsUrl() et utiliser @IsString()
   @IsOptional()
-  @IsUrl({}, { message: 'L\'URL de la lettre de motivation doit etre valide' })
+  @IsString({ message: 'L\'URL de la lettre de motivation doit etre une chaine de caracteres' })
   @MaxLength(500, { message: 'L\'URL de la lettre de motivation ne doit pas depasser 500 caracteres' })
   cover_letter_url?: string;
 
+  // ✅ CORRECTION: Supprimer @IsUrl() et utiliser @IsString()
   @IsOptional()
-  @IsUrl({}, { message: 'L\'URL de la photo doit etre valide' })
+  @IsString({ message: 'L\'URL de la photo doit etre une chaine de caracteres' })
   @MaxLength(500, { message: 'L\'URL de la photo ne doit pas depasser 500 caracteres' })
   photo_url?: string;
 
   @IsOptional()
-  @IsUrl({}, { message: 'L\'URL LinkedIn doit etre valide' })
+  @IsString({ message: 'L\'URL LinkedIn doit etre une chaine de caracteres' })
   @MaxLength(500, { message: 'L\'URL LinkedIn ne doit pas depasser 500 caracteres' })
   linkedin_url?: string;
 
   @IsOptional()
-  @IsUrl({}, { message: 'L\'URL du portfolio doit etre valide' })
+  @IsString({ message: 'L\'URL du portfolio doit etre une chaine de caracteres' })
   @MaxLength(500, { message: 'L\'URL du portfolio ne doit pas depasser 500 caracteres' })
   portfolio_url?: string;
 
   @IsOptional()
-  @IsUrl({}, { message: 'L\'URL du diplome doit etre valide' })
+  @IsString({ message: 'L\'URL du diplome doit etre une chaine de caracteres' })
   @MaxLength(500, { message: 'L\'URL du diplome ne doit pas depasser 500 caracteres' })
   diploma_url?: string;
 
   @IsOptional()
-  @IsUrl({}, { message: 'L\'URL de l\'attestation doit etre valide' })
+  @IsString({ message: 'L\'URL de l\'attestation doit etre une chaine de caracteres' })
   @MaxLength(500, { message: 'L\'URL de l\'attestation ne doit pas depasser 500 caracteres' })
   attestation_url?: string;
 

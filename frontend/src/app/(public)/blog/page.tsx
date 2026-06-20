@@ -537,7 +537,7 @@ export default function BlogPage() {
         </div>
       </div>
 
-      {/* ==================== MODAL ARTICLE ==================== */}
+      {/* ==================== MODAL ARTICLE - CORRIGE ==================== */}
       {showModal && selectedPost && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -545,8 +545,10 @@ export default function BlogPage() {
             <div className="sticky top-0 bg-white p-5 border-b flex justify-between items-center rounded-t-2xl">
               <div>
                 <h2 className="text-2xl font-bold text-gray-800">{getPostTitle(selectedPost)}</h2>
-                <p className="text-sm text-gray-500">
-                  {formatDate(selectedPost.published_at || selectedPost.created_at)} • {getAuthorName(selectedPost)}
+                <p className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
+                  <span>{formatDate(selectedPost.published_at || selectedPost.created_at)}</span>
+                  <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                  <span>{getAuthorName(selectedPost)}</span>
                 </p>
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition">
@@ -556,7 +558,14 @@ export default function BlogPage() {
 
             {selectedPost.image_url && (
               <div className="p-6">
-                <img src={selectedPost.image_url} alt={getPostTitle(selectedPost)} className="w-full h-[350px] object-cover rounded-xl shadow-lg" />
+                <img 
+                  src={selectedPost.image_url} 
+                  alt={getPostTitle(selectedPost)} 
+                  className="w-full h-[350px] object-cover rounded-xl shadow-lg"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/images/placeholder-blog.jpg';
+                  }}
+                />
               </div>
             )}
 
@@ -565,24 +574,23 @@ export default function BlogPage() {
                 <span className="flex items-center gap-1.5"><Eye className="w-4 h-4" /> {selectedPost.views} {getText('vues', 'fijeriana')}</span>
                 <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> {formatReadingTime(selectedPost.content_fr)}</span>
               </div>
+              
+              {/* Resume */}
               <div className="bg-blue-50 rounded-xl p-4 mb-6 border-l-4 border-blue-800">
                 <p className="text-gray-700 italic">{getPostSummary(selectedPost)}</p>
               </div>
+              
+              {/* Contenu complet */}
               <div className="prose prose-lg max-w-none text-gray-700">
                 <div dangerouslySetInnerHTML={{ __html: selectedPost.content_fr }} />
               </div>
             </div>
 
-            <div className="p-6 border-t flex flex-wrap gap-3 justify-center">
-              <button
-                onClick={() => handleReadMore(selectedPost.slug)}
-                className="bg-blue-800 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-900 transition"
-              >
-                {getText('Lire la suite', 'Hamaky bebe kokoa')}
-              </button>
+            {/* ✅ BOUTONS SIMPLIFIES - SANS "Lire la suite" */}
+            <div className="p-6 border-t flex justify-center gap-4">
               <button
                 onClick={() => setShowModal(false)}
-                className="bg-white border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-50 transition"
+                className="bg-blue-800 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-900 transition"
               >
                 {getText('Fermer', 'Hidy')}
               </button>

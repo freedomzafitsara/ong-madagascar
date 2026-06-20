@@ -3,16 +3,14 @@
 import axios from 'axios';
 
 // ============================================================
-// 1. CONFIGURATION DE BASE
+// 1. CONFIGURATION DE BASE - CORRIGÉ
 // ============================================================
 
-// ✅ FORCER l'URL sans /api
-// La variable d'environnement ne doit PAS contenir /api
-const API_BASE_URL = 'http://localhost:4001';
+//  Utiliser NEXT_PUBLIC_API_URL directement
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
-// ✅ baseURL avec /api
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
+  baseURL: API_BASE_URL, // Déjà avec /api
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -34,7 +32,7 @@ api.interceptors.request.use(
       }
     }
     
-    // Debug: Afficher l'URL complete
+    // Debug: Afficher l'URL complète
     console.log(`[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     
     return config;
@@ -77,7 +75,9 @@ api.interceptors.response.use(
         
         const isPublicPage = window.location.pathname.includes('/login') || 
                             window.location.pathname === '/' ||
-                            window.location.pathname.includes('/public');
+                            window.location.pathname.includes('/public') ||
+                            window.location.pathname.includes('/offers'); // ✅ Ajout des pages publiques
+                            
         if (!isPublicPage) {
           window.location.href = '/login';
         }
@@ -85,7 +85,7 @@ api.interceptors.response.use(
     } 
     else if (status === 403) {
       console.warn(`[API] 403 Interdit: ${url}`);
-      error.message = 'Vous n\'avez pas les droits necessaires';
+      error.message = error.response?.data?.message || 'Vous n\'avez pas les droits necessaires';
     } 
     else if (status === 404) {
       console.warn(`[API] 404 Non trouve: ${url}`);
