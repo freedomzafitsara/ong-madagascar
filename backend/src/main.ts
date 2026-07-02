@@ -11,17 +11,22 @@ import * as path from 'path';
 async function bootstrap() {
   const logger = new Logger('YMadAPI');
 
+  console.log('');
+  console.log('╔═══════════════════════════════════════════════════════════════════╗');
+  console.log('║           Y-MaD - Young for Madagascar Development                ║');
+  console.log('║           Plateforme de Gestion des Offres d\'Emploi              ║');
+  console.log('╚═══════════════════════════════════════════════════════════════════╝');
+  console.log('');
+
   logger.log('============================================================');
-  logger.log('Demarrage de l API Y-Mad');
-  logger.log('Version 1.0.0 - Conforme au Cahier des Charges');
-  logger.log('Theme: Gestion des offres d emploi - ONG Y-MaD');
+  logger.log('Y-MaD - Plateforme de Gestion des Offres d\'Emploi');
+  logger.log('Version 1.0.0');
   logger.log('============================================================');
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log', 'debug'],
   });
 
-  // Validation globale avec details des erreurs
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -52,7 +57,6 @@ async function bootstrap() {
     }),
   );
 
-  // Configuration CORS pour permettre au frontend Next.js d'acceder a l'API
   app.enableCors({
     origin: ['http://localhost:3000', 'http://localhost:4001', 'http://127.0.0.1:3000'],
     credentials: true,
@@ -61,48 +65,21 @@ async function bootstrap() {
     exposedHeaders: ['Content-Disposition'],
   });
 
-  // Prefixe global - TOUTES les routes commencent par /api
   app.setGlobalPrefix('api');
 
-  // Configuration Swagger avec informations reelles Y-MaD
+  // Configuration Swagger
   const config = new DocumentBuilder()
     .setTitle('Y-MaD API - Plateforme de Gestion des Offres d\'Emploi')
-    .setDescription(`
-      Y-MaD - Young for Madagascar Development
-
-      API complete pour la plateforme de gestion des offres d'emploi, de stages et de benevolat de l'ONG Y-MaD.
-
-      Informations de contact
-      - Organisation: Y-MaD (Young for Madagascar Development)
-      - Adresse: Carion, Antananarivo, Madagascar
-      - Telephone: +261 32 04 856 97
-      - Email: ymad.mg@gmail.com
-      - Horaires: Lundi au Vendredi, 8h - 17h
-
-      Mission
-      Developpement economique, social et educatif des jeunes malgaches de 18 a 35 ans a travers une plateforme centralisee d'offres d'emploi.
-
-      Modules disponibles
-      - Auth: Authentification admin avec JWT
-      - Jobs: Gestion des offres d'emploi et candidatures
-      - Projects: Gestion des projets Y-MaD
-      - Blog: Gestion des articles
-      - Pages: Gestion du contenu des pages et fonds d'ecran
-      - Upload: Gestion des fichiers (images, CV, documents)
-
-      Charte graphique
-      - Bleu primaire: #1E3A8A
-      - Gris secondaire: #6B7280
-    `)
+    .setDescription('API complete pour la plateforme de gestion des offres d\'emploi de l\'ONG Y-MaD.')
     .setVersion('1.0.0')
     .setContact('Y-MaD Association', 'https://y-mad.mg', 'ymad.mg@gmail.com')
     .setLicense('MIT', 'https://opensource.org/licenses/MIT')
     .addBearerAuth()
-    .addTag('auth', 'Authentification admin')
-    .addTag('jobs', 'Offres d emploi et candidatures')
-    .addTag('projects', 'Projets Y-MaD')
-    .addTag('blog', 'Articles du blog')
-    .addTag('pages', 'Contenu des pages et fonds d ecran')
+    .addTag('auth', 'Authentification')
+    .addTag('jobs', 'Offres d\'emploi')
+    .addTag('projects', 'Projets')
+    .addTag('blog', 'Articles')
+    .addTag('pages', 'Contenus')
     .addTag('upload', 'Upload de fichiers')
     .build();
 
@@ -110,7 +87,10 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
   logger.log('Swagger UI disponible sur /api/docs');
 
-  // Creation des dossiers uploads
+  // ============================================================
+  // CREATION DES DOSSIERS UPLOADS
+  // ============================================================
+
   const uploadsPath = path.join(process.cwd(), 'uploads');
   const subDirs = ['banner', 'project', 'blog', 'profile', 'logo', 'background', 'job', 'cv', 'diploma', 'attestation'];
   
@@ -128,53 +108,82 @@ async function bootstrap() {
   }
   logger.log('Sous-dossiers uploads crees avec succes');
 
-  // Serveur de fichiers statiques
-  app.useStaticAssets(uploadsPath, {
+  // ============================================================
+  // SERVEUR DE FICHIERS STATIQUES - CORRECTION IMPORTANTE
+  // ============================================================
+
+  // ✅ Utiliser le chemin absolu complet
+  const absoluteUploadsPath = path.resolve(uploadsPath);
+  logger.log(`Chemin absolu des uploads: ${absoluteUploadsPath}`);
+
+  // ✅ Servir les fichiers statiques avec le bon prefixe
+  app.useStaticAssets(absoluteUploadsPath, {
     prefix: '/uploads/',
-    setHeaders: (res) => {
+    setHeaders: (res, filePath) => {
+      // Déterminer le type MIME en fonction de l'extension
+      const ext = path.extname(filePath).toLowerCase();
+      let contentType = 'application/octet-stream';
+      
+      if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+      else if (ext === '.png') contentType = 'image/png';
+      else if (ext === '.gif') contentType = 'image/gif';
+      else if (ext === '.webp') contentType = 'image/webp';
+      else if (ext === '.pdf') contentType = 'application/pdf';
+      
+      res.setHeader('Content-Type', contentType);
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
     },
   });
+
+  // ✅ Ajouter une route de fallback pour debug
+  app.use('/uploads', (req, res, next) => {
+    logger.debug(`Fichier statique demande: ${req.url}`);
+    next();
+  });
+
+  // ✅ Vérifier les fichiers existants au demarrage
+  const profileDir = path.join(uploadsPath, 'profile');
+  if (fs.existsSync(profileDir)) {
+    const files = fs.readdirSync(profileDir);
+    logger.log(`Fichiers dans uploads/profile: ${files.length}`);
+    files.forEach(file => {
+      logger.log(`  - ${file}`);
+      // Vérifier que le fichier est accessible
+      const filePath = path.join(profileDir, file);
+      const stats = fs.statSync(filePath);
+      logger.log(`    Taille: ${stats.size} octets`);
+    });
+  } else {
+    logger.warn('Le dossier uploads/profile n\'existe pas encore');
+  }
+
   logger.log('Fichiers statiques disponibles sur /uploads/');
 
-  // Demarrage du serveur
+  // ============================================================
+  // DEMARRAGE DU SERVEUR
+  // ============================================================
+
   const port = process.env.PORT || 4001;
   await app.listen(port, '0.0.0.0');
 
-  // Affichage des informations de demarrage
   console.log('');
-  console.log('============================================================');
-  console.log('Y-MaD API - Youthful Madagascar');
-  console.log('Theme: Gestion des offres d emploi');
-  console.log('============================================================');
+  console.log('═══════════════════════════════════════════════════════════════════');
+  console.log('                 Y-MaD PLATEFORME DE GESTION                     ');
+  console.log('═══════════════════════════════════════════════════════════════════');
   console.log('');
-  console.log(`Serveur      : http://localhost:${port}`);
-  console.log(`API Prefixe  : http://localhost:${port}/api`);
-  console.log(`Swagger UI   : http://localhost:${port}/api/docs`);
-  console.log(`Uploads      : http://localhost:${port}/uploads/`);
+  console.log(`  Serveur        : http://localhost:${port}`);
+  console.log(`  API Prefixe    : http://localhost:${port}/api`);
+  console.log(`  Swagger UI     : http://localhost:${port}/api/docs`);
+  console.log(`  Uploads        : http://localhost:${port}/uploads/`);
   console.log('');
-  console.log('Informations de contact:');
-  console.log('   Adresse: Carion, Antananarivo, Madagascar');
-  console.log('   Telephone: +261 32 04 856 97');
-  console.log('   Email: ymad.mg@gmail.com');
-  console.log('   Horaires: Lundi au Vendredi, 8h - 17h');
+  console.log(`  Chemin uploads : ${absoluteUploadsPath}`);
   console.log('');
-  console.log('Modules actifs:');
-  console.log('   - Auth (authentification admin)');
-  console.log('   - Jobs (offres d emploi et candidatures)');
-  console.log('   - Projects (gestion des projets)');
-  console.log('   - Blog (gestion des articles)');
-  console.log('   - Pages (contenus et fonds d ecran)');
-  console.log('   - Upload (gestion des fichiers)');
-  console.log('');
-  console.log('Sous-dossiers uploads crees:');
-  for (const dir of subDirs) {
-    console.log(`   - /uploads/${dir}/`);
-  }
-  console.log('');
-  console.log('Charte graphique: Bleu (#1E3A8A) et Gris (#6B7280)');
-  console.log('');
-  console.log('============================================================');
+  console.log('═══════════════════════════════════════════════════════════════════');
+  console.log('  API Y-MaD demarree avec succes');
+  console.log('═══════════════════════════════════════════════════════════════════');
   console.log('');
 }
 

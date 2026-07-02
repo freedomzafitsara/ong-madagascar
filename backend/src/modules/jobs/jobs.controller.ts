@@ -17,7 +17,9 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
-  NotFoundException
+  NotFoundException,
+  Req,
+  UnauthorizedException
 } from '@nestjs/common';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -33,9 +35,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UploadService } from '../upload/upload.service';
 import { memoryStorage } from 'multer';
 import { UserRole } from '../auth/entities/user.entity';
+import { User } from '../../entities/user.entity';
 
 @Controller('jobs')
 export class JobsController {
@@ -45,7 +49,7 @@ export class JobsController {
   ) {}
 
   // ============================================================
-  // ROUTES PUBLIQUES
+  // ROUTES PUBLIQUES - Accessibles sans authentification
   // ============================================================
 
   @Public()
@@ -66,18 +70,60 @@ export class JobsController {
     return this.jobsService.findOnePublicWithImages(id);
   }
 
-  // ✅ Route pour postuler (PUBLIC)
-  @Public()
-  @Post('apply')  // ✅ Route '/jobs/apply'
-  async apply(@Body() createJobApplicationDto: CreateJobApplicationDto) {
-    return this.jobsService.apply(createJobApplicationDto);
+  // ============================================================
+  // ROUTES CANDIDATURES - PROTEGEES PAR JWT
+  // ============================================================
+
+  /**
+   * ✅ Postuler à une offre d'emploi
+   * Route protégée : Seuls les utilisateurs authentifiés peuvent postuler
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('applications')
+  async apply(
+    @Body() createJobApplicationDto: CreateJobApplicationDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    // Vérifier que l'utilisateur est authentifié
+    if (!currentUser) {
+      throw new UnauthorizedException('Vous devez être connecté pour postuler.');
+    }
+    
+    return this.jobsService.apply(createJobApplicationDto, currentUser);
   }
 
-  // ✅ Route alternative avec 's' (pour compatibilité)
-  @Public()
-  @Post('applications')  // ✅ Route '/jobs/applications'
-  async applyAlternative(@Body() createJobApplicationDto: CreateJobApplicationDto) {
-    return this.jobsService.apply(createJobApplicationDto);
+  /**
+   * ✅ Vérifier si l'utilisateur a déjà postulé à une offre
+   * Route protégée : Seuls les utilisateurs authentifiés peuvent vérifier
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get('applications/check/:jobId')
+  async checkIfApplied(
+    @Param('jobId') jobId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    if (!currentUser) {
+      throw new UnauthorizedException('Vous devez être connecté pour cette action.');
+    }
+    
+    const applied = await this.jobsService.hasApplied(jobId, currentUser.id);
+    return { applied };
+  }
+
+  /**
+   * ✅ Récupérer les candidatures de l'utilisateur connecté
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get('applications/my')
+  async getMyApplications(
+    @Query() queryDto: ApplicationQueryDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    if (!currentUser) {
+      throw new UnauthorizedException('Vous devez être connecté pour cette action.');
+    }
+    
+    return this.jobsService.getMyApplications(currentUser.id, queryDto);
   }
 
   // ============================================================

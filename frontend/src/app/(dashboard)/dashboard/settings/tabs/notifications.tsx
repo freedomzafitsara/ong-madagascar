@@ -2,15 +2,15 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { 
   Bell, Mail, Smartphone, CheckCircle, 
   Save, Loader2, Briefcase, FolderOpen,
-  FileText, Settings, AlertCircle, X
+  FileText, Settings, AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import api from '@/lib/api';
+import { authApi } from '@/lib/api';
 
 // ============================================================
 // COMPOSANTS
@@ -90,8 +90,27 @@ export function NotificationsTab({ getText }: { getText: (fr: string, mg: string
   const [projectUpdates, setProjectUpdates] = useState(true);
   const [blogUpdates, setBlogUpdates] = useState(false);
   const [systemUpdates, setSystemUpdates] = useState(true);
-  const [marketingEmails, setMarketingEmails] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Charger les preferences depuis le backend
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const response = await authApi.getPreferences();
+        if (response) {
+          setEmailNotifications(response.email_notifications !== false);
+          setPushNotifications(response.push_notifications !== false);
+          setJobAlerts(response.job_alerts !== false);
+          setProjectUpdates(response.project_updates !== false);
+          setBlogUpdates(response.blog_updates || false);
+          setSystemUpdates(response.system_updates !== false);
+        }
+      } catch (error) {
+        console.error('Erreur chargement preferences notifications:', error);
+      }
+    };
+    loadPreferences();
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -103,11 +122,9 @@ export function NotificationsTab({ getText }: { getText: (fr: string, mg: string
         project_updates: projectUpdates,
         blog_updates: blogUpdates,
         system_updates: systemUpdates,
-        marketing_emails: marketingEmails,
       };
       
-      // Sauvegarder les preferences
-      await api.put('/auth/notification-preferences', preferences);
+      await authApi.updatePreferences(preferences);
       
       toast.success(getText('Preferences sauvegardees', 'Vita ny fitehirizana'));
     } catch (error) {
@@ -126,14 +143,12 @@ export function NotificationsTab({ getText }: { getText: (fr: string, mg: string
     if (projectUpdates) count++;
     if (blogUpdates) count++;
     if (systemUpdates) count++;
-    if (marketingEmails) count++;
     return count;
   };
 
   return (
     <div className="space-y-6">
       
-      {/* Resume */}
       <SettingCard title={getText('Resume des notifications', 'Famintinana ny fampandrenesana')}>
         <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
           <Bell className="w-8 h-8 text-blue-800" />
@@ -141,12 +156,11 @@ export function NotificationsTab({ getText }: { getText: (fr: string, mg: string
             <p className="text-sm font-medium text-gray-800">
               {getText('Notifications actives', 'Fampandrenesana mavitrika')}
             </p>
-            <p className="text-2xl font-bold text-blue-800">{getNotificationCount()} / 7</p>
+            <p className="text-2xl font-bold text-blue-800">{getNotificationCount()} / 6</p>
           </div>
         </div>
       </SettingCard>
 
-      {/* Canal de notification */}
       <SettingCard 
         title={getText('Canaux de notification', 'Fomba fampandrenesana')}
         description={getText('Choisissez comment vous voulez recevoir les notifications', 'Fidio ny fomba hahazoana fampandrenesana')}
@@ -169,7 +183,6 @@ export function NotificationsTab({ getText }: { getText: (fr: string, mg: string
         </div>
       </SettingCard>
 
-      {/* Types de notifications */}
       <SettingCard 
         title={getText('Types de notifications', 'Karazana fampandrenesana')}
         description={getText('Choisissez les notifications que vous souhaitez recevoir', 'Fidio ny fampandrenesana tianao')}
@@ -203,17 +216,9 @@ export function NotificationsTab({ getText }: { getText: (fr: string, mg: string
             description={getText('Notifications techniques et maintenance', 'Fampandrenesana ara-teknika sy fanamboarana')}
             icon={Settings}
           />
-          <ToggleSwitch
-            enabled={marketingEmails}
-            onChange={setMarketingEmails}
-            label={getText('Emails marketing', 'Mail marketing')}
-            description={getText('Recevez les actualites et evenements Y-MaD', 'Mahazoa vaovao sy hetsika Y-MaD')}
-            icon={AlertCircle}
-          />
         </div>
       </SettingCard>
 
-      {/* Bouton sauvegarder */}
       <button
         onClick={handleSave}
         disabled={saving}

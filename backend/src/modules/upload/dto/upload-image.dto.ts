@@ -1,10 +1,8 @@
 // backend/src/modules/upload/dto/upload-image.dto.ts
+
 import { IsString, IsOptional, IsBoolean, IsInt, Min, Max, IsUUID } from 'class-validator';
 import { Transform } from 'class-transformer';
 
-/**
- * DTO pour l'upload d'un fichier
- */
 export class UploadImageDto {
   @IsString()
   entityType: string;
@@ -34,9 +32,6 @@ export class UploadImageDto {
   altTextMg?: string;
 }
 
-/**
- * DTO pour la mise à jour des textes alternatifs d'une image
- */
 export class UpdateImageAltDto {
   @IsOptional()
   @IsString()
@@ -47,17 +42,11 @@ export class UpdateImageAltDto {
   altTextMg?: string;
 }
 
-/**
- * DTO pour la réorganisation des images
- */
 export class ReorderImagesDto {
   @IsString({ each: true })
   imageIds: string[];
 }
 
-/**
- * DTO de réponse pour une image
- */
 export class ImageResponseDto {
   id: string;
   url: string;
@@ -73,9 +62,6 @@ export class ImageResponseDto {
   updatedAt: Date;
 }
 
-/**
- * DTO de réponse pour l'upload
- */
 export class UploadResponseDto {
   success: boolean;
   id: string;
@@ -89,17 +75,11 @@ export class UploadResponseDto {
   createdAt: Date;
 }
 
-/**
- * DTO de réponse pour la liste des images
- */
 export class ImagesListResponseDto {
   success: boolean;
   images: ImageResponseDto[];
 }
 
-/**
- * DTO de réponse pour la suppression
- */
 export class DeleteResponseDto {
   success: boolean;
   message: string;

@@ -16,8 +16,15 @@ export class UploadService {
     @InjectRepository(UploadedFile)
     private fileRepository: Repository<UploadedFile>,
   ) {
+    // Creer le dossier uploads s'il n'existe pas
     if (!fs.existsSync(this.uploadsPath)) {
       fs.mkdirSync(this.uploadsPath, { recursive: true });
+    }
+
+    // Creer le dossier profile s'il n'existe pas
+    const profilePath = path.join(this.uploadsPath, 'profile');
+    if (!fs.existsSync(profilePath)) {
+      fs.mkdirSync(profilePath, { recursive: true });
     }
   }
 
@@ -46,17 +53,25 @@ export class UploadService {
       const uniqueId = Math.random().toString(36).substring(2, 8);
       const ext = this.getExtensionFromMimeType(mimeType);
       const finalFileName = `${timestamp}-${uniqueId}.${ext}`;
+      
+      // Chemin relatif pour la base de donnees
       const relativePath = `uploads/${entityType}/${finalFileName}`;
       const fullPath = path.join(this.uploadsPath, entityType, finalFileName);
 
+      // Creer le dossier si necessaire
       const entityDir = path.join(this.uploadsPath, entityType);
       if (!fs.existsSync(entityDir)) {
         fs.mkdirSync(entityDir, { recursive: true });
       }
 
+      // Ecrire le fichier
       fs.writeFileSync(fullPath, file.buffer);
 
-      const fileUrl = `/${relativePath}`;
+      // ✅ CORRECTION: URL pour le serveur statique
+      const fileUrl = `/uploads/${entityType}/${finalFileName}`;
+
+      this.logger.log(`Fichier sauvegarde: ${fullPath}`);
+      this.logger.log(`URL: ${fileUrl}`);
 
       const fileEntity = this.fileRepository.create({
         url: fileUrl,
@@ -148,6 +163,6 @@ export class UploadService {
   }
 
   getImageUrl(id: string): string {
-    return `/api/upload/file/${id}`;
+    return `/uploads/${id}`;
   }
 }

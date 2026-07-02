@@ -4,9 +4,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // ============================================================
-// ROUTES PUBLIQUES (accessibles à tous)
+// ROUTES PAR ROLE - CONFIGURATION
 // ============================================================
 
+// Routes publiques (sans authentification)
 const PUBLIC_ROUTES = [
   '/',
   '/jobs',
@@ -20,166 +21,203 @@ const PUBLIC_ROUTES = [
   '/register',
   '/forgot-password',
   '/reset-password',
+];
+
+// Routes API publiques
+const PUBLIC_API_ROUTES = [
   '/api/auth/login',
   '/api/auth/register',
-  '/api/pages/backgrounds/:path*',
-  '/api/pages/public/:path*',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
   '/api/jobs/offers/public',
   '/api/jobs/offers/featured',
+  '/api/jobs/offers/public/:path*',
   '/api/projects/public',
-  '/api/projects/featured',
   '/api/blog/public',
+  '/api/pages/backgrounds',
+  '/api/pages/public',
 ];
 
-// ============================================================
-// ROUTES CANDIDATS (accessibles aux candidats et admins)
-// ============================================================
-
+// Routes candidats (accessibles aux candidats uniquement)
 const CANDIDATE_ROUTES = [
-  '/jobs/:id/apply',
-  '/api/jobs/apply',
-  '/profile/applications',
+  '/candidate',
+  '/candidate/:path*',
 ];
 
-// ============================================================
-// ROUTES ADMIN (accessibles uniquement aux admins)
-// ============================================================
-
+// Routes admin (accessibles aux admins uniquement)
 const ADMIN_ROUTES = [
   '/dashboard',
   '/dashboard/:path*',
-  '/api/admin/:path*',
-  '/api/jobs/offers',
-  '/api/jobs/offers/:path*',
-  '/api/jobs/applications',
-  '/api/jobs/applications/:path*',
-  '/api/projects',
-  '/api/projects/:path*',
-  '/api/blog',
-  '/api/blog/:path*',
-  '/api/pages/backgrounds/all',
-  '/api/pages/backgrounds/admin/:path*',
-  '/api/upload/:path*',
+  '/admin',
+  '/admin/:path*',
 ];
 
 // ============================================================
-// MIDDLEWARE
+// FONCTIONS UTILITAIRES
+// ============================================================
+
+function matchRoute(pathname: string, route: string): boolean {
+  if (route.includes(':path*')) {
+    const base = route.replace('/:path*', '');
+    return pathname === base || pathname.startsWith(base + '/');
+  }
+  return pathname === route || pathname.startsWith(route + '/');
+}
+
+function isRouteProtected(pathname: string, routes: string[]): boolean {
+  return routes.some(route => matchRoute(pathname, route));
+}
+
+function getUserFromCookie(request: NextRequest): any | null {
+  try {
+    const userCookie = request.cookies.get('user')?.value;
+    if (userCookie) {
+      return JSON.parse(decodeURIComponent(userCookie));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
+// MIDDLEWARE PRINCIPAL
 // ============================================================
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  // ✅ Récupérer le token et le rôle depuis les cookies ou localStorage
-  const token = request.cookies.get('access_token')?.value || 
-                request.headers.get('Authorization')?.replace('Bearer ', '');
-
-  let userRole: string | null = null;
-  try {
-    const userCookie = request.cookies.get('user')?.value;
-    if (userCookie) {
-      const user = JSON.parse(userCookie);
-      userRole = user.role;
-    }
-  } catch {
-    // Ignorer
-  }
+  
+  console.log(`[Middleware] Path: ${pathname}`);
 
   // ============================================================
-  // 1. VÉRIFICATION DES ROUTES PUBLIQUES
+  // 1. EXCLURE LES RESSOURCES STATIQUES
   // ============================================================
 
-  // Vérifier si la route est publique
-  const isPublicRoute = PUBLIC_ROUTES.some(route => {
-    if (route.includes(':path*')) {
-      const baseRoute = route.replace('/:path*', '');
-      return pathname === baseRoute || pathname.startsWith(`${baseRoute}/`);
-    }
-    return pathname === route || pathname.startsWith(`${route}/`);
-  });
-
-  if (isPublicRoute) {
+  const isStaticResource = 
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon.ico') ||
+    pathname.startsWith('/images') ||
+    pathname.startsWith('/uploads') ||
+    pathname.includes('.') && !pathname.includes('/api/');
+  
+  if (isStaticResource) {
     return NextResponse.next();
   }
 
   // ============================================================
-  // 2. VÉRIFICATION DE L'AUTHENTIFICATION
+  // 2. RECUPERER LES DONNEES DE SESSION
+  // ============================================================
+
+  const token = request.cookies.get('access_token')?.value || 
+                request.cookies.get('token')?.value;
+  
+  let userRole: string | null = null;
+  let userData = getUserFromCookie(request);
+  
+  if (userData) {
+    userRole = userData.role;
+  }
+
+  // ============================================================
+  // 3. VERIFIER LES ROUTES PUBLIQUES
+  // ============================================================
+
+  const isPublic = isRouteProtected(pathname, PUBLIC_ROUTES);
+  
+  if (isPublic) {
+    console.log('[Middleware] Route publique');
+    return NextResponse.next();
+  }
+
+  // ============================================================
+  // 4. VERIFIER LES ROUTES API PUBLIQUES
+  // ============================================================
+
+  const isPublicApi = isRouteProtected(pathname, PUBLIC_API_ROUTES);
+  
+  if (isPublicApi) {
+    console.log('[Middleware] API publique');
+    return NextResponse.next();
+  }
+
+  // ============================================================
+  // 5. VERIFIER L'AUTHENTIFICATION
   // ============================================================
 
   if (!token) {
-    // Rediriger vers login si non authentifié
+    console.log('[Middleware] Non authentifie - Redirection vers login');
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   // ============================================================
-  // 3. VÉRIFICATION DES ROUTES ADMIN
+  // 6. VERIFIER LES ROUTES ADMIN
   // ============================================================
 
-  const isAdminRoute = ADMIN_ROUTES.some(route => {
-    if (route.includes(':path*')) {
-      const baseRoute = route.replace('/:path*', '');
-      return pathname === baseRoute || pathname.startsWith(`${baseRoute}/`);
-    }
-    return pathname === route || pathname.startsWith(`${route}/`);
-  });
-
+  const isAdminRoute = isRouteProtected(pathname, ADMIN_ROUTES);
+  
   if (isAdminRoute) {
     if (userRole !== 'admin' && userRole !== 'super_admin') {
-      // Rediriger vers l'accueil
+      console.log('[Middleware] Acces non autorise - Redirection vers /');
       return NextResponse.redirect(new URL('/', request.url));
     }
+    console.log('[Middleware] Admin autorise');
     return NextResponse.next();
   }
 
   // ============================================================
-  // 4. VÉRIFICATION DES ROUTES CANDIDATS
+  // 7. VERIFIER LES ROUTES CANDIDAT
   // ============================================================
 
-  const isCandidateRoute = CANDIDATE_ROUTES.some(route => {
-    if (route.includes(':id')) {
-      // Gérer les routes dynamiques comme /jobs/:id/apply
-      const pattern = route.replace(':id', '[^/]+');
-      return new RegExp(`^${pattern}$`).test(pathname);
-    }
-    return pathname === route;
-  });
-
+  const isCandidateRoute = isRouteProtected(pathname, CANDIDATE_ROUTES);
+  
   if (isCandidateRoute) {
-    if (userRole !== 'candidate' && userRole !== 'admin' && userRole !== 'super_admin') {
-      // Rediriger vers login ou inscription
-      if (!token) {
-        return NextResponse.redirect(new URL('/login', request.url));
-      }
-      return NextResponse.redirect(new URL('/register?role=candidate', request.url));
+    if (userRole === 'admin' || userRole === 'super_admin') {
+      console.log('[Middleware] Admin sur route candidat - Redirection vers dashboard');
+      return NextResponse.redirect(new URL('/dashboard', request.url));
     }
+    if (userRole !== 'candidate') {
+      console.log('[Middleware] Non candidat - Redirection vers /');
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+    console.log('[Middleware] Candidat autorise');
     return NextResponse.next();
   }
 
   // ============================================================
-  // 5. PAR DÉFAUT : TOUT EST PROTÉGÉ
+  // 8. VERIFIER LES ROUTES API PROTE GEES
   // ============================================================
 
-  if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  if (pathname.startsWith('/api/')) {
+    console.log('[Middleware] API protegee - Verification token');
+    // Le token est deja verifie a l'etape 5
+    return NextResponse.next();
   }
 
+  // ============================================================
+  // 9. PAR DEFAUT - TOUT EST PROTEGE
+  // ============================================================
+
+  console.log('[Middleware] Route protegee par defaut');
   return NextResponse.next();
 }
 
 // ============================================================
-// CONFIGURATION DES ROUTES À INTERCEPTEUR
+// CONFIGURATION DU MIDDLEWARE
 // ============================================================
 
 export const config = {
   matcher: [
     /*
-     * Match all request paths except:
+     * Match all request paths except for:
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
+     * - images folder
+     * - uploads folder
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public|images|uploads|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)$).*)',
   ],
 };

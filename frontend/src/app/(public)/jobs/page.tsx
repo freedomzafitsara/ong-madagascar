@@ -136,7 +136,7 @@ export default function JobsPublicPage() {
 
   const loadPageBackground = async () => {
     try {
-      // ✅ Utilisation directe de l'API
+      //  Utilisation directe de l'API
       const response = await api.get('/pages/backgrounds/jobs');
       const background = response.data;
       if (background && background.is_active && background.image_url) {
@@ -150,7 +150,7 @@ export default function JobsPublicPage() {
   const fetchJobs = async () => {
     setLoading(true);
     try {
-      // ✅ Utilisation directe de l'API
+      //  Utilisation directe de l'API
       const response = await api.get('/jobs/offers/public', { params: { limit: 100 } });
       
       if (response && response.data) {

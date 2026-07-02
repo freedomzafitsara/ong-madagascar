@@ -1,16 +1,17 @@
-// frontend/src/app/(dashboard)/dashboard/settings/tabs/appearance.tsx
+// frontend/src/app/(dashboard)/dashboard/settings/tabs/security.tsx
 
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { 
-  Palette, Sun, Moon, Monitor, 
+  Shield, Lock, Eye, EyeOff, 
   CheckCircle, Save, Loader2,
-  Type, Layout, Grid, List, 
-  Eye, EyeOff, Maximize, Minimize
+  LogOut, AlertCircle, Key
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { authApi } from '@/lib/api';
 
 // ============================================================
 // COMPOSANTS
@@ -38,38 +39,51 @@ function SettingCard({
   );
 }
 
-function ToggleSwitch({ 
-  enabled, 
+function SettingRow({ 
+  label, 
+  value, 
   onChange, 
-  label,
-  description
-}: { 
-  enabled: boolean; 
-  onChange: (enabled: boolean) => void; 
+  type = 'text',
+  placeholder,
+  disabled = false,
+  icon: Icon,
+  helper,
+  required = false
+}: {
   label: string;
-  description?: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  icon?: any;
+  helper?: string;
+  required?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between py-2">
-      <div>
-        <p className="text-sm text-gray-700">{label}</p>
-        {description && <p className="text-xs text-gray-400">{description}</p>}
-      </div>
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-gray-700">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
       <div className="relative">
+        {Icon && (
+          <div className="absolute left-3 top-1/2 -translate-y-1/2">
+            <Icon className="w-4 h-4 text-gray-400" />
+          </div>
+        )}
         <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => onChange(e.target.checked)}
-          className="sr-only peer"
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none transition ${
+            disabled ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'
+          }`}
         />
-        <div className={`w-11 h-6 rounded-full transition-all ${
-          enabled ? 'bg-blue-800' : 'bg-gray-300'
-        } peer-focus:ring-2 peer-focus:ring-blue-800/50`}>
-          <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-all ${
-            enabled ? 'translate-x-5' : 'translate-x-0'
-          }`} />
-        </div>
       </div>
+      {helper && <p className="text-xs text-gray-400">{helper}</p>}
     </div>
   );
 }
@@ -78,160 +92,172 @@ function ToggleSwitch({
 // COMPOSANT PRINCIPAL
 // ============================================================
 
-export function AppearanceTab({ getText }: { getText: (fr: string, mg: string) => string }) {
-  const [theme, setTheme] = useState('light');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [fontSize, setFontSize] = useState('medium');
-  const [density, setDensity] = useState('comfortable');
-  const [animations, setAnimations] = useState(true);
+export function SecurityTab({ 
+  user, 
+  getText, 
+  setSuccess, 
+  setError 
+}: { 
+  user: any; 
+  getText: (fr: string, mg: string) => string;
+  setSuccess: (msg: string) => void;
+  setError: (msg: string) => void;
+}) {
+  const router = useRouter();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error(getText('Tous les champs sont requis', 'Ilaina ny sehatra rehetra'));
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error(getText('Les mots de passe ne correspondent pas', 'Tsy mitovy ny teny miafina'));
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error(getText('6 caracteres minimum', '6 soratra farafahakeliny'));
+      return;
+    }
+
     setSaving(true);
-    setTimeout(() => {
-      toast.success(getText('Preferences sauvegardees', 'Vita ny fitehirizana'));
+    try {
+      await authApi.changePassword(currentPassword, newPassword);
+      toast.success(getText('Mot de passe modifie', 'Vita ny fanovana'));
+      setSuccess(getText('Mot de passe modifie avec succes', 'Vita ny fanovana ny teny miafina'));
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || getText('Erreur', 'Nisy hadisoana');
+      toast.error(errorMsg);
+      setError(errorMsg);
+    } finally {
       setSaving(false);
-    }, 500);
+    }
   };
 
-  const getFontSizeClass = (size: string) => {
-    if (size === 'small') return 'text-sm';
-    if (size === 'large') return 'text-lg';
-    return 'text-base';
+  const handleLogout = () => {
+    if (confirm(getText('Voulez-vous vous deconnecter ?', 'Tiavo mivoaka ve ianao ?'))) {
+      localStorage.clear();
+      document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      router.push('/login');
+    }
   };
 
   return (
     <div className="space-y-6">
       
-      {/* Theme */}
       <SettingCard 
-        title={getText('Theme', 'Loko')}
-        description={getText('Choisissez votre theme prefere', 'Fidio ny lokonao')}
+        title={getText('Changer le mot de passe', 'Hanova ny teny miafina')}
+        description={getText('Choisissez un mot de passe fort pour votre compte', 'Mifidiana teny miafina matanjaka ho an\'ny kaontinao')}
       >
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="space-y-4">
+          <SettingRow
+            label={getText('Mot de passe actuel', 'Teny miafina ankehitriny')}
+            value={currentPassword}
+            onChange={setCurrentPassword}
+            type={showPassword ? 'text' : 'password'}
+            placeholder={getText('Entrez votre mot de passe actuel', 'Ampidiro ny teny miafinao ankehitriny')}
+            icon={Lock}
+            required
+          />
+          <SettingRow
+            label={getText('Nouveau mot de passe', 'Teny miafina vaovao')}
+            value={newPassword}
+            onChange={setNewPassword}
+            type={showPassword ? 'text' : 'password'}
+            placeholder={getText('Entrez votre nouveau mot de passe', 'Ampidiro ny teny miafina vaovao')}
+            icon={Key}
+            required
+          />
+          <SettingRow
+            label={getText('Confirmer le mot de passe', 'Hamarino ny teny miafina')}
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            type={showPassword ? 'text' : 'password'}
+            placeholder={getText('Confirmez votre nouveau mot de passe', 'Hamarino ny teny miafina vaovao')}
+            icon={CheckCircle}
+            required
+          />
+          
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="flex items-center gap-2 text-sm text-gray-500 hover:text-blue-800 transition"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {showPassword ? getText('Cacher', 'Afeno') : getText('Afficher', 'Aseho')}
+            </button>
+            <span className="text-xs text-gray-400">
+              {getText('Le mot de passe doit contenir au moins 6 caracteres', 'Ny teny miafina dia tsy maintsy misy 6 soratra farafahakeliny')}
+            </span>
+          </div>
+          
           <button
-            onClick={() => setTheme('light')}
-            className={`p-4 rounded-xl border transition text-center ${
-              theme === 'light' 
-                ? 'border-blue-800 bg-blue-50' 
-                : 'border-gray-200 hover:border-blue-300'
-            }`}
+            onClick={handleChangePassword}
+            disabled={saving}
+            className="px-6 py-2.5 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition disabled:opacity-50 flex items-center gap-2"
           >
-            <Sun className={`w-8 h-8 mx-auto mb-2 ${theme === 'light' ? 'text-blue-800' : 'text-gray-400'}`} />
-            <p className="text-sm font-medium">{getText('Clair', 'Mazava')}</p>
-            {theme === 'light' && <CheckCircle className="w-4 h-4 text-blue-800 mx-auto mt-1" />}
-          </button>
-          <button
-            onClick={() => setTheme('dark')}
-            className={`p-4 rounded-xl border transition text-center ${
-              theme === 'dark' 
-                ? 'border-blue-800 bg-blue-50' 
-                : 'border-gray-200 hover:border-blue-300'
-            }`}
-          >
-            <Moon className={`w-8 h-8 mx-auto mb-2 ${theme === 'dark' ? 'text-blue-800' : 'text-gray-400'}`} />
-            <p className="text-sm font-medium">{getText('Sombre', 'Maizina')}</p>
-            {theme === 'dark' && <CheckCircle className="w-4 h-4 text-blue-800 mx-auto mt-1" />}
-          </button>
-          <button
-            onClick={() => setTheme('system')}
-            className={`p-4 rounded-xl border transition text-center ${
-              theme === 'system' 
-                ? 'border-blue-800 bg-blue-50' 
-                : 'border-gray-200 hover:border-blue-300'
-            }`}
-          >
-            <Monitor className={`w-8 h-8 mx-auto mb-2 ${theme === 'system' ? 'text-blue-800' : 'text-gray-400'}`} />
-            <p className="text-sm font-medium">{getText('Systeme', 'Rafitra')}</p>
-            {theme === 'system' && <CheckCircle className="w-4 h-4 text-blue-800 mx-auto mt-1" />}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+            {getText('Changer le mot de passe', 'Hanova ny teny miafina')}
           </button>
         </div>
       </SettingCard>
 
-      {/* Taille de la police */}
-      <SettingCard 
-        title={getText('Taille de la police', 'Habeny ny soratra')}
-        description={getText('Ajustez la taille du texte', 'Ampifanaraho ny habeny ny soratra')}
-      >
-        <div className="flex flex-wrap gap-3">
-          {['small', 'medium', 'large'].map((size) => (
-            <button
-              key={size}
-              onClick={() => setFontSize(size)}
-              className={`px-4 py-2.5 rounded-lg border transition ${
-                fontSize === size 
-                  ? 'border-blue-800 bg-blue-50 text-blue-800' 
-                  : 'border-gray-300 text-gray-600 hover:border-blue-300'
-              }`}
-            >
-              <span className={getFontSizeClass(size)}>
-                {size === 'small' && getText('Petit', 'Kely')}
-                {size === 'medium' && getText('Moyen', 'Miary')}
-                {size === 'large' && getText('Grand', 'Lehibe')}
-              </span>
-              {fontSize === size && <CheckCircle className="w-4 h-4 text-blue-800 ml-2 inline" />}
-            </button>
-          ))}
+      <SettingCard title={getText('Session', 'Fivoriana')}>
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div>
+            <p className="text-sm font-medium text-gray-800">{getText('Se deconnecter', 'Mivoaka')}</p>
+            <p className="text-xs text-gray-500">{getText('Mettre fin a votre session', 'Hamarana ny fivorianao')}</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition text-sm flex items-center gap-2"
+          >
+            <LogOut className="w-4 h-4" />
+            {getText('Deconnexion', 'Mivoaha')}
+          </button>
         </div>
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-          <p className={`${getFontSizeClass(fontSize)} text-gray-600`}>
-            {getText('Apercu du texte dans la taille selectionnee', 'Topi-mason\'ny soratra amin\'ny habeny voafidy')}
+        
+        <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-yellow-700">
+            {getText('Apres la deconnexion, vous devrez vous reconnecter avec vos identifiants', 'Rehefa mivoaka dia tsy maintsy hiditra indray miaraka amin\'ny fahalalanao')}
           </p>
         </div>
       </SettingCard>
 
-      {/* Densite */}
-      <SettingCard 
-        title={getText('Densite', 'Fahavitsiana')}
-        description={getText('Ajustez l\'espacement des elements', 'Ampifanaraho ny elanelan\'ny zavatra')}
-      >
-        <div className="flex flex-wrap gap-3">
-          {['compact', 'comfortable', 'spacious'].map((d) => (
-            <button
-              key={d}
-              onClick={() => setDensity(d)}
-              className={`px-4 py-2.5 rounded-lg border transition ${
-                density === d 
-                  ? 'border-blue-800 bg-blue-50 text-blue-800' 
-                  : 'border-gray-300 text-gray-600 hover:border-blue-300'
-              }`}
-            >
-              {d === 'compact' && getText('Compact', 'Kely')}
-              {d === 'comfortable' && getText('Confortable', 'Mila')}
-              {d === 'spacious' && getText('Espace', 'Malalaka')}
-              {density === d && <CheckCircle className="w-4 h-4 text-blue-800 ml-2 inline" />}
-            </button>
-          ))}
+      <SettingCard title={getText('Securite du compte', 'Fiarovana ny kaonty')}>
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <span className="text-gray-600">{getText('Statut du compte', 'Sata ny kaonty')}</span>
+            <span className="text-green-600 font-medium">
+              <CheckCircle className="w-4 h-4 inline mr-1" />
+              {getText('Actif', 'Mavitrika')}
+            </span>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <span className="text-gray-600">{getText('Role', 'Sata')}</span>
+            <span className="text-blue-600 font-medium">
+              {user?.role === 'super_admin' ? 'Super Administrateur' :
+               user?.role === 'admin' ? 'Administrateur' :
+               getText('Utilisateur', 'Mpampiasa')}
+            </span>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <span className="text-gray-600">{getText('Email', 'Email')}</span>
+            <span className="text-gray-800 font-medium">{user?.email}</span>
+          </div>
         </div>
       </SettingCard>
-
-      {/* Preferences supplementaires */}
-      <SettingCard title={getText('Preferences supplementaires', 'Safidy fanampiny')}>
-        <div className="space-y-2">
-          <ToggleSwitch
-            enabled={animations}
-            onChange={setAnimations}
-            label={getText('Animations et transitions', 'Animations sy tetezamita')}
-            description={getText('Activer les animations dans l\'interface', 'Ampiasao ny animations amin\'ny sehatra')}
-          />
-          <ToggleSwitch
-            enabled={sidebarCollapsed}
-            onChange={setSidebarCollapsed}
-            label={getText('Barre laterale reduite', 'Ahena ny sisiny')}
-            description={getText('Reduire la barre laterale', 'Ahena ny sisiny')}
-          />
-        </div>
-      </SettingCard>
-
-      {/* Bouton sauvegarder */}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="px-6 py-2.5 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition disabled:opacity-50 flex items-center gap-2"
-      >
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        {getText('Enregistrer les preferences', 'Tehirizo ny safidy')}
-      </button>
     </div>
   );
 }

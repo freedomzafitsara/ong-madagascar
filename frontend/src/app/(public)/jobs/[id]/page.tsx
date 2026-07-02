@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -10,9 +10,12 @@ import {
   Briefcase, MapPin, Calendar, Building, ArrowLeft, 
   Mail, Phone, Send, AlertCircle, Loader2,
   FileText, User, X, Upload, Trash2, Linkedin, 
-  Globe as GlobeIcon, Camera, Check, FileCheck
+  Globe, Camera, Check, FileCheck,
+  Lock, Info, UserCheck, Shield
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import api from '@/lib/api';
 import { jobService, JobOffer, CreateJobApplicationDto, JobStatus } from '@/services/job.service';
 import { uploadService, UploadedFile } from '@/services/upload.service';
 import toast from 'react-hot-toast';
@@ -21,7 +24,10 @@ import toast from 'react-hot-toast';
 // CONFIGURATION DE L'EDITEUR QUILL
 // ============================================================
 
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+const ReactQuill = dynamic(() => import('react-quill'), { 
+  ssr: false,
+  loading: () => <div className="h-64 bg-gray-100 animate-pulse rounded-lg" />
+});
 import 'react-quill/dist/quill.snow.css';
 
 const QUILL_MODULES = {
@@ -33,7 +39,7 @@ const QUILL_MODULES = {
     [{ 'indent': '-1'}, { 'indent': '+1' }],
     [{ 'align': [] }],
     ['blockquote', 'code-block'],
-    ['link', 'image'],
+    ['link'],
     ['clean']
   ],
 };
@@ -42,11 +48,11 @@ const QUILL_FORMATS = [
   'header', 'bold', 'italic', 'underline', 'strike',
   'color', 'background', 'list', 'bullet', 'check',
   'indent', 'align', 'blockquote', 'code-block',
-  'link', 'image'
+  'link'
 ];
 
 // ============================================================
-// INTERFACES
+// INTERFACES ET TYPES
 // ============================================================
 
 interface ApplicationFormData {
@@ -68,35 +74,132 @@ interface FileUploadState {
   error: string;
 }
 
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
 // ============================================================
 // CONSTANTES
 // ============================================================
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024;
-const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 Mo
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5 Mo
+const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const PHONE_REGEX = /^(?:\+261|0)(?:32|33|34|37|38)\d{7}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ============================================================
-// PAGE PRINCIPALE
+// HOOKS PERSONNALISES
+// ============================================================
+
+const useJobData = (jobId: string, language: string) => {
+  const [job, setJob] = useState<JobOffer | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [hasApplied, setHasApplied] = useState(false);
+
+  const getText = useCallback((fr: string, mg: string) => {
+    return language === 'fr' ? fr : mg;
+  }, [language]);
+
+  const fetchJob = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      let jobData: JobOffer | null = null;
+
+      try {
+        jobData = await jobService.getOfferById(jobId);
+      } catch (err) {
+        console.debug('Route publique echouee, tentative liste...');
+      }
+
+      if (!jobData) {
+        try {
+          const response = await jobService.getPublishedOffers({ limit: 100 });
+          const found = response.data.find((item: JobOffer) => item.id === jobId);
+          if (found) jobData = found;
+        } catch (err) {
+          console.debug('Liste publique echouee');
+        }
+      }
+
+      if (!jobData) {
+        setError(getText(
+          'Cette offre n\'est pas disponible ou a ete supprimee.',
+          'Tsy misy na nesorina ity asa ity.'
+        ));
+        return;
+      }
+
+      if (jobData.status !== JobStatus.PUBLISHED || !jobData.is_published) {
+        setError(getText(
+          'Cette offre n\'est pas encore disponible.',
+          'Tsy mbola misy ity asa ity.'
+        ));
+        return;
+      }
+
+      setJob(jobData);
+    } catch (err) {
+      console.error('Erreur chargement offre:', err);
+      setError(getText(
+        'Une erreur est survenue lors du chargement de l\'offre.',
+        'Nisy olana tamin\'ny fampidinana ny asa.'
+      ));
+    } finally {
+      setLoading(false);
+    }
+  }, [jobId, getText]);
+
+  const checkApplication = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      if (!token) {
+        setHasApplied(false);
+        return;
+      }
+      
+      const response = await api.get(`/jobs/applications/check/${jobId}`);
+      setHasApplied(response.data?.applied || false);
+    } catch (error) {
+      console.error('Erreur verification candidature:', error);
+      setHasApplied(false);
+    }
+  }, [jobId]);
+
+  useEffect(() => {
+    if (jobId) {
+      fetchJob();
+      checkApplication();
+    }
+  }, [jobId, fetchJob, checkApplication]);
+
+  return { job, loading, error, hasApplied, setHasApplied };
+};
+
+// ============================================================
+// COMPOSANT PRINCIPAL
 // ============================================================
 
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { language } = useLanguage();
+  const { user, isAuthenticated } = useAuth();
   const jobId = params?.id as string;
-  
-  // Etat de l'offre
-  const [job, setJob] = useState<JobOffer | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+
+  // Hooks personnalises
+  const { job, loading, error, hasApplied, setHasApplied } = useJobData(jobId, language);
   
   // Etat du formulaire
-  const [applying, setApplying] = useState<boolean>(false);
-  const [showApplicationForm, setShowApplicationForm] = useState<boolean>(false);
-  const [phoneError, setPhoneError] = useState<string>('');
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [applying, setApplying] = useState(false);
+  const [showApplicationForm, setShowApplicationForm] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   
-  // Etat des fichiers uploades
+  // Etat des fichiers
   const [cvState, setCvState] = useState<FileUploadState>({
     file: null,
     uploading: false,
@@ -143,15 +246,13 @@ export default function JobDetailPage() {
   }, [language]);
 
   const validateEmail = useCallback((email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    return EMAIL_REGEX.test(email);
   }, []);
 
-  const validatePhoneNumber = useCallback((phone: string): boolean => {
+  const validatePhone = useCallback((phone: string): boolean => {
     if (!phone) return true;
     const cleanPhone = phone.replace(/\s/g, '');
-    const phoneRegex = /^(?:\+261|0)(?:32|33|34|37|38)\d{7}$/;
-    return phoneRegex.test(cleanPhone);
+    return PHONE_REGEX.test(cleanPhone);
   }, []);
 
   const formatPhoneNumber = useCallback((phone: string): string => {
@@ -167,85 +268,6 @@ export default function JobDetailPage() {
   }, []);
 
   // ============================================================
-  // CHARGEMENT DE L'OFFRE AVEC FALLBACK
-  // ============================================================
-
-  useEffect(() => {
-    if (jobId) {
-      fetchJobWithFallback();
-    }
-    return () => {
-      if (photoPreview) {
-        URL.revokeObjectURL(photoPreview);
-      }
-    };
-  }, [jobId]);
-
-  const fetchJobWithFallback = async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      let jobData: JobOffer | null = null;
-      
-      // Tentative 1: Route publique directe
-      try {
-        console.log('Tentative 1: Route publique directe...');
-        jobData = await jobService.getOfferById(jobId);
-        if (jobData) {
-          console.log('Offre trouvee via route publique');
-        }
-      } catch (err: any) {
-        console.log('Route publique echouee:', err.response?.status);
-      }
-      
-      // Si l'offre n'a pas ete trouvee, tentative 2: depuis la liste publique
-      if (!jobData) {
-        try {
-          console.log('Tentative 2: Recuperation depuis la liste publique...');
-          const response = await jobService.getPublishedOffers({ limit: 100 });
-          const found = response.data.find((item: JobOffer) => item.id === jobId);
-          if (found) {
-            jobData = found;
-            console.log('Offre trouvee dans la liste publique');
-          }
-        } catch (listErr) {
-          console.log('Liste publique echouee');
-        }
-      }
-      
-      if (!jobData) {
-        setError(getText(
-          'Cette offre n\'est pas disponible ou a ete supprimee.',
-          'Tsy misy na nesorina ity asa ity.'
-        ));
-        setLoading(false);
-        return;
-      }
-      
-      if (jobData.status !== JobStatus.PUBLISHED || !jobData.is_published) {
-        setError(getText(
-          'Cette offre n\'est pas encore disponible.',
-          'Tsy mbola misy ity asa ity.'
-        ));
-        setLoading(false);
-        return;
-      }
-      
-      setJob(jobData);
-      
-    } catch (error) {
-      console.error('Erreur generale:', error);
-      setError(getText(
-        'Une erreur est survenue lors du chargement de l\'offre.',
-        'Nisy olana tamin\'ny fampidinana ny asa.'
-      ));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ============================================================
   // GESTION DU FORMULAIRE
   // ============================================================
 
@@ -253,23 +275,16 @@ export default function JobDetailPage() {
     const rawValue = e.target.value;
     const formatted = formatPhoneNumber(rawValue);
     setFormData(prev => ({ ...prev, phone: formatted }));
-    
-    if (rawValue && !validatePhoneNumber(rawValue)) {
-      setPhoneError(getText(
-        'Format invalide. Utilisez +261 XX XXX XX',
-        'Tsy mety ny format. Mampiasa +261 XX XXX XX'
-      ));
-    } else {
-      setPhoneError('');
-    }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>): void => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ): void => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    if (formErrors[name]) {
-      setFormErrors(prev => ({ ...prev, [name]: '' }));
-    }
+    
+    // Effacer les erreurs de validation pour ce champ
+    setValidationErrors(prev => prev.filter(err => err.field !== name));
   };
 
   const handleCoverLetterChange = (value: string): void => {
@@ -277,14 +292,8 @@ export default function JobDetailPage() {
   };
 
   // ============================================================
-  // GESTION DES FICHIERS - AVEC VERIFICATION D'AUTHENTIFICATION
+  // GESTION DES FICHIERS
   // ============================================================
-
-  const isAuthenticated = useCallback((): boolean => {
-    if (typeof window === 'undefined') return false;
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-    return !!token;
-  }, []);
 
   const handleFileUpload = async (
     file: File,
@@ -294,23 +303,22 @@ export default function JobDetailPage() {
     setState(prev => ({ ...prev, uploading: true, error: '' }));
     
     try {
-      // ✅ Vérifier si l'utilisateur est authentifié avant l'upload
-      if (!isAuthenticated()) {
+      if (!isAuthenticated) {
         const message = getText(
-          'Vous devez être connecté pour uploader des fichiers. Veuillez vous connecter.',
-          'Mila miditra ianao vao afaka mandefa rakitra. Mba midira aloha.'
+          'Vous devez etre connecte pour uploader des fichiers.',
+          'Mila miditra ianao vao afaka mandefa rakitra.'
         );
         setState(prev => ({ ...prev, file: null, uploading: false, error: message }));
         toast.error(message);
         return null;
       }
 
-      const result = await uploadService.uploadImage(file, type as any, jobId);
+      const result = await uploadService.uploadImage(file, type as any);
       setState(prev => ({ ...prev, file: result, uploading: false, error: '' }));
       
       toast.success(getText(
-        'Fichier uploadé avec succès !',
-        'Vita soa aman-tsara ny fampidirana rakitra !'
+        'Fichier uploade avec succes.',
+        'Vita soa aman-tsara ny fampidirana rakitra.'
       ));
       
       return result.url || uploadService.getImageUrl(result.id);
@@ -318,14 +326,12 @@ export default function JobDetailPage() {
       const errorMessage = err.message || 'Erreur lors de l\'upload';
       setState(prev => ({ ...prev, file: null, uploading: false, error: errorMessage }));
       
-      if (errorMessage.includes('connecté') || errorMessage.includes('Session expirée')) {
+      if (errorMessage.includes('connecte') || errorMessage.includes('Session expiree')) {
         toast.error(getText(
-          'Session expirée. Veuillez vous reconnecter.',
+          'Session expiree. Veuillez vous reconnecter.',
           'Lasa ny fotoana nidirana. Mba midira indray.'
         ));
-        setTimeout(() => {
-          router.push('/login');
-        }, 1500);
+        setTimeout(() => router.push('/login'), 1500);
       } else {
         toast.error(errorMessage);
       }
@@ -338,12 +344,18 @@ export default function JobDetailPage() {
     if (!file) return;
     
     if (file.type !== 'application/pdf') {
-      setCvState(prev => ({ ...prev, error: getText('Seuls les fichiers PDF sont acceptes', 'Ny rakitra PDF ihany no ekena') }));
+      setCvState(prev => ({ 
+        ...prev, 
+        error: getText('Seuls les fichiers PDF sont acceptes', 'Ny rakitra PDF ihany no ekena') 
+      }));
       return;
     }
     
     if (file.size > MAX_FILE_SIZE) {
-      setCvState(prev => ({ ...prev, error: getText('Fichier trop grand (max 100 Mo)', 'Lehibe loatra ny rakitra (farany 100 Mo)') }));
+      setCvState(prev => ({ 
+        ...prev, 
+        error: getText('Fichier trop grand (max 100 Mo)', 'Lehibe loatra ny rakitra (farany 100 Mo)') 
+      }));
       return;
     }
     
@@ -356,12 +368,18 @@ export default function JobDetailPage() {
     if (!file) return;
     
     if (file.type !== 'application/pdf') {
-      setCoverLetterState(prev => ({ ...prev, error: getText('Seuls les fichiers PDF sont acceptes', 'Ny rakitra PDF ihany no ekena') }));
+      setCoverLetterState(prev => ({ 
+        ...prev, 
+        error: getText('Seuls les fichiers PDF sont acceptes', 'Ny rakitra PDF ihany no ekena') 
+      }));
       return;
     }
     
     if (file.size > MAX_FILE_SIZE) {
-      setCoverLetterState(prev => ({ ...prev, error: getText('Fichier trop grand (max 100 Mo)', 'Lehibe loatra ny rakitra (farany 100 Mo)') }));
+      setCoverLetterState(prev => ({ 
+        ...prev, 
+        error: getText('Fichier trop grand (max 100 Mo)', 'Lehibe loatra ny rakitra (farany 100 Mo)') 
+      }));
       return;
     }
     
@@ -373,20 +391,27 @@ export default function JobDetailPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setPhotoState(prev => ({ ...prev, error: getText('Formats acceptes: JPG, PNG, WEBP', 'Endrika azo: JPG, PNG, WEBP') }));
+    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+      setPhotoState(prev => ({ 
+        ...prev, 
+        error: getText('Formats acceptes: JPG, PNG, WEBP', 'Endrika azo: JPG, PNG, WEBP') 
+      }));
       return;
     }
     
     if (file.size > MAX_PHOTO_SIZE) {
-      setPhotoState(prev => ({ ...prev, error: getText('Photo trop grande (max 5 Mo)', 'Lehibe loatra ny sary (farany 5 Mo)') }));
+      setPhotoState(prev => ({ 
+        ...prev, 
+        error: getText('Photo trop grande (max 5 Mo)', 'Lehibe loatra ny sary (farany 5 Mo)') 
+      }));
       return;
     }
     
+    // Nettoyer l'ancienne preview
     if (photoPreview) {
       URL.revokeObjectURL(photoPreview);
     }
+    
     setPhotoPreview(URL.createObjectURL(file));
     setPhotoState(prev => ({ ...prev, error: '' }));
     await handleFileUpload(file, 'profile', setPhotoState);
@@ -412,37 +437,77 @@ export default function JobDetailPage() {
   };
 
   // ============================================================
-  // VALIDATION ET SOUMISSION
+  // VALIDATION DU FORMULAIRE
   // ============================================================
 
-  const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
+  const validateForm = useCallback((): boolean => {
+    const errors: ValidationError[] = [];
     
     if (!formData.full_name.trim()) {
-      errors.full_name = getText('Le nom complet est requis', 'Ilaina ny anarana feno');
+      errors.push({
+        field: 'full_name',
+        message: getText('Le nom complet est requis', 'Ilaina ny anarana feno')
+      });
     }
     
     if (!validateEmail(formData.email)) {
-      errors.email = getText('Email invalide', 'Tsy mety ny email');
+      errors.push({
+        field: 'email',
+        message: getText('Email invalide', 'Tsy mety ny email')
+      });
     }
     
-    if (formData.phone && !validatePhoneNumber(formData.phone)) {
-      errors.phone = getText('Numero de telephone invalide', 'Tsy mety ny laharana');
+    if (formData.phone && !validatePhone(formData.phone)) {
+      errors.push({
+        field: 'phone',
+        message: getText('Numero de telephone invalide', 'Tsy mety ny laharana')
+      });
     }
     
     if (!cvState.file) {
-      errors.cv = getText('CV requis (PDF)', 'Ilaina ny CV (PDF)');
+      errors.push({
+        field: 'cv',
+        message: getText('CV requis (PDF)', 'Ilaina ny CV (PDF)')
+      });
     }
     
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
+    setValidationErrors(errors);
+    return errors.length === 0;
+  }, [formData, cvState.file, validateEmail, validatePhone, getText]);
+
+  // ============================================================
+  // SOUMISSION DU FORMULAIRE
+  // ============================================================
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
+    if (!isAuthenticated) {
+      toast.error(getText(
+        'Veuillez vous connecter pour postuler.',
+        'Mba midira aloha vao hangataka.'
+      ));
+      router.push(`/login?redirect=/jobs/${jobId}`);
+      return;
+    }
+
+    if (hasApplied) {
+      toast.error(getText(
+        'Vous avez deja postule a cette offre.',
+        'Efa nangatahana ity asa ity ianao.'
+      ));
+      return;
+    }
+    
     if (!validateForm()) {
       toast.error(getText('Veuillez corriger les erreurs', 'Ahitsio ny hadisoana'));
+      
+      // Focus sur le premier champ en erreur
+      const firstError = validationErrors[0];
+      if (firstError) {
+        const element = document.querySelector(`[name="${firstError.field}"]`) as HTMLElement;
+        if (element) element.focus();
+      }
       return;
     }
     
@@ -469,11 +534,20 @@ export default function JobDetailPage() {
       };
       
       await jobService.apply(applicationData);
-      toast.success(getText('Candidature envoyee avec succes !', 'Vita soa aman-tsara ny fandefasana!'));
+      
+      toast.success(getText(
+        'Candidature envoyee avec succes.',
+        'Vita soa aman-tsara ny fandefasana.'
+      ));
+      
+      setHasApplied(true);
       setShowApplicationForm(false);
       resetForm();
+      
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || getText('Erreur lors de l\'envoi', 'Nisy olana tamin\'ny fandefasana');
+      const errorMessage = error.response?.data?.message || 
+                          error.message || 
+                          getText('Erreur lors de l\'envoi', 'Nisy olana tamin\'ny fandefasana');
       toast.error(errorMessage);
     } finally {
       setApplying(false);
@@ -493,15 +567,49 @@ export default function JobDetailPage() {
       linkedin_url: '',
       portfolio_url: ''
     });
-    setPhoneError('');
-    setFormErrors({});
+    setValidationErrors([]);
     removeCv();
     removeCoverLetterFile();
     removePhoto();
   };
 
   // ============================================================
-  // RENDU - CHARGEMENT
+  // GESTION DE L'OUVERTURE DU FORMULAIRE
+  // ============================================================
+
+  const handleOpenApplicationForm = (): void => {
+    if (!isAuthenticated) {
+      toast.error(getText(
+        'Veuillez vous connecter ou creer un compte pour postuler.',
+        'Mba midira na hamorona kaonty aloha vao hangataka.'
+      ));
+      router.push(`/login?redirect=/jobs/${jobId}`);
+      return;
+    }
+    
+    if (hasApplied) {
+      toast.error(getText(
+        'Vous avez deja postule a cette offre.',
+        'Efa nangatahana ity asa ity ianao.'
+      ));
+      return;
+    }
+    
+    // Pré-remplir le formulaire avec les données de l'utilisateur
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+        email: user.email || '',
+        phone: user.phone || '',
+      }));
+    }
+    
+    setShowApplicationForm(true);
+  };
+
+  // ============================================================
+  // RENDU CONDITIONNEL - CHARGEMENT
   // ============================================================
 
   if (loading) {
@@ -513,7 +621,7 @@ export default function JobDetailPage() {
   }
 
   // ============================================================
-  // RENDU - ERREUR
+  // RENDU CONDITIONNEL - ERREUR
   // ============================================================
 
   if (error || !job) {
@@ -536,6 +644,10 @@ export default function JobDetailPage() {
     );
   }
 
+  // ============================================================
+  // RENDU PRINCIPAL
+  // ============================================================
+
   const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
   const isAvailable = job.status === JobStatus.PUBLISHED && job.is_published && !isExpired;
   
@@ -546,18 +658,23 @@ export default function JobDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       
-      <div className="bg-white border-b sticky top-0 z-10 shadow-sm">
+      {/* Header de navigation */}
+      <header className="bg-white border-b sticky top-0 z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-4">
-          <Link href="/jobs" className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-800 transition">
+          <Link 
+            href="/jobs" 
+            className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-800 transition-colors"
+          >
             <ArrowLeft className="w-4 h-4" />
             <span>{getText('Retour aux offres', 'Hiverina any amin\'ny asa')}</span>
           </Link>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <main className="max-w-6xl mx-auto px-4 py-8">
         
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+        {/* Carte de l'offre */}
+        <section className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
           {imageUrl && (
             <div className="relative h-72 w-full bg-gradient-to-r from-blue-800 to-blue-900">
               <img 
@@ -595,7 +712,9 @@ export default function JobDetailPage() {
                 </span>
               )}
               {job.deadline && (
-                <span className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full ${isExpired ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-800'}`}>
+                <span className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full ${
+                  isExpired ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-800'
+                }`}>
                   <Calendar className="w-4 h-4" />
                   <span>
                     {getText('Date limite:', 'Farany:')} {new Date(job.deadline).toLocaleDateString('fr-FR')}
@@ -604,14 +723,79 @@ export default function JobDetailPage() {
               )}
             </div>
 
+            {/* Message pour les visiteurs non authentifies */}
+            {isAvailable && !isAuthenticated && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-blue-800 font-medium">
+                    {getText(
+                      'Vous devez avoir un compte pour postuler a cette offre.',
+                      'Mila manana kaonty ianao vao afaka mangataka ity asa ity.'
+                    )}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    <Link href="/register" className="underline font-semibold hover:text-blue-800">
+                      {getText('Creer un compte', 'Hamorona kaonty')}
+                    </Link>
+                    {getText(' ou ', ' na ')}
+                    <Link href={`/login?redirect=/jobs/${jobId}`} className="underline font-semibold hover:text-blue-800">
+                      {getText('se connecter', 'midira')}
+                    </Link>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Message si deja postule */}
+            {isAvailable && isAuthenticated && hasApplied && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+                <UserCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-emerald-800 font-medium">
+                    {getText(
+                      'Vous avez deja postule a cette offre.',
+                      'Efa nangatahana ity asa ity ianao.'
+                    )}
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-1">
+                    {getText(
+                      'Consultez vos candidatures dans votre espace personnel.',
+                      'Jereo ny fangatahanao ao amin\'ny toeranao manokana.'
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Bouton d'action principal */}
             {isAvailable ? (
-              <button
-                onClick={() => setShowApplicationForm(true)}
-                className="w-full md:w-auto bg-blue-800 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-900 transition flex items-center justify-center gap-2 shadow-md"
-              >
-                <Send className="w-5 h-5" />
-                <span>{getText('Postuler maintenant', 'Mangataka izao')}</span>
-              </button>
+              isAuthenticated && hasApplied ? (
+                <button
+                  disabled
+                  className="w-full md:w-auto bg-gray-400 text-white px-8 py-3 rounded-xl font-semibold cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Check className="w-5 h-5" />
+                  <span>{getText('Deja postule', 'Efa nangataka')}</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleOpenApplicationForm}
+                  className="w-full md:w-auto bg-blue-800 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-900 transition-colors flex items-center justify-center gap-2 shadow-md"
+                >
+                  {isAuthenticated ? (
+                    <>
+                      <Send className="w-5 h-5" />
+                      <span>{getText('Postuler maintenant', 'Mangataka izao')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-5 h-5" />
+                      <span>{getText('Se connecter pour postuler', 'Midira aloha vao mangataka')}</span>
+                    </>
+                  )}
+                </button>
+              )
             ) : (
               <div className="bg-gray-100 text-gray-600 p-4 rounded-xl flex items-center gap-2">
                 <AlertCircle className="w-5 h-5" />
@@ -623,9 +807,10 @@ export default function JobDetailPage() {
               </div>
             )}
           </div>
-        </div>
+        </section>
 
-        <div className="bg-white rounded-2xl shadow-lg p-8">
+        {/* Description du poste */}
+        <section className="bg-white rounded-2xl shadow-lg p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <FileText className="w-6 h-6 text-blue-800" />
             <span>{getText('Description du poste', 'Famaritana ny asa')}</span>
@@ -633,9 +818,10 @@ export default function JobDetailPage() {
           <div className="prose max-w-none text-gray-600 whitespace-pre-wrap leading-relaxed">
             {description}
           </div>
-        </div>
+        </section>
 
-        {showApplicationForm && isAvailable && (
+        {/* Formulaire de candidature */}
+        {showApplicationForm && isAvailable && isAuthenticated && !hasApplied && (
           <div 
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" 
             onClick={() => setShowApplicationForm(false)}
@@ -645,6 +831,7 @@ export default function JobDetailPage() {
               onClick={(e) => e.stopPropagation()}
             >
               
+              {/* En-tete du formulaire */}
               <div className="sticky top-0 bg-white border-b p-5 flex justify-between items-center">
                 <div>
                   <h2 className="text-xl font-bold text-gray-800">
@@ -654,16 +841,17 @@ export default function JobDetailPage() {
                 </div>
                 <button 
                   onClick={() => setShowApplicationForm(false)} 
-                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition"
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                  aria-label="Fermer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
-              <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6">
+              <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6" noValidate>
                 
-                {/* Photo de profil */}
-                <div className="border-b border-gray-200 pb-6">
+                {/* Section: Photo de profil */}
+                <section className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Camera className="w-5 h-5 text-blue-800" />
                     <span>{getText('Photo de profil', 'Sary momba anao')}</span>
@@ -680,7 +868,8 @@ export default function JobDetailPage() {
                       <button
                         type="button"
                         onClick={() => photoInputRef.current?.click()}
-                        className="absolute bottom-0 right-0 p-1.5 bg-blue-800 text-white rounded-full hover:bg-blue-900 transition shadow-md"
+                        className="absolute bottom-0 right-0 p-1.5 bg-blue-800 text-white rounded-full hover:bg-blue-900 transition-colors shadow-md"
+                        aria-label="Uploader une photo"
                       >
                         <Camera className="w-3 h-3" />
                       </button>
@@ -690,6 +879,7 @@ export default function JobDetailPage() {
                         accept="image/jpeg,image/jpg,image/png,image/webp"
                         onChange={handlePhotoChange}
                         className="hidden"
+                        aria-label="Photo de profil"
                       />
                     </div>
                     <div className="flex-1">
@@ -700,112 +890,132 @@ export default function JobDetailPage() {
                         {getText('Formats: JPG, PNG, WEBP. Max 5 Mo', 'Endrika: JPG, PNG, WEBP. Farany 5 Mo')}
                       </p>
                       {photoState.file && (
-                        <div className="mt-2 flex items-center gap-2 text-green-600 text-sm">
+                        <div className="mt-2 flex items-center gap-2 text-emerald-600 text-sm">
                           <Check className="w-4 h-4" />
                           <span>{getText('Photo uploadee', 'Nahomana ny fampidirana sary')}</span>
                         </div>
                       )}
                     </div>
                   </div>
-                  {photoState.error && <p className="text-xs text-red-500 mt-2">{photoState.error}</p>}
-                </div>
+                  {photoState.error && (
+                    <p className="text-xs text-red-500 mt-2">{photoState.error}</p>
+                  )}
+                </section>
 
-                {/* Informations personnelles */}
-                <div className="border-b border-gray-200 pb-6">
+                {/* Section: Informations personnelles */}
+                <section className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <User className="w-5 h-5 text-blue-800" />
                     <span>{getText('Informations personnelles', 'Fampahalalana manokana')}</span>
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
                         {getText('Nom complet', 'Anarana feno')} <span className="text-red-500">*</span>
                       </label>
                       <input
+                        id="full_name"
                         type="text"
                         name="full_name"
                         required
                         value={formData.full_name}
                         onChange={handleInputChange}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition ${
-                          formErrors.full_name ? 'border-red-500' : 'border-gray-300'
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors ${
+                          validationErrors.some(e => e.field === 'full_name') 
+                            ? 'border-red-500' 
+                            : 'border-gray-300'
                         }`}
                         placeholder={getText('Votre nom complet', 'Anaranao feno')}
                       />
-                      {formErrors.full_name && (
-                        <p className="text-xs text-red-500 mt-1">{formErrors.full_name}</p>
+                      {validationErrors.map(err => 
+                        err.field === 'full_name' && (
+                          <p key={err.field} className="text-xs text-red-500 mt-1">{err.message}</p>
+                        )
                       )}
                     </div>
+                    
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                         Email <span className="text-red-500">*</span>
                       </label>
                       <input
+                        id="email"
                         type="email"
                         name="email"
                         required
                         value={formData.email}
                         onChange={handleInputChange}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition ${
-                          formErrors.email ? 'border-red-500' : 'border-gray-300'
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors ${
+                          validationErrors.some(e => e.field === 'email') 
+                            ? 'border-red-500' 
+                            : 'border-gray-300'
                         }`}
                         placeholder="votre@email.com"
                       />
-                      {formErrors.email && (
-                        <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>
+                      {validationErrors.map(err => 
+                        err.field === 'email' && (
+                          <p key={err.field} className="text-xs text-red-500 mt-1">{err.message}</p>
+                        )
                       )}
                     </div>
+                    
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
                         {getText('Telephone', 'Telefaonina')}
                       </label>
-                      <div>
-                        <input
-                          type="tel"
-                          name="phone"
-                          value={formData.phone}
-                          onChange={handlePhoneChange}
-                          className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition ${
-                            phoneError || formErrors.phone ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                          placeholder="+261 XX XXX XX"
-                        />
-                        {(phoneError || formErrors.phone) && (
-                          <p className="text-xs text-red-500 mt-1">{phoneError || formErrors.phone}</p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-1">
-                          {getText('Format: +261 XX XXX XX', 'Format: +261 XX XXX XX')}
-                        </p>
-                      </div>
+                      <input
+                        id="phone"
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handlePhoneChange}
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors ${
+                          validationErrors.some(e => e.field === 'phone') 
+                            ? 'border-red-500' 
+                            : 'border-gray-300'
+                        }`}
+                        placeholder="+261 XX XXX XX"
+                      />
+                      {validationErrors.map(err => 
+                        err.field === 'phone' && (
+                          <p key={err.field} className="text-xs text-red-500 mt-1">{err.message}</p>
+                        )
+                      )}
+                      <p className="text-xs text-gray-400 mt-1">
+                        {getText('Format: +261 XX XXX XX', 'Format: +261 XX XXX XX')}
+                      </p>
                     </div>
+                    
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
                         {getText('Adresse', 'Adiresy')}
                       </label>
                       <input
+                        id="address"
                         type="text"
                         name="address"
                         value={formData.address}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
                         placeholder={getText('Antananarivo, Madagascar', 'Antananarivo, Madagasikara')}
                       />
                     </div>
                   </div>
-                </div>
+                </section>
 
-                {/* Experience professionnelle */}
-                <div className="border-b border-gray-200 pb-6">
+                {/* Section: Experience professionnelle */}
+                <section className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Briefcase className="w-5 h-5 text-blue-800" />
                     <span>{getText('Experience professionnelle', 'Traza')}</span>
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="experience_years" className="block text-sm font-medium text-gray-700 mb-1">
                         {getText('Annees d\'experience', 'Taona fahaizana')}
                       </label>
                       <select
+                        id="experience_years"
                         name="experience_years"
                         value={formData.experience_years}
                         onChange={handleInputChange}
@@ -819,37 +1029,41 @@ export default function JobDetailPage() {
                         <option value="10">10+ {getText('ans', 'taona')}</option>
                       </select>
                     </div>
+                    
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="current_position" className="block text-sm font-medium text-gray-700 mb-1">
                         {getText('Poste actuel', 'Toerana misy anao')}
                       </label>
                       <input
+                        id="current_position"
                         type="text"
                         name="current_position"
                         value={formData.current_position}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
                         placeholder={getText('Developpeur Web', 'Mpamorona tranokala')}
                       />
                     </div>
+                    
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="current_company" className="block text-sm font-medium text-gray-700 mb-1">
                         {getText('Entreprise actuelle', 'Orinasa misy anao')}
                       </label>
                       <input
+                        id="current_company"
                         type="text"
                         name="current_company"
                         value={formData.current_company}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
                         placeholder={getText('Tech Company', 'Orinasa teknolojia')}
                       />
                     </div>
                   </div>
-                </div>
+                </section>
 
-                {/* CV */}
-                <div className="border-b border-gray-200 pb-6">
+                {/* Section: CV */}
+                <section className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-800" />
                     <span>{getText('Curriculum Vitae (CV)', 'Curriculum Vitae (CV)')}</span>
@@ -858,9 +1072,9 @@ export default function JobDetailPage() {
                   </h3>
                   
                   {cvState.file ? (
-                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <FileCheck className="w-8 h-8 text-green-600" />
+                        <FileCheck className="w-8 h-8 text-emerald-600" />
                         <div>
                           <p className="font-medium text-gray-800">{cvState.file.fileName}</p>
                           <p className="text-xs text-gray-500">
@@ -868,15 +1082,22 @@ export default function JobDetailPage() {
                           </p>
                         </div>
                       </div>
-                      <button type="button" onClick={removeCv} className="text-red-500 hover:text-red-700 p-2">
+                      <button 
+                        type="button" 
+                        onClick={removeCv} 
+                        className="text-red-500 hover:text-red-700 p-2"
+                        aria-label="Supprimer le CV"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (
                     <div
                       onClick={() => cvInputRef.current?.click()}
-                      className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition ${
-                        cvState.error || formErrors.cv ? 'border-red-400 bg-red-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                      className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                        validationErrors.some(e => e.field === 'cv') 
+                          ? 'border-red-400 bg-red-50' 
+                          : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
                       }`}
                     >
                       <input
@@ -901,20 +1122,25 @@ export default function JobDetailPage() {
                       )}
                     </div>
                   )}
-                  {(cvState.error || formErrors.cv) && (
-                    <p className="text-xs text-red-500 mt-2">{cvState.error || formErrors.cv}</p>
+                  {validationErrors.map(err => 
+                    err.field === 'cv' && (
+                      <p key={err.field} className="text-xs text-red-500 mt-2">{err.message}</p>
+                    )
                   )}
-                </div>
+                  {cvState.error && (
+                    <p className="text-xs text-red-500 mt-2">{cvState.error}</p>
+                  )}
+                </section>
 
-                {/* Lettre de motivation */}
-                <div className="border-b border-gray-200 pb-6">
+                {/* Section: Lettre de motivation */}
+                <section className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Mail className="w-5 h-5 text-blue-800" />
                     <span>{getText('Lettre de motivation', 'Taraty fanekena')}</span>
                   </h3>
                   
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="cover_letter" className="block text-sm font-medium text-gray-700 mb-2">
                       {getText('Redigez votre lettre', 'Soraty ny taratasy')}
                     </label>
                     <div className="quill-editor">
@@ -933,13 +1159,13 @@ export default function JobDetailPage() {
                     </div>
                   </div>
                   
-                  <div className="mt-4">
+                  <div>
                     <p className="text-sm text-gray-500 mb-2">
                       {getText('Ou uploader un fichier PDF', 'Na alefaso ny rakitra PDF')}
                     </p>
                     <div
                       onClick={() => coverLetterInputRef.current?.click()}
-                      className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition"
+                      className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
                     >
                       <input
                         ref={coverLetterInputRef}
@@ -951,7 +1177,7 @@ export default function JobDetailPage() {
                       {coverLetterState.uploading ? (
                         <Loader2 className="w-8 h-8 text-blue-800 animate-spin mx-auto" />
                       ) : coverLetterState.file ? (
-                        <div className="flex items-center justify-center gap-2 text-green-600">
+                        <div className="flex items-center justify-center gap-2 text-emerald-600">
                           <FileCheck className="w-5 h-5" />
                           <span className="text-sm">{coverLetterState.file.fileName}</span>
                           <span className="text-xs text-gray-500 ml-1">
@@ -961,6 +1187,7 @@ export default function JobDetailPage() {
                             type="button"
                             onClick={(e) => { e.stopPropagation(); removeCoverLetterFile(); }}
                             className="text-red-500 hover:text-red-700"
+                            aria-label="Supprimer la lettre de motivation"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -975,67 +1202,78 @@ export default function JobDetailPage() {
                       )}
                     </div>
                   </div>
-                  {coverLetterState.error && <p className="text-xs text-red-500 mt-2">{coverLetterState.error}</p>}
-                </div>
+                  {coverLetterState.error && (
+                    <p className="text-xs text-red-500 mt-2">{coverLetterState.error}</p>
+                  )}
+                </section>
 
-                {/* Liens professionnels */}
-                <div className="border-b border-gray-200 pb-6">
+                {/* Section: Liens professionnels */}
+                <section className="border-b border-gray-200 pb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <GlobeIcon className="w-5 h-5 text-blue-800" />
+                    <Globe className="w-5 h-5 text-blue-800" />
                     <span>{getText('Liens professionnels', 'Rohy momba ny asa')}</span>
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="linkedin_url" className="block text-sm font-medium text-gray-700 mb-1">
                         LinkedIn
                       </label>
                       <div className="relative">
                         <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
+                          id="linkedin_url"
                           type="url"
                           name="linkedin_url"
                           value={formData.linkedin_url}
                           onChange={handleInputChange}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
                           placeholder="https://linkedin.com/in/..."
                         />
                       </div>
                     </div>
+                    
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="portfolio_url" className="block text-sm font-medium text-gray-700 mb-1">
                         {getText('Portfolio / Site web', 'Portfolio / Tranokala')}
                       </label>
                       <div className="relative">
-                        <GlobeIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
+                          id="portfolio_url"
                           type="url"
                           name="portfolio_url"
                           value={formData.portfolio_url}
                           onChange={handleInputChange}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition"
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
                           placeholder="https://..."
                         />
                       </div>
                     </div>
                   </div>
-                </div>
+                </section>
 
                 {/* Boutons d'action */}
-                <div className="flex gap-3 pt-4">
+                <div className="flex flex-col sm:flex-row gap-3 pt-4">
                   <button
                     type="button"
                     onClick={() => setShowApplicationForm(false)}
-                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition font-medium"
+                    className="px-4 py-2.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors font-medium sm:flex-1 order-2 sm:order-1"
                   >
                     {getText('Annuler', 'Aoka')}
                   </button>
                   <button
                     type="submit"
                     disabled={applying}
-                    className="flex-1 bg-blue-800 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-blue-900 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
+                    className="px-4 py-2.5 bg-blue-800 text-white rounded-xl font-semibold hover:bg-blue-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md sm:flex-1 order-1 sm:order-2"
                   >
-                    {applying ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                    {applying ? getText('Envoi...', 'Fandefasana...') : getText('Envoyer ma candidature', 'Alefaso ny fangatahana')}
+                    {applying ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Send className="w-5 h-5" />
+                    )}
+                    {applying 
+                      ? getText('Envoi...', 'Fandefasana...') 
+                      : getText('Envoyer ma candidature', 'Alefaso ny fangatahana')}
                   </button>
                 </div>
 
@@ -1049,12 +1287,16 @@ export default function JobDetailPage() {
             </div>
           </div>
         )}
-      </div>
+      </main>
 
+      {/* Styles globaux pour l'editeur Quill */}
       <style jsx global>{`
         .quill-editor .ql-container {
           min-height: 250px;
           font-size: 14px;
+          border-bottom-left-radius: 8px;
+          border-bottom-right-radius: 8px;
+          border-color: #e5e7eb;
         }
         .quill-editor .ql-editor {
           min-height: 250px;
@@ -1065,13 +1307,12 @@ export default function JobDetailPage() {
           border-color: #e5e7eb;
           background-color: #f9fafb;
         }
-        .quill-editor .ql-container {
-          border-bottom-left-radius: 8px;
-          border-bottom-right-radius: 8px;
-          border-color: #e5e7eb;
-        }
         .quill-editor .ql-editor p {
-          mb-2: 0.5rem;
+          margin-bottom: 0.5rem;
+        }
+        .quill-editor .ql-editor.ql-blank::before {
+          color: #9ca3af;
+          font-style: normal;
         }
       `}</style>
     </div>

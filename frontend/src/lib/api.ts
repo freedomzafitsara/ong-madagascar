@@ -14,7 +14,6 @@ import toast from 'react-hot-toast';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
-// Création de l'instance axios
 export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -100,7 +99,10 @@ const isPublicPage = (): boolean => {
     path.includes('/offers') ||
     path.includes('/public') ||
     path.includes('/register') ||
-    path.includes('/forgot-password')
+    path.includes('/forgot-password') ||
+    path.includes('/blog') ||
+    path.includes('/projects') ||
+    path.includes('/contact')
   );
 };
 
@@ -115,7 +117,6 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Debug en développement
     if (process.env.NODE_ENV === 'development') {
       console.log(`[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     }
@@ -123,7 +124,7 @@ api.interceptors.request.use(
     return config;
   },
   (error: AxiosError) => {
-    console.error('[API] Erreur requête:', error.message);
+    console.error('[API] Erreur requete:', error.message);
     return Promise.reject(error);
   }
 );
@@ -134,7 +135,6 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response: AxiosResponse) => {
-    // Debug en développement
     if (process.env.NODE_ENV === 'development') {
       console.log(`[API] ${response.status} ${response.config.url}`);
     }
@@ -143,11 +143,10 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     
-    // Erreur réseau
     if (!error.response) {
-      console.error('[API] Erreur réseau:', error.message);
+      console.error('[API] Erreur reseau:', error.message);
       if (!isPublicPage()) {
-        toast.error('Impossible de contacter le serveur. Vérifiez votre connexion.');
+        toast.error('Impossible de contacter le serveur. Verifiez votre connexion.');
       }
       return Promise.reject(error);
     }
@@ -158,18 +157,16 @@ api.interceptors.response.use(
     const message = data?.message || data?.error || error.message;
 
     // ============================================================
-    // 401 - Non authentifié
+    // 401 - Non authentifie
     // ============================================================
     if (status === 401) {
-      console.warn(`[API] 401 Non autorisé: ${url}`);
+      console.warn(`[API] 401 Non autorise: ${url}`);
       
-      // Éviter les boucles infinies
       if (originalRequest?._retry) {
-        console.warn('[API] Tentative de refresh déjà en cours, abandon.');
+        console.warn('[API] Tentative de refresh deja en cours, abandon.');
         return Promise.reject(error);
       }
       
-      // Ne pas tenter de refresh sur les routes d'auth
       if (originalRequest?.url?.includes('/auth/refresh') || 
           originalRequest?.url?.includes('/auth/login') ||
           originalRequest?.url?.includes('/auth/register')) {
@@ -180,7 +177,6 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
       
-      // Si un refresh est déjà en cours, mettre en file d'attente
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ 
@@ -216,34 +212,25 @@ api.interceptors.response.use(
             setRefreshToken(refresh_token);
           }
           
-          console.log('[API] Token rafraîchi avec succès');
+          console.log('[API] Token rafraichi avec succes');
           
-          // Mettre à jour le token dans la requête originale
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${access_token}`;
           }
           
-          // Traiter la file d'attente
           processQueue(null);
-          
-          // Réexécuter la requête originale
           return api(originalRequest);
         } else {
-          throw new Error('Token non reçu lors du refresh');
+          throw new Error('Token non recu lors du refresh');
         }
         
       } catch (refreshError) {
-        console.error('[API] Échec du refresh token:', refreshError);
-        
-        // Nettoyer les tokens
+        console.error('[API] Echec du refresh token:', refreshError);
         clearTokens();
-        
-        // Traiter la file d'attente avec erreur
         processQueue(refreshError);
         
-        // Rediriger vers la page de connexion si pas déjà sur une page publique
         if (!isPublicPage()) {
-          toast.error('Votre session a expiré. Veuillez vous reconnecter.');
+          toast.error('Votre session a expire. Veuillez vous reconnecter.');
           window.location.href = '/login';
         }
         
@@ -258,36 +245,33 @@ api.interceptors.response.use(
     // 403 - Interdit
     // ============================================================
     if (status === 403) {
-      console.warn(`[API] 403 Accès interdit: ${url}`, message);
+      console.warn(`[API] 403 Acces interdit: ${url}`, message);
       
-      // Pour les offres, ne pas afficher d'erreur si on est sur une page publique
       if (url?.includes('/jobs/offers/') && !url?.includes('/public')) {
-        // L'erreur sera gérée par la page
         return Promise.reject(error);
       }
       
-      // Si c'est une page publique, ne pas afficher de toast
       if (!isPublicPage()) {
-        toast.error(message || 'Vous n\'avez pas les droits nécessaires.');
+        toast.error(message || 'Vous n\'avez pas les droits necessaires.');
       }
     }
 
     // ============================================================
-    // 404 - Non trouvé
+    // 404 - Non trouve
     // ============================================================
     else if (status === 404) {
-      console.warn(`[API] 404 Non trouvé: ${url}`);
+      console.warn(`[API] 404 Non trouve: ${url}`);
       if (!isPublicPage() && !url?.includes('/public')) {
-        toast.error('Ressource non trouvée.');
+        toast.error('Ressource non trouvee.');
       }
     }
 
     // ============================================================
-    // 429 - Trop de requêtes
+    // 429 - Trop de requetes
     // ============================================================
     else if (status === 429) {
-      console.warn(`[API] 429 Trop de requêtes: ${url}`);
-      toast.error('Trop de requêtes. Veuillez patienter quelques instants.');
+      console.warn(`[API] 429 Trop de requetes: ${url}`);
+      toast.error('Trop de requetes. Veuillez patienter quelques instants.');
     }
 
     // ============================================================
@@ -296,7 +280,6 @@ api.interceptors.response.use(
     else if (status === 422) {
       console.warn(`[API] 422 Erreur de validation: ${url}`, data);
       
-      // Afficher les erreurs de validation
       if (data?.errors) {
         const errors = data.errors;
         if (typeof errors === 'object') {
@@ -309,7 +292,7 @@ api.interceptors.response.use(
           });
         }
       } else {
-        toast.error(message || 'Données invalides.');
+        toast.error(message || 'Donnees invalides.');
       }
     }
 
@@ -319,7 +302,7 @@ api.interceptors.response.use(
     else if (status >= 500) {
       console.error(`[API] ${status} Erreur serveur: ${url}`, data);
       if (!isPublicPage()) {
-        toast.error('Erreur interne du serveur. Veuillez réessayer plus tard.');
+        toast.error('Erreur interne du serveur. Veuillez reessayer plus tard.');
       }
     }
 
@@ -338,10 +321,6 @@ api.interceptors.response.use(
 );
 
 // ============================================================
-// EXPORT DES APIS PAR MODULE
-// ============================================================
-
-// ============================================================
 // AUTH API
 // ============================================================
 
@@ -355,6 +334,7 @@ export interface LoginResponse {
     last_name: string;
     role: string;
     is_active: boolean;
+    avatar_url?: string;
   };
 }
 
@@ -410,8 +390,42 @@ export const authApi = {
     return response.data;
   },
 
-  getUsers: async () => {
-    const response = await api.get('/auth/users');
+  // ============================================================
+  // GESTION DES UTILISATEURS - ADMIN
+  // ============================================================
+
+  getUsers: async (page: number = 1, limit: number = 10, role?: string, status?: string, search?: string) => {
+    const params = new URLSearchParams();
+    params.append('page', page.toString());
+    params.append('limit', limit.toString());
+    if (role) params.append('role', role);
+    if (status) params.append('status', status);
+    if (search) params.append('search', search);
+    const response = await api.get(`/auth/users?${params.toString()}`);
+    return response.data;
+  },
+
+  getUsersStats: async () => {
+    const response = await api.get('/auth/users/stats');
+    return response.data;
+  },
+
+  exportUsers: async (role?: string) => {
+    const params = new URLSearchParams();
+    if (role) params.append('role', role);
+    const response = await api.get(`/auth/users/export?${params.toString()}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  getUserById: async (id: string) => {
+    const response = await api.get(`/auth/users/${id}`);
+    return response.data;
+  },
+
+  updateUser: async (id: string, data: any) => {
+    const response = await api.put(`/auth/users/${id}`, data);
     return response.data;
   },
 
@@ -429,6 +443,74 @@ export const authApi = {
     const response = await api.delete(`/auth/users/${userId}`);
     return response.data;
   },
+
+  // ============================================================
+  // PREFERENCES
+  // ============================================================
+
+  getPreferences: async () => {
+    const response = await api.get('/auth/preferences');
+    return response.data;
+  },
+
+  updatePreferences: async (data: any) => {
+    const response = await api.put('/auth/preferences', data);
+    return response.data;
+  },
+
+  // ============================================================
+  // UPLOAD AVATAR - CORRIGE AVEC GESTION D'ERREUR
+  // ============================================================
+
+  uploadAvatar: async (file: File): Promise<{ avatar_url: string; success: boolean }> => {
+    if (!file) {
+      throw new Error('Aucun fichier selectionne');
+    }
+
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      throw new Error('Format d\'image non supporte. Utilisez JPG, PNG, WEBP ou GIF.');
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('L\'image ne doit pas depasser 5 Mo.');
+    }
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+    
+    try {
+      const response = await api.post('/auth/upload-avatar', formData, {
+        headers: { 
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      const data = response.data;
+      
+      if (!data.avatar_url) {
+        throw new Error('URL de l\'avatar non recue du serveur');
+      }
+      
+      return {
+        success: true,
+        avatar_url: data.avatar_url,
+      };
+    } catch (error: any) {
+      console.error('Erreur upload avatar:', error);
+      
+      // Si l'erreur vient du serveur, afficher le message
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      
+      throw new Error('Erreur lors de l\'upload de l\'avatar');
+    }
+  },
+
+  // ============================================================
+  // UTILITAIRES
+  // ============================================================
 
   isAuthenticated: () => {
     if (typeof window !== 'undefined') {
@@ -527,7 +609,6 @@ export const jobsApi = {
     return response.data;
   },
 
-  // ✅ CORRECTION: Route publique pour les offres publiées
   getPublic: async (page: number = 1, limit: number = 9, contract_type?: string) => {
     const params = new URLSearchParams();
     params.append('page', page.toString());
@@ -537,14 +618,11 @@ export const jobsApi = {
     return response.data;
   },
 
-  // ✅ CORRECTION: Utiliser la route publique pour les détails
   getOne: async (id: string) => {
     try {
-      // Essayer la route publique d'abord
       const response = await api.get(`/jobs/offers/public/${id}`);
       return response.data;
     } catch (error: any) {
-      // Si erreur 403, essayer la route normale (avec token)
       if (error.response?.status === 403) {
         const response = await api.get(`/jobs/offers/${id}`);
         return response.data;
@@ -603,6 +681,11 @@ export const jobsApi = {
 
   getApplicationStats: async () => {
     const response = await api.get('/jobs/applications/stats');
+    return response.data;
+  },
+
+  checkApplication: async (jobId: string) => {
+    const response = await api.get(`/jobs/applications/check/${jobId}`);
     return response.data;
   },
 };
@@ -745,10 +828,13 @@ export const contactApi = {
 // ============================================================
 
 export const uploadApi = {
-  uploadImage: async (file: File, type: string = 'background'): Promise<{ id: string; url: string; filename: string }> => {
+  uploadImage: async (file: File, type: string = 'background', entityId?: string): Promise<{ id: string; url: string; filename: string }> => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('type', type);
+    formData.append('entityType', type);
+    if (entityId) {
+      formData.append('entityId', entityId);
+    }
     
     const response = await api.post('/upload/single', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

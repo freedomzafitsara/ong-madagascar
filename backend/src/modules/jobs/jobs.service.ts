@@ -6,12 +6,14 @@ import {
   BadRequestException, 
   Logger,
   ConflictException,
-  ForbiddenException
+  ForbiddenException,
+  UnauthorizedException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, FindOptionsWhere, Like, MoreThan, Between } from 'typeorm';
 import { JobOffer } from '../../entities/job-offer.entity';
 import { JobApplication } from '../../entities/job-application.entity';
+import { User } from '../../entities/user.entity';
 import { 
   CreateJobOfferDto, 
   UpdateJobOfferDto, 
@@ -43,6 +45,8 @@ export class JobsService {
     private jobRepository: Repository<JobOffer>,
     @InjectRepository(JobApplication)
     private applicationRepository: Repository<JobApplication>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private uploadService: UploadService,
   ) {}
 
@@ -52,10 +56,8 @@ export class JobsService {
 
   async create(createDto: CreateJobOfferDto): Promise<JobOfferResponseDto> {
     try {
-      // Validation des données
       this.validateOfferData(createDto);
 
-      // Création de l'offre avec les champs du DTO
       const job = this.jobRepository.create({
         title_fr: createDto.title_fr.trim(),
         title_mg: createDto.title_mg?.trim() || null,
@@ -91,6 +93,134 @@ export class JobsService {
       throw new BadRequestException('La description doit contenir au moins 20 caractères');
     }
   }
+
+  // ============================================================
+  // CANDIDATURES - AVEC UTILISATEUR CONNECTE
+  // ============================================================
+
+  /**
+   * ✅ Postuler à une offre (avec utilisateur connecté)
+   */
+  async apply(createDto: CreateJobApplicationDto, currentUser: User): Promise<ApplicationResponseDto> {
+    // Vérifier que l'utilisateur est authentifié
+    if (!currentUser) {
+      throw new UnauthorizedException('Vous devez être connecté pour postuler.');
+    }
+
+    // Vérifier l'offre
+    const job = await this.jobRepository.findOne({ 
+      where: { id: createDto.job_offer_id } 
+    });
+    
+    if (!job) {
+      throw new NotFoundException('Offre non trouvée');
+    }
+
+    if (!job.is_published || job.status !== 'published') {
+      throw new BadRequestException("Cette offre n'est plus disponible");
+    }
+
+    if (job.deadline && new Date(job.deadline) < new Date()) {
+      throw new BadRequestException("Date limite dépassée");
+    }
+
+    // Vérifier si l'utilisateur a déjà postulé
+    const existing = await this.applicationRepository.findOne({
+      where: { 
+        job_offer_id: createDto.job_offer_id, 
+        user_id: currentUser.id 
+      },
+    });
+
+    if (existing) {
+      throw new ConflictException("Vous avez déjà postulé à cette offre");
+    }
+
+    // Limiter le nombre de candidatures
+    const applicationCount = await this.applicationRepository.count({
+      where: { job_offer_id: createDto.job_offer_id }
+    });
+
+    if (applicationCount >= this.MAX_APPLICATIONS_PER_OFFER) {
+      throw new BadRequestException('Cette offre a atteint le nombre maximum de candidatures');
+    }
+
+    // Créer la candidature
+    const application = this.applicationRepository.create({
+      job_offer_id: createDto.job_offer_id,
+      user_id: currentUser.id,
+      full_name: createDto.full_name?.trim() || `${currentUser.first_name} ${currentUser.last_name}`.trim(),
+      email: createDto.email?.trim()?.toLowerCase() || currentUser.email,
+      phone: createDto.phone?.trim() || currentUser.phone || null,
+      address: createDto.address?.trim() || null,
+      experience_years: createDto.experience_years || 0,
+      current_position: createDto.current_position?.trim() || null,
+      current_company: createDto.current_company?.trim() || null,
+      cv_url: createDto.cv_url || null,
+      cover_letter: createDto.cover_letter?.trim() || null,
+      cover_letter_url: createDto.cover_letter_url || null,
+      photo_url: createDto.photo_url || null,
+      linkedin_url: createDto.linkedin_url?.trim() || null,
+      portfolio_url: createDto.portfolio_url?.trim() || null,
+      diploma_url: createDto.diploma_url || null,
+      attestation_url: createDto.attestation_url || null,
+      applied_at: new Date(),
+      status: ApplicationStatusEnum.SUBMITTED,
+    });
+
+    const savedApplication = await this.applicationRepository.save(application);
+    
+    // Incrémenter le compteur
+    job.applications_count += 1;
+    await this.jobRepository.save(job);
+    
+    this.logger.log(`Nouvelle candidature: ${currentUser.email} pour l'offre ${createDto.job_offer_id}`);
+    return ApplicationResponseDto.fromEntity(savedApplication);
+  }
+
+  /**
+   * ✅ Vérifier si l'utilisateur a déjà postulé à une offre
+   */
+  async hasApplied(jobId: string, userId: string): Promise<boolean> {
+    const application = await this.applicationRepository.findOne({
+      where: { 
+        job_offer_id: jobId, 
+        user_id: userId 
+      },
+    });
+    return !!application;
+  }
+
+  /**
+   * ✅ Récupérer les candidatures de l'utilisateur connecté
+   */
+  async getMyApplications(userId: string, queryDto: ApplicationQueryDto): Promise<PaginatedResponseDto<ApplicationResponseDto>> {
+    const page = Math.max(1, queryDto.page || 1);
+    const limit = Math.min(100, queryDto.limit || 10);
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.applicationRepository.createQueryBuilder('app')
+      .leftJoinAndSelect('app.jobOffer', 'jobOffer')
+      .where('app.user_id = :userId', { userId });
+
+    if (queryDto.status) {
+      queryBuilder.andWhere('app.status = :status', { status: queryDto.status });
+    }
+
+    queryBuilder.orderBy('app.created_at', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    const responseData = data.map(app => ApplicationResponseDto.fromEntity(app));
+
+    return new PaginatedResponseDto(responseData, total, page, limit);
+  }
+
+  // ============================================================
+  // RECHERCHE DES OFFRES
+  // ============================================================
 
   async updateMainImage(jobId: string, imageId: string): Promise<JobOfferResponseDto> {
     const job = await this.findOne(jobId);
@@ -284,7 +414,6 @@ export class JobsService {
   async update(id: string, updateDto: UpdateJobOfferDto): Promise<JobOfferResponseDto> {
     const job = await this.findOne(id);
     
-    // Champs autorisés
     const allowedFields = [
       'title_fr', 'title_mg', 'description_fr', 'description_mg',
       'company', 'location', 'contract_type', 'deadline', 'image_url',
@@ -347,7 +476,6 @@ export class JobsService {
       where: { status: 'archived' } 
     });
     
-    // Statistiques des vues
     const viewsResult = await this.jobRepository
       .createQueryBuilder('job')
       .select('SUM(job.views_count)', 'total')
@@ -356,7 +484,6 @@ export class JobsService {
     
     const totalApplications = await this.applicationRepository.count();
 
-    // Statistiques par type de contrat
     const contractsByType: Record<string, number> = {};
     for (const type of CONTRACT_TYPES) {
       const count = await this.jobRepository.count({ 
@@ -381,79 +508,8 @@ export class JobsService {
   }
 
   // ============================================================
-  // GESTION DES CANDIDATURES
+  // GESTION DES CANDIDATURES (ADMIN)
   // ============================================================
-
-  async apply(createDto: CreateJobApplicationDto): Promise<ApplicationResponseDto> {
-    // Vérifier l'offre
-    const job = await this.jobRepository.findOne({ 
-      where: { id: createDto.job_offer_id } 
-    });
-    
-    if (!job) {
-      throw new NotFoundException('Offre non trouvée');
-    }
-
-    if (!job.is_published || job.status !== 'published') {
-      throw new BadRequestException("Cette offre n'est plus disponible");
-    }
-
-    if (job.deadline && new Date(job.deadline) < new Date()) {
-      throw new BadRequestException("Date limite dépassée");
-    }
-
-    // Vérifier les doublons
-    const existing = await this.applicationRepository.findOne({
-      where: { 
-        job_offer_id: createDto.job_offer_id, 
-        email: createDto.email.toLowerCase().trim() 
-      },
-    });
-
-    if (existing) {
-      throw new ConflictException("Vous avez déjà postulé à cette offre");
-    }
-
-    // Limiter le nombre de candidatures
-    const applicationCount = await this.applicationRepository.count({
-      where: { job_offer_id: createDto.job_offer_id }
-    });
-
-    if (applicationCount >= this.MAX_APPLICATIONS_PER_OFFER) {
-      throw new BadRequestException('Cette offre a atteint le nombre maximum de candidatures');
-    }
-
-    // Créer la candidature
-    const application = this.applicationRepository.create({
-      job_offer_id: createDto.job_offer_id,
-      full_name: createDto.full_name.trim(),
-      email: createDto.email.toLowerCase().trim(),
-      phone: createDto.phone?.trim() || null,
-      address: createDto.address?.trim() || null,
-      experience_years: createDto.experience_years || 0,
-      current_position: createDto.current_position?.trim() || null,
-      current_company: createDto.current_company?.trim() || null,
-      cv_url: createDto.cv_url || null,
-      cover_letter: createDto.cover_letter?.trim() || null,
-      cover_letter_url: createDto.cover_letter_url || null,
-      photo_url: createDto.photo_url || null,
-      linkedin_url: createDto.linkedin_url?.trim() || null,
-      portfolio_url: createDto.portfolio_url?.trim() || null,
-      diploma_url: createDto.diploma_url || null,
-      attestation_url: createDto.attestation_url || null,
-      applied_at: new Date(),
-      status: ApplicationStatusEnum.SUBMITTED,
-    });
-
-    const savedApplication = await this.applicationRepository.save(application);
-    
-    // Incrémenter le compteur
-    job.applications_count += 1;
-    await this.jobRepository.save(job);
-    
-    this.logger.log(`Nouvelle candidature: ${createDto.email} pour l'offre ${createDto.job_offer_id}`);
-    return ApplicationResponseDto.fromEntity(savedApplication);
-  }
 
   async getAllApplications(queryDto: ApplicationQueryDto): Promise<PaginatedResponseDto<ApplicationResponseDto>> {
     const page = Math.max(1, queryDto.page || 1);

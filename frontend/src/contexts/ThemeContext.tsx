@@ -2,290 +2,180 @@
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import api from '@/lib/api';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { authApi } from '@/lib/api';
+import toast from 'react-hot-toast';
 
-type Theme = 'light' | 'dark' | 'system';
-type FontSize = 'small' | 'medium' | 'large';
-type Density = 'compact' | 'comfortable' | 'spacious';
+// ============================================================
+// TYPES
+// ============================================================
 
-interface Preferences {
-  theme: Theme;
-  font_size: FontSize;
-  sidebar_collapsed: boolean;
-  animations_enabled: boolean;
-  density: Density;
-  preferred_language: string;
-  timezone: string;
-  email_notifications: boolean;
-  push_notifications: boolean;
-  job_alerts: boolean;
-  project_updates: boolean;
-  blog_updates: boolean;
-  system_updates: boolean;
-}
-
-interface ThemeContextType {
-  theme: Theme;
-  fontSize: FontSize;
-  density: Density;
+export interface ThemePreferences {
+  theme: 'light' | 'dark' | 'system';
+  fontSize: 'small' | 'medium' | 'large';
+  density: 'compact' | 'comfortable' | 'spacious';
   sidebarCollapsed: boolean;
   animationsEnabled: boolean;
-  preferences: Preferences | null;
-  loading: boolean;
-  setTheme: (theme: Theme) => Promise<void>;
-  setFontSize: (size: FontSize) => Promise<void>;
-  setDensity: (density: Density) => Promise<void>;
-  setSidebarCollapsed: (collapsed: boolean) => Promise<void>;
-  setAnimationsEnabled: (enabled: boolean) => Promise<void>;
-  updatePreferences: (prefs: Partial<Preferences>) => Promise<void>;
-  loadPreferences: () => Promise<void>;
-  applyTheme: (theme: Theme) => void;
-  applyFontSize: (size: FontSize) => void;
-  applyDensity: (density: Density) => void;
-  applyAnimations: (enabled: boolean) => void;
 }
+
+export interface ThemeContextType extends ThemePreferences {
+  loading: boolean;
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  setFontSize: (size: 'small' | 'medium' | 'large') => void;
+  setDensity: (density: 'compact' | 'comfortable' | 'spacious') => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  setAnimationsEnabled: (enabled: boolean) => void;
+  updatePreferences: (prefs: Partial<ThemePreferences>) => Promise<void>;
+  refreshPreferences: () => Promise<void>;
+}
+
+// ============================================================
+// CONTEXT
+// ============================================================
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const defaultPreferences: Preferences = {
-  theme: 'light',
-  font_size: 'medium',
-  sidebar_collapsed: false,
-  animations_enabled: true,
-  density: 'comfortable',
-  preferred_language: 'fr',
-  timezone: 'Indian/Antananarivo',
-  email_notifications: true,
-  push_notifications: true,
-  job_alerts: true,
-  project_updates: true,
-  blog_updates: false,
-  system_updates: true,
-};
+// ============================================================
+// PROVIDER
+// ============================================================
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('light');
-  const [fontSize, setFontSizeState] = useState<FontSize>('medium');
-  const [density, setDensityState] = useState<Density>('comfortable');
+  const [loading, setLoading] = useState(true);
+  const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>('light');
+  const [fontSize, setFontSizeState] = useState<'small' | 'medium' | 'large'>('medium');
+  const [density, setDensityState] = useState<'compact' | 'comfortable' | 'spacious'>('comfortable');
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(false);
   const [animationsEnabled, setAnimationsEnabledState] = useState(true);
-  const [preferences, setPreferences] = useState<Preferences | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const getToken = () => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('access_token') || localStorage.getItem('token');
-    }
-    return null;
-  };
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // ============================================================
-  // APPLICATION DES PREFERENCES
+  // APPLICATION DU THEME - FONCTION CRITIQUE
   // ============================================================
 
-  const applyTheme = (newTheme: Theme) => {
+  const applyTheme = useCallback((newTheme: 'light' | 'dark' | 'system') => {
     const root = document.documentElement;
+    
+    // Supprimer toutes les classes de theme
+    root.classList.remove('light', 'dark');
+    
     if (newTheme === 'dark') {
       root.classList.add('dark');
-      root.style.colorScheme = 'dark';
+      document.documentElement.style.colorScheme = 'dark';
+      localStorage.setItem('theme', 'dark');
+      console.log('[Theme] Mode sombre active');
     } else if (newTheme === 'light') {
       root.classList.remove('dark');
-      root.style.colorScheme = 'light';
+      document.documentElement.style.colorScheme = 'light';
+      localStorage.setItem('theme', 'light');
+      console.log('[Theme] Mode clair active');
     } else {
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      // System
+      localStorage.removeItem('theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) {
         root.classList.add('dark');
-        root.style.colorScheme = 'dark';
+        document.documentElement.style.colorScheme = 'dark';
+        console.log('[Theme] Mode systeme: sombre');
       } else {
         root.classList.remove('dark');
-        root.style.colorScheme = 'light';
+        document.documentElement.style.colorScheme = 'light';
+        console.log('[Theme] Mode systeme: clair');
       }
     }
-    localStorage.setItem('theme', newTheme);
-  };
-
-  const applyFontSize = (size: FontSize) => {
-    const root = document.documentElement;
-    const sizes = { small: '14px', medium: '16px', large: '18px' };
-    root.style.fontSize = sizes[size];
-    localStorage.setItem('fontSize', size);
-  };
-
-  const applyDensity = (newDensity: Density) => {
-    const root = document.documentElement;
-    const spacings = {
-      compact: '0.75rem',
-      comfortable: '1rem',
-      spacious: '1.25rem'
-    };
-    root.style.setProperty('--spacing-unit', spacings[newDensity]);
-    localStorage.setItem('density', newDensity);
-  };
-
-  const applyAnimations = (enabled: boolean) => {
-    const root = document.documentElement;
-    if (enabled) {
-      root.style.setProperty('--transition-duration', '0.3s');
-      root.classList.remove('reduce-motion');
-    } else {
-      root.style.setProperty('--transition-duration', '0s');
-      root.classList.add('reduce-motion');
+    
+    // Mettre a jour la meta tag
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      const isDark = root.classList.contains('dark');
+      metaThemeColor.setAttribute('content', isDark ? '#1a1a2e' : '#ffffff');
     }
-    localStorage.setItem('animations', String(enabled));
-  };
-
-  const applySidebar = (collapsed: boolean) => {
-    localStorage.setItem('sidebarCollapsed', String(collapsed));
-    window.dispatchEvent(new CustomEvent('sidebarToggle', { detail: { collapsed } }));
-  };
+  }, []);
 
   // ============================================================
   // CHARGEMENT DES PREFERENCES
   // ============================================================
 
-  const loadPreferences = async () => {
-    const token = getToken();
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
+  const loadPreferences = useCallback(async () => {
     try {
-      const response = await api.get('/auth/preferences');
-      const data = response.data;
+      console.log('[Theme] Chargement des preferences...');
+      
+      // Recuperer le theme depuis localStorage d'abord
+      const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null;
+      
+      let themeValue: 'light' | 'dark' | 'system' = 'light';
+      let fontSizeValue: 'small' | 'medium' | 'large' = 'medium';
+      let densityValue: 'compact' | 'comfortable' | 'spacious' = 'comfortable';
+      let sidebarCollapsedValue = false;
+      let animationsEnabledValue = true;
 
-      if (data) {
-        // Fusionner avec les defaults pour garantir toutes les proprietes
-        const mergedPreferences: Preferences = {
-          ...defaultPreferences,
-          ...data,
-        };
-        
-        setPreferences(mergedPreferences);
-        setThemeState(mergedPreferences.theme);
-        setFontSizeState(mergedPreferences.font_size);
-        setDensityState(mergedPreferences.density);
-        setSidebarCollapsedState(mergedPreferences.sidebar_collapsed);
-        setAnimationsEnabledState(mergedPreferences.animations_enabled);
-
-        applyTheme(mergedPreferences.theme);
-        applyFontSize(mergedPreferences.font_size);
-        applyDensity(mergedPreferences.density);
-        applyAnimations(mergedPreferences.animations_enabled);
-        applySidebar(mergedPreferences.sidebar_collapsed);
+      // Essayer de charger depuis l'API
+      try {
+        const response = await authApi.getPreferences();
+        if (response) {
+          themeValue = (response.theme as any) || savedTheme || 'light';
+          fontSizeValue = (response.fontSize as any) || 'medium';
+          densityValue = (response.density as any) || 'comfortable';
+          sidebarCollapsedValue = response.sidebarCollapsed || false;
+          animationsEnabledValue = response.animationsEnabled !== false;
+        }
+      } catch (apiError) {
+        console.warn('[Theme] Erreur API, utilisation des valeurs localStorage:', apiError);
+        if (savedTheme) {
+          themeValue = savedTheme;
+        }
       }
+
+      // Appliquer le theme
+      setThemeState(themeValue);
+      setFontSizeState(fontSizeValue);
+      setDensityState(densityValue);
+      setSidebarCollapsedState(sidebarCollapsedValue);
+      setAnimationsEnabledState(animationsEnabledValue);
+      
+      // Appliquer le theme au DOM
+      applyTheme(themeValue);
+      
+      // Appliquer la taille de police
+      document.documentElement.style.fontSize = 
+        fontSizeValue === 'small' ? '14px' : 
+        fontSizeValue === 'large' ? '18px' : 
+        '16px';
+      
+      // Appliquer la densite
+      const densityClass = {
+        compact: 'density-compact',
+        comfortable: 'density-comfortable',
+        spacious: 'density-spacious'
+      }[densityValue];
+      document.documentElement.classList.remove('density-compact', 'density-comfortable', 'density-spacious');
+      document.documentElement.classList.add(densityClass);
+      
+      // Appliquer les animations
+      if (!animationsEnabledValue) {
+        document.documentElement.classList.add('animations-disabled');
+      } else {
+        document.documentElement.classList.remove('animations-disabled');
+      }
+      
+      setIsInitialized(true);
+      console.log('[Theme] Preferences chargees:', { theme: themeValue });
     } catch (error) {
-      console.error('Erreur chargement preferences:', error);
-      loadFromLocalStorage();
+      console.error('[Theme] Erreur chargement preferences:', error);
+      applyTheme('light');
+      setIsInitialized(true);
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadFromLocalStorage = () => {
-    const savedTheme = localStorage.getItem('theme') as Theme | null;
-    const savedFontSize = localStorage.getItem('fontSize') as FontSize | null;
-    const savedDensity = localStorage.getItem('density') as Density | null;
-    const savedSidebar = localStorage.getItem('sidebarCollapsed') === 'true';
-    const savedAnimations = localStorage.getItem('animations') !== 'false';
-
-    if (savedTheme) {
-      setThemeState(savedTheme);
-      applyTheme(savedTheme);
-    }
-    if (savedFontSize) {
-      setFontSizeState(savedFontSize);
-      applyFontSize(savedFontSize);
-    }
-    if (savedDensity) {
-      setDensityState(savedDensity);
-      applyDensity(savedDensity);
-    }
-    setSidebarCollapsedState(savedSidebar);
-    applySidebar(savedSidebar);
-    setAnimationsEnabledState(savedAnimations);
-    applyAnimations(savedAnimations);
-  };
-
-  // ============================================================
-  // MISE A JOUR DES PREFERENCES
-  // ============================================================
-
-  // ✅ CORRIGE : Type securise pour les preferences partielles
-  const updatePreferences = async (prefs: Partial<Preferences>) => {
-    const token = getToken();
-    
-    // Appliquer les changements en local d'abord
-    if (prefs.theme !== undefined) {
-      setThemeState(prefs.theme);
-      applyTheme(prefs.theme);
-    }
-    if (prefs.font_size !== undefined) {
-      setFontSizeState(prefs.font_size);
-      applyFontSize(prefs.font_size);
-    }
-    if (prefs.density !== undefined) {
-      setDensityState(prefs.density);
-      applyDensity(prefs.density);
-    }
-    if (prefs.sidebar_collapsed !== undefined) {
-      setSidebarCollapsedState(prefs.sidebar_collapsed);
-      applySidebar(prefs.sidebar_collapsed);
-    }
-    if (prefs.animations_enabled !== undefined) {
-      setAnimationsEnabledState(prefs.animations_enabled);
-      applyAnimations(prefs.animations_enabled);
-    }
-
-    // Mettre a jour le state preferences
-    setPreferences(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        ...prefs,
-      };
-    });
-
-    if (!token) {
-      return;
-    }
-
-    try {
-      await api.put('/auth/preferences', prefs);
-    } catch (error) {
-      console.error('Erreur mise a jour preferences:', error);
-    }
-  };
-
-  // ============================================================
-  // SETTERS
-  // ============================================================
-
-  const setTheme = async (newTheme: Theme) => {
-    await updatePreferences({ theme: newTheme });
-  };
-
-  const setFontSize = async (size: FontSize) => {
-    await updatePreferences({ font_size: size });
-  };
-
-  const setDensity = async (newDensity: Density) => {
-    await updatePreferences({ density: newDensity });
-  };
-
-  const setSidebarCollapsed = async (collapsed: boolean) => {
-    await updatePreferences({ sidebar_collapsed: collapsed });
-  };
-
-  const setAnimationsEnabled = async (enabled: boolean) => {
-    await updatePreferences({ animations_enabled: enabled });
-  };
+  }, [applyTheme]);
 
   // ============================================================
   // INITIALISATION
   // ============================================================
 
   useEffect(() => {
+    loadPreferences();
+    
+    // Ecouter les changements de theme systeme
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => {
       if (theme === 'system') {
@@ -293,45 +183,133 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       }
     };
     mediaQuery.addEventListener('change', handleChange);
-    loadPreferences();
+    
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [loadPreferences, theme, applyTheme]);
 
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
+  // ============================================================
+  // SETTERS AVEC LOG
+  // ============================================================
+
+  const setTheme = useCallback((newTheme: 'light' | 'dark' | 'system') => {
+    console.log('[Theme] setTheme appele avec:', newTheme);
+    setThemeState(newTheme);
+    applyTheme(newTheme);
+  }, [applyTheme]);
+
+  const setFontSize = useCallback((size: 'small' | 'medium' | 'large') => {
+    setFontSizeState(size);
+    document.documentElement.style.fontSize = 
+      size === 'small' ? '14px' : 
+      size === 'large' ? '18px' : 
+      '16px';
   }, []);
 
+  const setDensity = useCallback((newDensity: 'compact' | 'comfortable' | 'spacious') => {
+    setDensityState(newDensity);
+    const densityClass = {
+      compact: 'density-compact',
+      comfortable: 'density-comfortable',
+      spacious: 'density-spacious'
+    }[newDensity];
+    
+    document.documentElement.classList.remove('density-compact', 'density-comfortable', 'density-spacious');
+    document.documentElement.classList.add(densityClass);
+  }, []);
+
+  const setSidebarCollapsed = useCallback((collapsed: boolean) => {
+    setSidebarCollapsedState(collapsed);
+    localStorage.setItem('sidebarCollapsed', String(collapsed));
+  }, []);
+
+  const setAnimationsEnabled = useCallback((enabled: boolean) => {
+    setAnimationsEnabledState(enabled);
+    document.documentElement.style.setProperty(
+      '--animations-enabled', 
+      enabled ? '1' : '0'
+    );
+    if (!enabled) {
+      document.documentElement.classList.add('animations-disabled');
+    } else {
+      document.documentElement.classList.remove('animations-disabled');
+    }
+  }, []);
+
+  // ============================================================
+  // SAUVEGARDE DES PREFERENCES
+  // ============================================================
+
+  const updatePreferences = useCallback(async (prefs: Partial<ThemePreferences>) => {
+    try {
+      console.log('[Theme] Sauvegarde des preferences:', prefs);
+      
+      if (prefs.theme !== undefined) setTheme(prefs.theme);
+      if (prefs.fontSize !== undefined) setFontSize(prefs.fontSize);
+      if (prefs.density !== undefined) setDensity(prefs.density);
+      if (prefs.sidebarCollapsed !== undefined) setSidebarCollapsed(prefs.sidebarCollapsed);
+      if (prefs.animationsEnabled !== undefined) setAnimationsEnabled(prefs.animationsEnabled);
+      
+      const apiData: any = {};
+      if (prefs.theme !== undefined) apiData.theme = prefs.theme;
+      if (prefs.fontSize !== undefined) apiData.font_size = prefs.fontSize;
+      if (prefs.density !== undefined) apiData.density = prefs.density;
+      if (prefs.sidebarCollapsed !== undefined) apiData.sidebar_collapsed = prefs.sidebarCollapsed;
+      if (prefs.animationsEnabled !== undefined) apiData.animations_enabled = prefs.animationsEnabled;
+      
+      await authApi.updatePreferences(apiData);
+      
+      toast.success('Preferences mises a jour');
+      console.log('[Theme] Preferences sauvegardees avec succes');
+    } catch (error) {
+      console.error('[Theme] Erreur sauvegarde preferences:', error);
+      toast.error('Erreur lors de la sauvegarde');
+      throw error;
+    }
+  }, [setTheme, setFontSize, setDensity, setSidebarCollapsed, setAnimationsEnabled]);
+
+  // ============================================================
+  // RAFRAICHIR
+  // ============================================================
+
+  const refreshPreferences = useCallback(async () => {
+    await loadPreferences();
+  }, [loadPreferences]);
+
+  // ============================================================
+  // VALEUR DU CONTEXT
+  // ============================================================
+
+  const value: ThemeContextType = {
+    theme,
+    fontSize,
+    density,
+    sidebarCollapsed,
+    animationsEnabled,
+    loading,
+    setTheme,
+    setFontSize,
+    setDensity,
+    setSidebarCollapsed,
+    setAnimationsEnabled,
+    updatePreferences,
+    refreshPreferences,
+  };
+
   return (
-    <ThemeContext.Provider
-      value={{
-        theme,
-        fontSize,
-        density,
-        sidebarCollapsed,
-        animationsEnabled,
-        preferences,
-        loading,
-        setTheme,
-        setFontSize,
-        setDensity,
-        setSidebarCollapsed,
-        setAnimationsEnabled,
-        updatePreferences,
-        loadPreferences,
-        applyTheme,
-        applyFontSize,
-        applyDensity,
-        applyAnimations,
-      }}
-    >
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );
 }
 
-export function useTheme() {
+// ============================================================
+// HOOK PERSONNALISE
+// ============================================================
+
+export const useTheme = (): ThemeContextType => {
   const context = useContext(ThemeContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useTheme must be used within a ThemeProvider');
   }
   return context;
-}
+};

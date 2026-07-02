@@ -21,19 +21,23 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
+import { memoryStorage } from 'multer';
 import { AuthService } from './auth.service';
+import { UploadService } from '../upload/upload.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { Public } from './decorators/public.decorator';
 import { UserRole } from '../../entities/user.entity';
-import { memoryStorage } from 'multer';
 
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   // ============================================================
   // ROUTES PUBLIQUES
@@ -64,7 +68,7 @@ export class AuthController {
   }
 
   // ============================================================
-  // ROUTES PROTEGEES
+  // ROUTES PROTEGEES - PROFIL
   // ============================================================
 
   @UseGuards(JwtAuthGuard)
@@ -85,29 +89,72 @@ export class AuthController {
     return this.authService.changePassword(req.user.id, changePasswordDto);
   }
 
+  // ============================================================
+  // ROUTES - UPLOAD AVATAR
+  // ============================================================
+
   @UseGuards(JwtAuthGuard)
   @Post('upload-avatar')
-  @UseInterceptors(FileInterceptor('avatar', {
-    storage: memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (req, file, callback) => {
-      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-      if (allowedMimeTypes.includes(file.mimetype)) {
-        callback(null, true);
-      } else {
-        callback(new BadRequestException('Format d\'image non supporte'), false);
-      }
-    },
-  }))
-  async uploadAvatar(@Req() req: any, @UploadedFile() file: Express.Multer.File) {
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+      fileFilter: (req, file, callback) => {
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+        if (allowedTypes.includes(file.mimetype)) {
+          callback(null, true);
+        } else {
+          callback(new BadRequestException('Format d\'image non supporte'), false);
+        }
+      },
+    }),
+  )
+  async uploadAvatar(
+    @Req() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
     if (!file) {
-      throw new BadRequestException('Aucun fichier uploade');
+      throw new BadRequestException('Aucun fichier fourni');
     }
-    return this.authService.uploadAvatar(req.user.id, file);
+
+    const userId = req.user.id;
+    this.logger.log(`Upload avatar pour l'utilisateur ${userId}: ${file.originalname}`);
+
+    try {
+      const uploadedFile = await this.uploadService.uploadFile(
+        file,
+        'profile',
+        userId,
+      );
+
+      const avatarUrl = uploadedFile.url;
+      this.logger.log(`URL de l'avatar: ${avatarUrl}`);
+
+      const updatedUser = await this.authService.updateAvatar(userId, avatarUrl);
+
+      return {
+        success: true,
+        avatar_url: avatarUrl,
+        file: {
+          id: uploadedFile.id,
+          fileName: uploadedFile.filename,
+          originalName: uploadedFile.originalName,
+          fileSize: uploadedFile.size,
+          format: uploadedFile.format,
+          url: avatarUrl,
+        },
+        user: updatedUser,
+      };
+    } catch (error) {
+      this.logger.error(`Erreur upload avatar: ${error.message}`);
+      throw new BadRequestException(`Erreur lors de l'upload de l'avatar: ${error.message}`);
+    }
   }
 
   // ============================================================
-  // ✅ ROUTES - GESTION DES PREFERENCES
+  // ROUTES - PREFERENCES
   // ============================================================
 
   @UseGuards(JwtAuthGuard)
@@ -123,6 +170,19 @@ export class AuthController {
     @Body() preferencesDto: any,
   ) {
     return this.authService.updatePreferences(req.user.id, preferencesDto);
+  }
+
+  // ============================================================
+  // ROUTES - APPARENCE (PREFERENCES SPECIFIQUES)
+  // ============================================================
+
+  @UseGuards(JwtAuthGuard)
+  @Put('appearance')
+  async updateAppearance(
+    @Req() req: any,
+    @Body() appearanceDto: any,
+  ) {
+    return this.authService.updateAppearancePreferences(req.user.id, appearanceDto);
   }
 
   // ============================================================

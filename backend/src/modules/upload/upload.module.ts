@@ -9,7 +9,7 @@ import { UploadedFile } from '../../entities/uploaded-file.entity';
 @Module({
   imports: [TypeOrmModule.forFeature([UploadedFile])],
   controllers: [UploadController],
-  providers: [UploadService],
-  exports: [UploadService],
+  providers: [UploadService], //  Utiliser la classe UploadService
+  exports: [UploadService], //  Exporter la classe UploadService
 })
 export class UploadModule {}

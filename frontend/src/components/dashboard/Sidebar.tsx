@@ -2,14 +2,14 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   LayoutDashboard, Briefcase, FileText, FolderOpen, 
   BookOpen, Mail, Palette, Settings, LogOut, X, ChevronLeft,
-  Users, Home
+  Users, Home, User, Award, Star, UserCircle, Image as ImageIcon
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -22,11 +22,25 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed }: SidebarProps) {
   const { logout, user } = useAuth();
   const pathname = usePathname();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const getText = (fr: string, mg: string) => {
     const language = localStorage.getItem('y-mad-language') || 'fr';
     return language === 'fr' ? fr : mg;
   };
+
+  // Mettre à jour l'avatar quand l'utilisateur change
+  useEffect(() => {
+    if (user?.avatar_url) {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
+      const avatarUrl = user.avatar_url.startsWith('http') 
+        ? user.avatar_url 
+        : `${baseUrl}${user.avatar_url}`;
+      setAvatarUrl(avatarUrl);
+    } else {
+      setAvatarUrl(null);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (window.innerWidth < 1024) {
@@ -40,6 +54,7 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed
     localStorage.setItem('sidebarCollapsed', String(newState));
   };
 
+  // ✅ CORRECTION: Chemins correspondant à la structure réelle
   const menuSections = [
     { 
       title: getText('PRINCIPAL', 'LEHIBEVAVY'),
@@ -60,15 +75,16 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed
     { 
       title: getText('PERSONNALISATION', 'FANAMBOARANA'),
       items: [
-        { href: '/dashboard/backgrounds', label: getText('Fonds d\'écran', 'Sary ambadika'), icon: Palette },
+        { href: '/dashboard/backgrounds', label: getText('Fonds d\'ecran', 'Sary ambadika'), icon: ImageIcon },
         { href: '/dashboard/pages', label: getText('Pages', 'Pejy'), icon: Home },
+        { href: '/dashboard/profil-admin', label: getText('Mon profil', 'Ny momba ahy'), icon: UserCircle },
       ] 
     },
     { 
       title: getText('ADMINISTRATION', 'FITANTANANA'),
       items: [
         { href: '/dashboard/users', label: getText('Utilisateurs', 'Mpampiasa'), icon: Users },
-        { href: '/dashboard/settings', label: getText('Paramètres', 'Fandrindrana'), icon: Settings },
+        { href: '/dashboard/settings', label: getText('Parametres', 'Fandrindrana'), icon: Settings },
       ] 
     },
   ];
@@ -78,8 +94,10 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed
   const filteredSections = menuSections.map(section => ({
     ...section,
     items: section.items.filter(item => {
-      if (item.href === '/dashboard/users' && !hasAdminAccess) return false;
-      if (item.href === '/dashboard/settings' && !hasAdminAccess) return false;
+      // Restreindre l'accès admin
+      if ((item.href === '/dashboard/users' || item.href === '/dashboard/settings') && !hasAdminAccess) {
+        return false;
+      }
       return true;
     })
   })).filter(section => section.items.length > 0);
@@ -104,7 +122,8 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed
 
   const getUserRoleLabel = (): string => {
     if (user?.role === 'super_admin') return getText('Super Administrateur', 'Super Admin');
-    return getText('Administrateur', 'Admin');
+    if (user?.role === 'admin') return getText('Administrateur', 'Admin');
+    return getText('Utilisateur', 'Mpampiasa');
   };
 
   const sidebarWidth = isCollapsed ? 'w-20' : 'w-72';
@@ -163,16 +182,34 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed
           <ChevronLeft className={`w-3 h-3 text-gray-400 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`} />
         </button>
 
-        {/* Profil */}
+        {/* Profil utilisateur avec avatar */}
         <div className={`p-4 mx-3 my-4 bg-gray-800 rounded-xl ${isCollapsed ? 'mx-2 px-2' : ''}`}>
           <div className={`flex items-center gap-3 ${isCollapsed ? 'justify-center' : ''}`}>
-            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-lg">{getUserInitial()}</span>
+            <div className="relative">
+              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-blue-400/30">
+                {avatarUrl ? (
+                  <img 
+                    src={avatarUrl} 
+                    alt={getUserName()} 
+                    className="w-full h-full rounded-full object-cover"
+                    onError={() => setAvatarUrl(null)}
+                  />
+                ) : (
+                  <span className="text-white font-bold text-lg">{getUserInitial()}</span>
+                )}
+              </div>
+              {/* Point vert de connexion */}
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800">
+                <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-75"></div>
+              </div>
             </div>
             {!isCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{getUserName()}</p>
                 <p className="text-xs text-gray-400">{getUserRoleLabel()}</p>
+                {user?.email && (
+                  <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
+                )}
               </div>
             )}
           </div>
@@ -220,17 +257,17 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed
           ))}
         </div>
 
-        {/* Footer */}
+        {/* Footer avec déconnexion */}
         <div className={`p-4 border-t border-gray-800 bg-gray-900 ${isCollapsed ? 'px-2' : ''}`}>
           <button
             onClick={logout}
             className={`flex items-center gap-3 w-full px-3 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-950/50 rounded-lg transition-colors ${
               isCollapsed ? 'justify-center' : ''
             }`}
-            title={isCollapsed ? getText('Déconnexion', 'Fivoahana') : ''}
+            title={isCollapsed ? getText('Deconnexion', 'Fivoahana') : ''}
           >
             <LogOut className="w-5 h-5" />
-            {!isCollapsed && <span className="text-sm font-medium">{getText('Déconnexion', 'Fivoahana')}</span>}
+            {!isCollapsed && <span className="text-sm font-medium">{getText('Deconnexion', 'Fivoahana')}</span>}
           </button>
           {!isCollapsed && (
             <div className="mt-4 text-center">

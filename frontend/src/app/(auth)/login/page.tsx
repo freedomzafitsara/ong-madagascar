@@ -7,9 +7,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Mail, Lock, Eye, EyeOff, AlertCircle, 
-  ArrowLeft, Loader2, Sparkles, Shield,
+  ArrowLeft, Loader2, Shield,
   CheckCircle, Clock, Key, UserCog,
-  Fingerprint, Database, Server, LockKeyhole
+  Fingerprint, Database, Server, LockKeyhole,
+  UserPlus, Briefcase
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { pageService, PageBackground } from '@/services/page.service';
@@ -32,13 +33,13 @@ interface LoginAttempt {
 }
 
 // ============================================================
-// CONFIGURATION DE SÉCURITÉ
+// CONFIGURATION DE SECURITE
 // ============================================================
 
 const SECURITY_CONFIG = {
   maxAttempts: 5,
-  lockoutDuration: 15 * 60 * 1000, // 15 minutes
-  sessionDuration: 24 * 60 * 60 * 1000, // 24 heures
+  lockoutDuration: 15 * 60 * 1000,
+  sessionDuration: 24 * 60 * 60 * 1000,
   minPasswordLength: 8,
 };
 
@@ -52,7 +53,7 @@ export default function LoginPage() {
   const { login, isLoading: authLoading } = useAuth();
   
   // ============================================================
-  // ÉTATS DU FORMULAIRE
+  // ETATS DU FORMULAIRE - CHAMPS VIDES PAR DEFAUT
   // ============================================================
   
   const [email, setEmail] = useState<string>('');
@@ -62,9 +63,10 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [userRole, setUserRole] = useState<'admin' | 'candidate'>('candidate');
   
   // ============================================================
-  // ÉTATS DE SÉCURITÉ
+  // ETATS DE SECURITE
   // ============================================================
   
   const [loginAttempts, setLoginAttempts] = useState<LoginAttempt[]>([]);
@@ -74,7 +76,7 @@ export default function LoginPage() {
   const [showSecurityBadge, setShowSecurityBadge] = useState<boolean>(false);
   
   // ============================================================
-  // ÉTATS UI
+  // ETATS UI
   // ============================================================
   
   const [pageBackground, setPageBackground] = useState<PageBackground | null>(null);
@@ -87,7 +89,14 @@ export default function LoginPage() {
   const lockoutIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // ============================================================
-  // TRADUCTION
+  // RECUPERER L'URL DE REDIRECTION
+  // ============================================================
+
+  const redirectUrl = searchParams.get('redirect') || '/';
+  const jobId = searchParams.get('jobId');
+
+  // ============================================================
+  // TRADUCTION BILINGUE
   // ============================================================
 
   const getText = useCallback((fr: string, mg: string): string => {
@@ -98,44 +107,38 @@ export default function LoginPage() {
   }, []);
 
   // ============================================================
-  // CHARGEMENT DES DONNÉES
+  // CHARGEMENT DES DONNEES
   // ============================================================
 
   useEffect((): (() => void) => {
     setMounted(true);
     loadPageBackground();
     
-    // ✅ Appel correct de la fonction
     const cleanupLockout = checkLockoutStatus();
     loadSecurityConfig();
     
-    // Vérifier si l'utilisateur vient de s'inscrire
     const registered = searchParams.get('registered');
     if (registered === 'true') {
       setSuccessMessage(
         getText(
-          'Inscription réussie ! Vous pouvez maintenant vous connecter.',
-          'Fahombiazana ny fisoratana anarana ! Afaka miditra izao ianao.'
+          'Inscription reussie. Vous pouvez maintenant vous connecter.',
+          'Fahombiazana ny fisoratana anarana. Afaka miditra izao ianao.'
         )
       );
     }
 
-    // Focus sur le champ email
     const focusTimeout = setTimeout((): void => {
       emailInputRef.current?.focus();
     }, 500);
 
-    // Nettoyer les messages après 5 secondes
     const messageTimeout = setTimeout((): void => {
       setSuccessMessage('');
     }, 5000);
 
-    // Afficher le badge de sécurité après 3 secondes
     const securityTimeout = setTimeout((): void => {
       setShowSecurityBadge(true);
     }, 3000);
 
-    // ✅ Retourner une fonction de nettoyage
     return (): void => {
       clearTimeout(focusTimeout);
       clearTimeout(messageTimeout);
@@ -158,7 +161,7 @@ export default function LoginPage() {
         setPageBackground(background);
       }
     } catch (error) {
-      console.error('Erreur chargement du fond d\'écran:', error);
+      console.error('Erreur chargement du fond d\'ecran:', error);
     }
   };
 
@@ -168,12 +171,11 @@ export default function LoginPage() {
       try {
         JSON.parse(config);
       } catch (error) {
-        console.error('Erreur chargement config sécurité:', error);
+        console.error('Erreur chargement config securite:', error);
       }
     }
   };
 
-  // ✅ CORRIGÉ : Retourne une fonction de nettoyage ou undefined
   const checkLockoutStatus = (): (() => void) | undefined => {
     const attempts = JSON.parse(localStorage.getItem('loginAttempts') || '[]');
     setLoginAttempts(attempts);
@@ -191,7 +193,6 @@ export default function LoginPage() {
         );
         setLockoutTimer(remainingTime);
         
-        // Nettoyer l'ancien intervalle
         if (lockoutIntervalRef.current) {
           clearInterval(lockoutIntervalRef.current);
           lockoutIntervalRef.current = null;
@@ -212,7 +213,6 @@ export default function LoginPage() {
           });
         }, 60000);
         
-        // ✅ Retourner une fonction de nettoyage
         return (): void => {
           if (lockoutIntervalRef.current) {
             clearInterval(lockoutIntervalRef.current);
@@ -248,8 +248,8 @@ export default function LoginPage() {
       newErrors.password = getText('Le mot de passe est requis', 'Ilaina ny tenimiafina');
     } else if (password.length < SECURITY_CONFIG.minPasswordLength) {
       newErrors.password = getText(
-        `Le mot de passe doit contenir au moins ${SECURITY_CONFIG.minPasswordLength} caractères`,
-        `Ny tenimiafina dia tsy maintsy misy ${SECURITY_CONFIG.minPasswordLength} tarehintsoratra`
+        `Le mot de passe doit contenir au moins ${SECURITY_CONFIG.minPasswordLength} caracteres`,
+        `${SECURITY_CONFIG.minPasswordLength} litera farafahakeliny ny tenimiafina`
       );
     }
 
@@ -258,7 +258,7 @@ export default function LoginPage() {
   }, [email, password, getText]);
 
   // ============================================================
-  // GESTION DE LA MÉMORISATION
+  // GESTION DE LA MEMORISATION
   // ============================================================
 
   const handleRememberMe = useCallback((e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -271,7 +271,7 @@ export default function LoginPage() {
   }, [email]);
 
   // ============================================================
-  // SOUMISSION DU FORMULAIRE
+  // SOUMISSION DU FORMULAIRE - AVEC REDIRECTION INTELLIGENTE
   // ============================================================
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -283,7 +283,7 @@ export default function LoginPage() {
     if (isLocked) {
       setErrors({ 
         general: getText(
-          `Compte temporairement verrouillé. Réessayez dans ${lockoutTimer} minutes.`,
+          `Compte temporairement verrouille. Reessayez dans ${lockoutTimer} minutes.`,
           `Voavonjy vonjimaika ny kaonty. Andramo indray rehefa afaka ${lockoutTimer} minitra.`
         ) 
       });
@@ -299,7 +299,31 @@ export default function LoginPage() {
     try {
       await login(email, password);
       recordLoginAttempt(true);
-      router.push('/dashboard');
+      
+      // Redirection intelligente selon le role
+      const userData = localStorage.getItem('user');
+      const currentUser = userData ? JSON.parse(userData) : null;
+      
+      // Si c'est un administrateur
+      if (currentUser?.role === 'admin' || currentUser?.role === 'super_admin') {
+        router.push('/dashboard');
+        return;
+      }
+      
+      // Si c'est un candidat et qu'il y a une offre specifique
+      if (jobId) {
+        router.push(`/jobs/${jobId}`);
+        return;
+      }
+      
+      // Si c'est un candidat et qu'il y a une URL de redirection
+      if (redirectUrl && redirectUrl !== '/') {
+        router.push(redirectUrl);
+        return;
+      }
+      
+      // Par defaut pour les candidats : redirection vers la page des offres
+      router.push('/jobs');
       
     } catch (error: any) {
       recordLoginAttempt(false);
@@ -322,7 +346,7 @@ export default function LoginPage() {
         setLockoutTimer(15);
         setErrors({ 
           general: getText(
-            'Trop de tentatives échouées. Compte verrouillé pour 15 minutes.',
+            'Trop de tentatives echouees. Compte verrouille pour 15 minutes.',
             'Be loatra ny andrana tsy nahomby. Voavonjy ny kaonty mandritra ny 15 minitra.'
           ) 
         });
@@ -393,7 +417,7 @@ export default function LoginPage() {
   }, []);
 
   // ============================================================
-  // STYLES DU FOND D'ÉCRAN
+  // STYLES DU FOND D'ECRAN
   // ============================================================
 
   const heroBackgroundStyle = useMemo(() => {
@@ -431,7 +455,7 @@ export default function LoginPage() {
             <Shield className="w-8 h-8 text-blue-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
           </div>
           <p className="text-blue-200 text-sm animate-pulse">
-            {getText('Chargement sécurisé...', 'Fandefasana azo antoka...')}
+            {getText('Chargement securise...', 'Fandefasana azo antoka...')}
           </p>
         </div>
       </div>
@@ -445,7 +469,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen">
       
-      {/* Fond d'écran */}
+      {/* Fond d'ecran */}
       <div className="fixed inset-0 z-0">
         {pageBackground?.image_url && pageBackground.is_active ? (
           <>
@@ -470,7 +494,7 @@ export default function LoginPage() {
           {/* Carte de connexion */}
           <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-6 sm:p-8 transform transition-all duration-500 hover:scale-[1.01]">
             
-            {/* En-tête */}
+            {/* En-tete */}
             <div className="mb-8">
               <Link 
                 href="/" 
@@ -478,19 +502,21 @@ export default function LoginPage() {
               >
                 <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                 <span className="text-sm font-medium">
-                  {getText('Retour à l\'accueil', 'Hiverina any an-tokotany')}
+                  {getText('Retour a l\'accueil', 'Hiverina any an-tokotany')}
                 </span>
               </Link>
             </div>
 
             <div className="text-center mb-8">
+              {/* Badge Y-MaD avec nom complet */}
               <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full px-4 py-1.5 mb-4 border border-blue-100">
                 <UserCog className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-medium text-gray-700">
-                  {getText('Accès Administrateur', 'Fidirana administrateur')}
+                  Young for Madagascar Development
                 </span>
               </div>
 
+              {/* Icône */}
               <div className="relative w-20 h-20 mx-auto mb-4">
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl rotate-6 opacity-20" />
                 <div className="relative w-full h-full bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
@@ -499,14 +525,52 @@ export default function LoginPage() {
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 tracking-tight">
-                {getText('Espace Administration', 'Trano Fitantanana')}
+                {getText('Connexion', 'Hiditra')}
               </h1>
               <p className="text-gray-500 mt-2 text-sm">
                 {getText(
-                  'Connectez-vous avec vos identifiants administrateur',
-                  'Midira amin\'ny alalan\'ny kaontinao administrateur'
+                  'Connectez-vous a votre espace personnel',
+                  'Midira ao amin\'ny toeranao manokana'
                 )}
               </p>
+            </div>
+
+            {/* Selecteur de type de compte */}
+            <div className="mb-6">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserRole('admin');
+                    setEmail('');
+                    setPassword('');
+                  }}
+                  className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 ${
+                    userRole === 'admin'
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <UserCog className="w-4 h-4" />
+                  <span className="text-sm">{getText('Administrateur', 'Administrateur')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserRole('candidate');
+                    setEmail('');
+                    setPassword('');
+                  }}
+                  className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 ${
+                    userRole === 'candidate'
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <Briefcase className="w-4 h-4" />
+                  <span className="text-sm">{getText('Candidat', 'Mpangataka')}</span>
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -529,7 +593,7 @@ export default function LoginPage() {
                 <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                 <span className="text-sm text-amber-700">
                   {getText(
-                    `Compte verrouillé pour ${lockoutTimer} minute${lockoutTimer !== 1 ? 's' : ''}`,
+                    `Compte verrouille pour ${lockoutTimer} minute${lockoutTimer !== 1 ? 's' : ''}`,
                     `Voavonjy ny kaonty mandritra ${lockoutTimer} minitra`
                   )}
                 </span>
@@ -550,7 +614,7 @@ export default function LoginPage() {
             {/* Formulaire */}
             <form onSubmit={handleSubmit} className="space-y-5">
               
-              {/* Email */}
+              {/* Email - CHAMP VIDE PAR DEFAUT */}
               <div className="space-y-1">
                 <label className="block text-sm font-medium text-gray-700">
                   {getText('Adresse email', 'Adiresy email')}
@@ -588,7 +652,7 @@ export default function LoginPage() {
                 )}
               </div>
 
-              {/* Mot de passe */}
+              {/* Mot de passe - CHAMP VIDE PAR DEFAUT */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="block text-sm font-medium text-gray-700">
@@ -697,7 +761,7 @@ export default function LoginPage() {
                   href="/forgot-password" 
                   className="text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors font-medium"
                 >
-                  {getText('Mot de passe oublié ?', 'Hadino ny tenimiafina ?')}
+                  {getText('Mot de passe oublie ?', 'Hadino ny tenimiafina ?')}
                 </Link>
               </div>
 
@@ -715,7 +779,7 @@ export default function LoginPage() {
                 ) : isLocked ? (
                   <>
                     <Clock className="w-5 h-5" />
-                    <span>{getText('Compte verrouillé', 'Voavonjy ny kaonty')}</span>
+                    <span>{getText('Compte verrouille', 'Voavonjy ny kaonty')}</span>
                   </>
                 ) : (
                   <>
@@ -725,12 +789,12 @@ export default function LoginPage() {
                 )}
               </button>
 
-              {/* Indicateurs de sécurité */}
+              {/* Indicateurs de securite */}
               <div className="flex flex-col items-center gap-1">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
                   <span className="flex items-center gap-1">
                     <Shield className="w-3 h-3" />
-                    {getText('SSL Sécurisé', 'SSL Azo antoka')}
+                    {getText('SSL Securise', 'SSL Azo antoka')}
                   </span>
                   <span className="w-1 h-1 bg-gray-300 rounded-full" />
                   <span className="flex items-center gap-1">
@@ -748,48 +812,82 @@ export default function LoginPage() {
                   <div className="mt-2 text-xs text-emerald-600 flex items-center gap-1 animate-fadeIn">
                     <CheckCircle className="w-3 h-3" />
                     <span>
-                      {getText('Connexion sécurisée', 'Fidirana azo antoka')}
+                      {getText('Connexion securisee', 'Fidirana azo antoka')}
                     </span>
                   </div>
                 )}
               </div>
             </form>
 
-            {/* Liens supplémentaires */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <p className="text-center text-sm text-gray-600">
-                {getText('Pas encore de compte administrateur ?', 'Mbola tsy manana kaonty administrateur ?')}{' '}
-                <Link 
-                  href="/contact" 
-                  className="text-blue-600 font-semibold hover:text-blue-700 hover:underline transition-colors"
-                >
-                  {getText('Contacter le support', 'Mifandraisa amin\'ny fanampiana')}
-                </Link>
-              </p>
-              <p className="text-center text-xs text-gray-400 mt-3">
+            {/* Liens supplementaires */}
+            <div className="mt-6 pt-6 border-t border-gray-200 space-y-4">
+              
+              {/* Lien d'inscription pour les candidats */}
+              <div className="text-center">
+                <p className="text-sm text-gray-600">
+                  {getText('Pas encore de compte ?', 'Mbola tsy manana kaonty ?')}{' '}
+                  <Link 
+                    href="/register" 
+                    className="text-blue-600 font-semibold hover:text-blue-700 hover:underline transition-colors inline-flex items-center gap-1"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    {getText('Creer un compte', 'Hamorona kaonty')}
+                  </Link>
+                </p>
+              </div>
+
+              {/* Lien Admin cache */}
+              {userRole === 'candidate' && (
+                <div className="text-center">
+                  <p className="text-xs text-gray-400 flex items-center justify-center gap-2">
+                    <span>{getText('Vous etes administrateur ?', 'Administrateur ve ianao ?')}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserRole('admin');
+                        setEmail('');
+                        setPassword('');
+                      }}
+                      className="text-blue-600 hover:text-blue-700 hover:underline font-medium transition-colors"
+                    >
+                      {getText('Acces administration', 'Fidirana administrateur')}
+                    </button>
+                  </p>
+                </div>
+              )}
+
+              {/* Lien Candidat */}
+              {userRole === 'admin' && (
+                <div className="text-center">
+                  <p className="text-xs text-gray-400 flex items-center justify-center gap-2">
+                    <span>{getText('Vous etes candidat ?', 'Mpangataka ve ianao ?')}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserRole('candidate');
+                        setEmail('');
+                        setPassword('');
+                      }}
+                      className="text-blue-600 hover:text-blue-700 hover:underline font-medium transition-colors"
+                    >
+                      {getText('Acces candidat', 'Fidirana mpangataka')}
+                    </button>
+                  </p>
+                </div>
+              )}
+
+              <p className="text-center text-xs text-gray-400">
                 {getText(
-                  'Accès réservé à l\'administration de Y-MaD Madagascar',
-                  'Fidirana ho an\'ny mpitantana Y-MaD Madagascar ihany'
+                  'Acces reserve aux membres de Young for Madagascar Development',
+                  'Fidirana ho an\'ny mpikambana Young for Madagascar Development ihany'
                 )}
               </p>
             </div>
           </div>
-
-          {/* Footer */}
-          <div className="mt-8 text-center">
-            <p className="text-xs text-white/60 flex items-center justify-center gap-2">
-              <Server className="w-3 h-3" />
-              <span>
-                © {new Date().getFullYear()} Y-MaD Madagascar. {getText('Tous droits réservés.', 'Zo rehetra voatokana.')}
-              </span>
-              <span className="w-1 h-1 bg-white/30 rounded-full" />
-              <span>v2.0.0</span>
-            </p>
-          </div>
         </div>
       </div>
 
-      {/* Styles animés */}
+      {/* Styles animes */}
       <style jsx>{`
         @keyframes slideDown {
           from {

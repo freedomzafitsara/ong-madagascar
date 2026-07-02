@@ -135,7 +135,7 @@ export interface JobOfferStats {
 }
 
 // ============================================================
-// SERVICE
+// SERVICE COMPLET
 // ============================================================
 
 export const jobService = {
@@ -171,7 +171,6 @@ export const jobService = {
     }
   },
 
-  // Route publique pour les details d'une offre
   async getOfferById(id: string): Promise<JobOffer> {
     try {
       const response = await api.get(`/jobs/offers/public/${id}`);
@@ -179,7 +178,6 @@ export const jobService = {
     } catch (error: any) {
       console.error('Erreur chargement offre:', error);
       
-      // Si erreur 403 ou 404, essayer de recuperer depuis la liste
       if (error.response?.status === 403 || error.response?.status === 404) {
         try {
           const offers = await this.getPublishedOffers({ limit: 100 });
@@ -196,7 +194,6 @@ export const jobService = {
     }
   },
 
-  // ✅ METHODE AJOUTEE pour recuperer depuis la liste publique
   async getOfferFromPublicList(id: string): Promise<JobOffer | null> {
     try {
       const response = await api.get('/jobs/offers/public', { 
@@ -267,10 +264,16 @@ export const jobService = {
   },
 
   // ============================================================
-  // CANDIDATURES
+  // CANDIDATURES - AVEC SECURITE
   // ============================================================
   
   async apply(data: CreateJobApplicationDto): Promise<JobApplication> {
+    // ✅ Vérifier si l'utilisateur est authentifié
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Vous devez être connecté pour postuler à une offre.');
+    }
+    
     const response = await api.post('/jobs/applications', data);
     return response.data;
   },
@@ -300,6 +303,11 @@ export const jobService = {
     limit?: number; 
     status?: string;
   }): Promise<PaginatedResponse<JobApplication>> {
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Vous devez être connecté pour voir vos candidatures.');
+    }
+    
     const response = await api.get('/jobs/applications/my', { params });
     return response.data;
   },
@@ -319,27 +327,63 @@ export const jobService = {
     return response.data;
   },
 
+  // ✅ METHODE AJOUTEE - Vérifier si l'utilisateur a déjà postulé
+  async hasApplied(jobId: string): Promise<boolean> {
+    try {
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      if (!token) {
+        return false;
+      }
+      
+      const response = await api.get(`/jobs/applications/check/${jobId}`);
+      return response.data?.applied || false;
+    } catch (error) {
+      console.error('Erreur vérification candidature:', error);
+      return false;
+    }
+  },
+
   // ============================================================
-  // FAVORIS
+  // FAVORIS - AVEC SECURITE
   // ============================================================
   
   async saveJob(jobId: string): Promise<any> {
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Vous devez être connecté pour sauvegarder une offre.');
+    }
+    
     const response = await api.post(`/jobs/saved/${jobId}`);
     return response.data;
   },
 
   async unsaveJob(jobId: string): Promise<{ success: boolean; message: string }> {
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Vous devez être connecté pour cette action.');
+    }
+    
     const response = await api.delete(`/jobs/saved/${jobId}`);
     return response.data;
   },
 
   async getSavedJobs(params?: { page?: number; limit?: number }): Promise<PaginatedResponse<any>> {
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Vous devez être connecté pour voir vos favoris.');
+    }
+    
     const response = await api.get('/jobs/saved', { params });
     return response.data;
   },
 
   async checkIfSaved(jobId: string): Promise<boolean> {
     try {
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      if (!token) {
+        return false;
+      }
+      
       const response = await api.get(`/jobs/saved/${jobId}`);
       return response.data.saved || false;
     } catch (error) {
@@ -348,10 +392,15 @@ export const jobService = {
   },
 
   // ============================================================
-  // EXPORT
+  // EXPORT - AVEC SECURITE
   // ============================================================
   
   async exportApplications(jobId?: string): Promise<string> {
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Vous devez être connecté pour exporter.');
+    }
+    
     const response = await api.get('/jobs/applications/export', { 
       params: { jobId },
       responseType: 'blob'
@@ -360,6 +409,11 @@ export const jobService = {
   },
 
   async exportOffers(params?: { status?: string; contract_type?: string }): Promise<string> {
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Vous devez être connecté pour exporter.');
+    }
+    
     const response = await api.get('/jobs/offers/export', { 
       params,
       responseType: 'blob'
@@ -368,10 +422,15 @@ export const jobService = {
   },
 
   // ============================================================
-  // UPLOAD DE FICHIERS
+  // UPLOAD DE FICHIERS - AVEC SECURITE
   // ============================================================
   
   async uploadFile(file: File, type: 'cv' | 'cover_letter' | 'photo' | 'diploma' | 'attestation'): Promise<{ url: string; filename: string }> {
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Vous devez être connecté pour uploader un fichier.');
+    }
+    
     const formData = new FormData();
     formData.append('file', file);
     formData.append('type', type);
@@ -382,6 +441,32 @@ export const jobService = {
       },
     });
     return response.data;
+  },
+
+  // ============================================================
+  // FONCTIONS UTILITAIRES DE SECURITE
+  // ============================================================
+  
+  isAuthenticated(): boolean {
+    if (typeof window !== 'undefined') {
+      return !!(localStorage.getItem('access_token') || localStorage.getItem('token'));
+    }
+    return false;
+  },
+
+  getCurrentUser(): any {
+    if (typeof window !== 'undefined') {
+      const user = localStorage.getItem('user');
+      return user ? JSON.parse(user) : null;
+    }
+    return null;
+  },
+
+  getToken(): string | null {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('access_token') || localStorage.getItem('token');
+    }
+    return null;
   },
 };
 

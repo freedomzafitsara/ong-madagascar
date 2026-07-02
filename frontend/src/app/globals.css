@@ -1,197 +1,132 @@
-﻿@tailwind base;
+﻿/* frontend/src/app/globals.css */
+
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ============================================================
-   1. VARIABLES CSS (COULEURS OFFICIELLES Y-Mad)
-   ============================================================ */
-
-:root {
-  /* Bleu Y-Mad - Couleur principale */
-  --ymad-blue-50: #eff6ff;
-  --ymad-blue-100: #dbeafe;
-  --ymad-blue-200: #bfdbfe;
-  --ymad-blue-300: #93c5fd;
-  --ymad-blue-400: #60a5fa;
-  --ymad-blue-500: #3b82f6;
-  --ymad-blue-600: #1A69EB;   /* Bleu officiel Y-Mad */
-  --ymad-blue-700: #0D4CA8;   /* Bleu foncé Y-Mad */
-  --ymad-blue-800: #07307a;
-  --ymad-blue-900: #041a47;
-  
-  /* Gris Y-Mad - Couleur secondaire */
-  --ymad-gray-50: #f8fafc;
-  --ymad-gray-100: #f1f5f9;
-  --ymad-gray-200: #e2e8f0;
-  --ymad-gray-300: #cbd5e1;
-  --ymad-gray-400: #94a3b8;
-  --ymad-gray-500: #64748b;
-  --ymad-gray-600: #475569;
-  --ymad-gray-700: #334155;
-  --ymad-gray-800: #1e293b;
-  --ymad-gray-900: #0f172a;
-}
-
-/* ============================================================
-   2. STYLES DE BASE
+   1. VARIABLES CSS (COULEURS OFFICIELLES Y-MaD)
    ============================================================ */
 
 @layer base {
-  body {
-    @apply bg-ymad-gray-50 text-ymad-gray-800 font-sans antialiased;
+  :root {
+    /* Bleu Y-MaD - Couleur principale */
+    --ymad-blue-50: #eff6ff;
+    --ymad-blue-100: #dbeafe;
+    --ymad-blue-200: #bfdbfe;
+    --ymad-blue-300: #93c5fd;
+    --ymad-blue-400: #60a5fa;
+    --ymad-blue-500: #3b82f6;
+    --ymad-blue-600: #1A69EB;
+    --ymad-blue-700: #0D4CA8;
+    --ymad-blue-800: #07307a;
+    --ymad-blue-900: #041a47;
+    
+    /* Gris Y-MaD - Couleur secondaire */
+    --ymad-gray-50: #f8fafc;
+    --ymad-gray-100: #f1f5f9;
+    --ymad-gray-200: #e2e8f0;
+    --ymad-gray-300: #cbd5e1;
+    --ymad-gray-400: #94a3b8;
+    --ymad-gray-500: #64748b;
+    --ymad-gray-600: #475569;
+    --ymad-gray-700: #334155;
+    --ymad-gray-800: #1e293b;
+    --ymad-gray-900: #0f172a;
+
+    /* Couleurs système pour le mode clair */
+    --background: 255 255 255;
+    --foreground: 15 23 42;
+    --card: 255 255 255;
+    --card-foreground: 15 23 42;
+    --popover: 255 255 255;
+    --popover-foreground: 15 23 42;
+    --primary: 30 58 138;
+    --primary-foreground: 255 255 255;
+    --secondary: 241 245 249;
+    --secondary-foreground: 15 23 42;
+    --muted: 241 245 249;
+    --muted-foreground: 100 116 139;
+    --accent: 241 245 249;
+    --accent-foreground: 15 23 42;
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
+    --border: 229 231 235;
+    --input: 229 231 235;
+    --ring: 30 58 138;
+    --radius: 0.5rem;
+
+    /* Espacement et transitions */
+    --spacing-unit: 1rem;
+    --transition-duration: 0.3s;
+    --animations-enabled: 1;
   }
-  
+
+  /* ============================================================
+     MODE SOMBRE
+     ============================================================ */
+
+  .dark {
+    --background: 15 23 42;
+    --foreground: 248 250 252;
+    --card: 30 41 59;
+    --card-foreground: 248 250 252;
+    --popover: 30 41 59;
+    --popover-foreground: 248 250 252;
+    --primary: 59 130 246;
+    --primary-foreground: 255 255 255;
+    --secondary: 51 65 85;
+    --secondary-foreground: 248 250 252;
+    --muted: 51 65 85;
+    --muted-foreground: 148 163 184;
+    --accent: 51 65 85;
+    --accent-foreground: 248 250 252;
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
+    --border: 51 65 85;
+    --input: 51 65 85;
+    --ring: 59 130 246;
+  }
+
+  /* ============================================================
+     STYLES DE BASE
+     ============================================================ */
+
+  body {
+    background-color: rgb(var(--background));
+    color: rgb(var(--foreground));
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    min-height: 100vh;
+  }
+
   html {
     scroll-behavior: smooth;
   }
-  
-  /* Typographie */
+
   h1, h2, h3, h4, h5, h6 {
-    @apply font-bold text-ymad-gray-900;
+    font-weight: 700;
+    color: rgb(var(--foreground));
   }
-  
+
   a {
-    @apply transition-colors duration-200;
+    transition: color 0.2s ease;
+    text-decoration: none;
   }
 }
 
 /* ============================================================
-   3. GESTION DES FONDS D'ÉCRAN
+   2. ANIMATIONS ET TRANSITIONS
    ============================================================ */
 
-/* Fond d'écran fixe pour toute la page */
-.page-background {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  object-fit: cover;
-  pointer-events: none;
+/* Animation désactivée si animations_enabled = 0 */
+.animations-disabled *,
+.reduce-motion * {
+  animation-duration: 0s !important;
+  transition-duration: 0s !important;
 }
 
-/* Overlay pour améliorer la lisibilité du texte */
-.page-background-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-  pointer-events: none;
-}
-
-/* Contenu principal au-dessus du fond d'écran */
-.page-content {
-  position: relative;
-  z-index: 2;
-}
-
-/* Hero section avec fond d'écran intégré */
-.hero-section {
-  position: relative;
-  min-height: 100vh;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.hero-background {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-}
-
-.hero-background-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.hero-content {
-  position: relative;
-  z-index: 2;
-  text-align: center;
-  padding: 2rem;
-}
-
-/* Section avec fond d'écran intégré */
-.section-with-bg {
-  position: relative;
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-}
-
-.section-with-bg::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 1;
-}
-
-.section-with-bg > * {
-  position: relative;
-  z-index: 2;
-}
-
-/* ============================================================
-   4. SCROLLBAR PERSONNALISÉE
-   ============================================================ */
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--ymad-gray-100);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--ymad-blue-600);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--ymad-blue-700);
-}
-
-/* Firefox */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--ymad-blue-600) var(--ymad-gray-100);
-}
-
-/* ============================================================
-   5. SÉLECTION DE TEXTE
-   ============================================================ */
-
-::selection {
-  background: var(--ymad-blue-600);
-  color: #ffffff;
-}
-
-::-moz-selection {
-  background: var(--ymad-blue-600);
-  color: #ffffff;
-}
-
-/* ============================================================
-   6. ANIMATIONS
-   ============================================================ */
-
+/* Keyframes */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -245,6 +180,15 @@
   }
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Classes d'animation */
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
@@ -266,158 +210,513 @@
   animation: zoomIn 0.3s ease-out forwards;
 }
 
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
 /* ============================================================
-   7. COMPOSANTS RÉUTILISABLES
+   3. DENSITE - ESPACEMENT
+   ============================================================ */
+
+:root {
+  --spacing-unit: 1rem;
+}
+
+.density-compact {
+  --spacing-unit: 0.75rem;
+}
+
+.density-spacious {
+  --spacing-unit: 1.25rem;
+}
+
+/* Application de la densité */
+.density-compact .card,
+.density-compact .btn {
+  padding: calc(var(--spacing-unit) * 0.5) calc(var(--spacing-unit) * 0.75);
+}
+
+.density-spacious .card,
+.density-spacious .btn {
+  padding: calc(var(--spacing-unit) * 1.25) calc(var(--spacing-unit) * 1.5);
+}
+
+/* ============================================================
+   4. SCROLLBAR PERSONNALISEE
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ymad-gray-100);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ymad-blue-600);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ymad-blue-700);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ymad-blue-600) var(--ymad-gray-100);
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgb(30 41 59);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgb(59 130 246);
+}
+
+/* ============================================================
+   5. SELECTION DE TEXTE
+   ============================================================ */
+
+::selection {
+  background: var(--ymad-blue-600);
+  color: #ffffff;
+}
+
+::-moz-selection {
+  background: var(--ymad-blue-600);
+  color: #ffffff;
+}
+
+/* ============================================================
+   6. GESTION DES FONDS D'ECRAN
+   ============================================================ */
+
+/* Fond d'ecran fixe */
+.page-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* Overlay pour ameliorer la lisibilite */
+.page-background-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Contenu principal au-dessus du fond d'ecran */
+.page-content {
+  position: relative;
+  z-index: 2;
+}
+
+/* Section avec fond d'ecran */
+.section-with-bg {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.section-with-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1;
+}
+
+.section-with-bg > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ============================================================
+   7. COMPOSANTS REUTILISABLES
    ============================================================ */
 
 @layer components {
   /* ---------- BOUTONS ---------- */
   .btn-primary {
-    @apply bg-ymad-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold 
-           hover:bg-ymad-blue-700 transition-all duration-200 shadow-sm hover:shadow-md;
+    background-color: var(--ymad-blue-600);
+    color: #ffffff;
+    padding: 0.625rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+  
+  .btn-primary:hover {
+    background-color: var(--ymad-blue-700);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
   }
   
   .btn-secondary {
-    @apply bg-ymad-gray-200 text-ymad-gray-800 px-6 py-2.5 rounded-lg font-semibold 
-           hover:bg-ymad-gray-300 transition-all duration-200;
+    background-color: var(--ymad-gray-200);
+    color: var(--ymad-gray-800);
+    padding: 0.625rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  
+  .btn-secondary:hover {
+    background-color: var(--ymad-gray-300);
   }
   
   .btn-outline {
-    @apply border-2 border-ymad-blue-600 text-ymad-blue-600 px-6 py-2.5 rounded-lg font-semibold 
-           hover:bg-ymad-blue-600 hover:text-white transition-all duration-200;
+    border: 2px solid var(--ymad-blue-600);
+    color: var(--ymad-blue-600);
+    padding: 0.625rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    background: transparent;
+  }
+  
+  .btn-outline:hover {
+    background-color: var(--ymad-blue-600);
+    color: #ffffff;
   }
   
   .btn-sm {
-    @apply px-3 py-1.5 text-sm;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
   }
   
   .btn-lg {
-    @apply px-8 py-3 text-lg;
+    padding: 0.75rem 2rem;
+    font-size: 1.125rem;
   }
 
   /* ---------- CARTES ---------- */
   .card {
-    @apply bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all duration-300;
+    background-color: #ffffff;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .card:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   }
   
   .card-hover {
-    @apply hover:-translate-y-1 transition-transform duration-300;
+    transition: transform 0.3s ease;
   }
   
-  .card-gradient {
-    @apply bg-gradient-to-br from-white to-ymad-gray-50;
+  .card-hover:hover {
+    transform: translateY(-4px);
+  }
+
+  .dark .card {
+    background-color: rgb(30 41 59);
+    color: rgb(248 250 252);
   }
 
   /* ---------- CHAMPS DE SAISIE ---------- */
   .input {
-    @apply w-full px-4 py-2.5 border border-ymad-gray-300 rounded-lg 
-           focus:ring-2 focus:ring-ymad-blue-500 focus:border-transparent 
-           outline-none transition-all duration-200 bg-white;
+    width: 100%;
+    padding: 0.625rem 1rem;
+    border: 1px solid var(--ymad-gray-300);
+    border-radius: 0.5rem;
+    outline: none;
+    transition: all 0.2s ease;
+    background-color: #ffffff;
+  }
+  
+  .input:focus {
+    ring: 2px solid var(--ymad-blue-500);
+    border-color: transparent;
   }
   
   .input-error {
-    @apply border-red-500 focus:ring-red-400;
+    border-color: #ef4444;
+  }
+  
+  .input-error:focus {
+    ring-color: #ef4444;
   }
   
   .input-sm {
-    @apply px-3 py-1.5 text-sm;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .dark .input {
+    background-color: rgb(30 41 59);
+    border-color: rgb(51 65 85);
+    color: rgb(248 250 252);
+  }
+
+  .dark .input::placeholder {
+    color: rgb(148 163 184);
   }
 
   /* ---------- CONTENEUR ---------- */
   .container-custom {
-    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .container-custom {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container-custom {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
   }
 
   /* ---------- BADGES ---------- */
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
   }
   
   .badge-info {
-    @apply bg-ymad-blue-100 text-ymad-blue-700;
+    background-color: var(--ymad-blue-100);
+    color: var(--ymad-blue-700);
   }
 
-  /* ---------- SIDEBAR ---------- */
-  .nav-link {
-    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-ymad-gray-600 
-           hover:bg-ymad-gray-100 hover:text-ymad-blue-600 transition-all duration-200;
-  }
-  
-  .nav-link-active {
-    @apply bg-ymad-blue-50 text-ymad-blue-700 font-medium;
+  .dark .badge-info {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: rgb(147, 197, 253);
   }
 
   /* ---------- TABLEAUX ---------- */
   .table-container {
-    @apply bg-white rounded-xl shadow-sm overflow-hidden;
+    background-color: #ffffff;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
   }
   
   .table-header {
-    @apply bg-ymad-gray-50 border-b px-4 py-3 text-left text-sm font-semibold text-ymad-gray-700;
+    background-color: var(--ymad-gray-50);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ymad-gray-700);
+    border-bottom: 1px solid var(--ymad-gray-200);
   }
   
   .table-cell {
-    @apply px-4 py-3 text-sm text-ymad-gray-600 border-b;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: var(--ymad-gray-600);
+    border-bottom: 1px solid var(--ymad-gray-200);
   }
   
   .table-row-hover:hover {
-    @apply bg-ymad-gray-50 transition-colors;
+    background-color: var(--ymad-gray-50);
+    transition: background-color 0.2s ease;
+  }
+
+  .dark .table-container {
+    background-color: rgb(30 41 59);
+  }
+
+  .dark .table-header {
+    background-color: rgb(51 65 85);
+    color: rgb(248 250 252);
+  }
+
+  .dark .table-cell {
+    color: rgb(203 213 225);
+    border-bottom-color: rgb(51 65 85);
+  }
+
+  .dark .table-row-hover:hover {
+    background-color: rgb(51 65 85);
   }
 
   /* ---------- MODALES ---------- */
   .modal-overlay {
-    @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4;
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 1rem;
   }
   
   .modal-container {
-    @apply bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto;
+    background-color: #ffffff;
+    border-radius: 0.75rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 448px;
+    max-height: 90vh;
+    overflow-y: auto;
   }
   
   .modal-header {
-    @apply sticky top-0 bg-white p-4 border-b flex justify-between items-center;
+    position: sticky;
+    top: 0;
+    background-color: #ffffff;
+    padding: 1rem;
+    border-bottom: 1px solid var(--ymad-gray-200);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
   
   .modal-footer {
-    @apply sticky bottom-0 bg-white p-4 border-t flex justify-end gap-3;
+    position: sticky;
+    bottom: 0;
+    background-color: #ffffff;
+    padding: 1rem;
+    border-top: 1px solid var(--ymad-gray-200);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+
+  .dark .modal-container {
+    background-color: rgb(30 41 59);
+  }
+
+  .dark .modal-header {
+    background-color: rgb(30 41 59);
+    border-bottom-color: rgb(51 65 85);
+  }
+
+  .dark .modal-footer {
+    background-color: rgb(30 41 59);
+    border-top-color: rgb(51 65 85);
   }
 
   /* ---------- PAGINATION ---------- */
   .pagination {
-    @apply flex justify-center gap-2 mt-8;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 2rem;
   }
   
   .pagination-item {
-    @apply px-3 py-1.5 rounded-lg border border-ymad-gray-300 text-ymad-gray-600 
-           hover:bg-ymad-gray-100 transition;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--ymad-gray-300);
+    color: var(--ymad-gray-600);
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  
+  .pagination-item:hover {
+    background-color: var(--ymad-gray-100);
   }
   
   .pagination-item-active {
-    @apply bg-ymad-blue-600 text-white border-ymad-blue-600 hover:bg-ymad-blue-700;
+    background-color: var(--ymad-blue-600);
+    color: #ffffff;
+    border-color: var(--ymad-blue-600);
+  }
+  
+  .pagination-item-active:hover {
+    background-color: var(--ymad-blue-700);
+  }
+
+  .dark .pagination-item {
+    border-color: rgb(51 65 85);
+    color: rgb(148 163 184);
+  }
+
+  .dark .pagination-item:hover {
+    background-color: rgb(51 65 85);
+  }
+
+  .dark .pagination-item-active {
+    background-color: rgb(59 130 246);
+    color: #ffffff;
+    border-color: rgb(59 130 246);
   }
 
   /* ---------- CHARGEMENT ---------- */
   .spinner {
-    @apply w-12 h-12 border-4 border-ymad-blue-200 border-t-ymad-blue-600 rounded-full animate-spin;
+    width: 3rem;
+    height: 3rem;
+    border: 4px solid var(--ymad-blue-200);
+    border-top-color: var(--ymad-blue-600);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
   }
   
   .skeleton {
-    @apply bg-ymad-gray-200 animate-pulse rounded;
+    background-color: var(--ymad-gray-200);
+    border-radius: 0.25rem;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .dark .skeleton {
+    background-color: rgb(51 65 85);
   }
 }
 
 /* ============================================================
-   8. UTILITAIRES PERSONNALISÉS
+   8. UTILITAIRES PERSONNALISES
    ============================================================ */
 
 @layer utilities {
-  /* Texte avec dégradé bleu */
+  /* Texte avec degrade bleu */
   .text-gradient {
-    @apply bg-gradient-to-r from-ymad-blue-600 to-ymad-blue-700 bg-clip-text text-transparent;
+    background: linear-gradient(to right, var(--ymad-blue-600), var(--ymad-blue-700));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
   
-  /* Ligne séparatrice */
+  /* Ligne separatrice */
   .separator {
-    @apply w-16 h-1 bg-ymad-blue-600 rounded-full mx-auto my-4;
+    width: 4rem;
+    height: 0.25rem;
+    background-color: var(--ymad-blue-600);
+    border-radius: 9999px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .dark .separator {
+    background-color: rgb(59, 130, 246);
   }
   
   /* Limitation de lignes pour les textes longs */
@@ -447,14 +746,19 @@
     transition: all 0.2s ease-in-out;
   }
   
-  /* Ombre spécifique Y-Mad */
+  /* Ombre specifique Y-MaD */
   .shadow-ymad {
     box-shadow: 0 4px 14px rgba(26, 105, 235, 0.15);
   }
   
-  /* Bordure supérieure bleue */
+  /* Bordure superieure bleue */
   .border-top-blue {
     border-top: 3px solid var(--ymad-blue-600);
+  }
+
+  /* Texte equilibre */
+  .text-balance {
+    text-wrap: balance;
   }
 }
 
@@ -462,172 +766,266 @@
    9. STYLES RESPONSIVES
    ============================================================ */
 
-/* Mobile (jusqu'à 640px) */
+/* Mobile (jusqu'a 640px) */
 @media (max-width: 640px) {
   .container-custom {
-    @apply px-4;
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
   
-  .btn-primary, .btn-secondary, .btn-outline {
-    @apply px-4 py-2 text-sm;
+  .btn-primary,
+  .btn-secondary,
+  .btn-outline {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
   }
   
   .modal-container {
-    @apply max-w-[95%] mx-2;
+    max-width: 95%;
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
   }
   
   h1 {
-    @apply text-2xl;
+    font-size: 1.5rem;
   }
   
   h2 {
-    @apply text-xl;
+    font-size: 1.25rem;
   }
 }
 
 /* Tablette (641px - 768px) */
 @media (min-width: 641px) and (max-width: 768px) {
   .container-custom {
-    @apply px-6;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
   }
 }
 
 /* ============================================================
-   10. MODE SOMBRE (optionnel - désactivé par défaut)
+   10. DARK MODE - STYLES SPECIFIQUES POUR TAILWIND
    ============================================================ */
 
-/* 
-   Pour activer le mode sombre, décommentez ce bloc
-   
-@media (prefers-color-scheme: dark) {
-  body {
-    @apply bg-ymad-gray-900 text-ymad-gray-200;
-  }
-  
-  .card {
-    @apply bg-ymad-gray-800;
-  }
+/* Override des classes Tailwind en mode sombre */
+.dark .bg-white {
+  background-color: rgb(30 41 59) !important;
 }
-*/
-/* frontend/src/app/globals.css */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+.dark .bg-gray-50 {
+  background-color: rgb(30 41 59) !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: rgb(51 65 85) !important;
+}
+
+.dark .bg-gray-200 {
+  background-color: rgb(51 65 85) !important;
+}
+
+.dark .text-gray-800 {
+  color: rgb(248 250 252) !important;
+}
+
+.dark .text-gray-700 {
+  color: rgb(226 232 240) !important;
+}
+
+.dark .text-gray-600 {
+  color: rgb(203 213 225) !important;
+}
+
+.dark .text-gray-500 {
+  color: rgb(148 163 184) !important;
+}
+
+.dark .text-gray-400 {
+  color: rgb(148 163 184) !important;
+}
+
+.dark .border-gray-200 {
+  border-color: rgb(51 65 85) !important;
+}
+
+.dark .border-gray-300 {
+  border-color: rgb(51 65 85) !important;
+}
+
+.dark .border-gray-100 {
+  border-color: rgb(51 65 85) !important;
+}
+
+.dark .shadow-sm {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4) !important;
+}
+
+.dark .shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4) !important;
+}
+
+.dark .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+.dark .text-blue-800 {
+  color: rgb(147, 197, 253) !important;
+}
+
+.dark .text-blue-600 {
+  color: rgb(96, 165, 250) !important;
+}
+
+.dark .border-blue-800 {
+  border-color: rgb(59, 130, 246) !important;
+}
+
+.dark .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+.dark .text-red-600 {
+  color: rgb(248, 113, 113) !important;
+}
+
+.dark .bg-green-50 {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+}
+
+.dark .text-green-600 {
+  color: rgb(74, 222, 128) !important;
+}
+
+.dark .bg-yellow-50 {
+  background-color: rgba(234, 179, 8, 0.15) !important;
+}
+
+.dark .text-yellow-600 {
+  color: rgb(250, 204, 21) !important;
+}
+
+.dark .bg-gray-800 {
+  background-color: rgb(15 23 42) !important;
+}
+
+.dark .bg-gray-900 {
+  background-color: rgb(15 23 42) !important;
+}
+
+.dark .bg-white\\/20 {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.dark .bg-white\\/10 {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.dark .text-white {
+  color: rgb(248 250 252) !important;
+}
+
+.dark .hover\\:bg-gray-50:hover {
+  background-color: rgb(51 65 85) !important;
+}
+
+.dark .hover\\:bg-gray-100:hover {
+  background-color: rgb(51 65 85) !important;
+}
+
+.dark .hover\\:text-gray-700:hover {
+  color: rgb(226 232 240) !important;
+}
+
+.dark .divide-gray-200 > * + * {
+  border-color: rgb(51 65 85) !important;
+}
+
+.dark .ring-gray-300 {
+  --tw-ring-color: rgb(51 65 85) !important;
+}
+
+.dark .placeholder-gray-400::placeholder {
+  color: rgb(148 163 184) !important;
+}
+
+.dark .bg-gradient-to-r.from-blue-800 {
+  --tw-gradient-from: #1e293b !important;
+}
+
+.dark .bg-gradient-to-r.to-blue-900 {
+  --tw-gradient-to: #0f172a !important;
+}
 
 /* ============================================================
-   BASE
+   11. SECTION AVEC FOND D'ECRAN EN MODE SOMBRE
    ============================================================ */
 
-@layer base {
-  :root {
-    /* Couleurs de base */
-    --background: 255 255 255;
-    --foreground: 15 23 42;
-    --card: 255 255 255;
-    --card-foreground: 15 23 42;
-    --popover: 255 255 255;
-    --popover-foreground: 15 23 42;
-    --primary: 30 58 138;
-    --primary-foreground: 255 255 255;
-    --secondary: 241 245 249;
-    --secondary-foreground: 15 23 42;
-    --muted: 241 245 249;
-    --muted-foreground: 100 116 139;
-    --accent: 241 245 249;
-    --accent-foreground: 15 23 42;
-    --destructive: 239 68 68;
-    --destructive-foreground: 255 255 255;
-    --border: 229 231 235;
-    --input: 229 231 235;
-    --ring: 30 58 138;
-    --radius: 0.5rem;
-
-    /* Espacement */
-    --spacing-unit: 1rem;
-    --transition-duration: 0.3s;
-  }
-
-  .dark {
-    --background: 15 23 42;
-    --foreground: 248 250 252;
-    --card: 30 41 59;
-    --card-foreground: 248 250 252;
-    --popover: 30 41 59;
-    --popover-foreground: 248 250 252;
-    --primary: 59 130 246;
-    --primary-foreground: 255 255 255;
-    --secondary: 51 65 85;
-    --secondary-foreground: 248 250 252;
-    --muted: 51 65 85;
-    --muted-foreground: 148 163 184;
-    --accent: 51 65 85;
-    --accent-foreground: 248 250 252;
-    --destructive: 239 68 68;
-    --destructive-foreground: 255 255 255;
-    --border: 51 65 85;
-    --input: 51 65 85;
-    --ring: 59 130 246;
-  }
+.dark .section-with-bg::before {
+  background: rgba(0, 0, 0, 0.6);
 }
 
 /* ============================================================
-   CORPS DE PAGE
+   12. FORMULAIRES EN MODE SOMBRE
    ============================================================ */
 
-body {
-  background-color: rgb(var(--background));
-  color: rgb(var(--foreground));
-  transition: background-color 0.3s ease, color 0.3s ease;
+.dark input[type="text"],
+.dark input[type="email"],
+.dark input[type="password"],
+.dark input[type="tel"],
+.dark input[type="url"],
+.dark input[type="number"],
+.dark input[type="date"],
+.dark textarea,
+.dark select {
+  background-color: rgb(30 41 59) !important;
+  border-color: rgb(51 65 85) !important;
+  color: rgb(248 250 252) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: rgb(148 163 184) !important;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: rgb(59 130 246) !important;
+  --tw-ring-color: rgb(59 130 246) !important;
 }
 
 /* ============================================================
-   REDUCTION DES ANIMATIONS
+   13. BOUTONS EN MODE SOMBRE
    ============================================================ */
 
-.reduce-motion * {
-  transition-duration: 0s !important;
-  animation-duration: 0s !important;
+.dark .btn-primary {
+  background-color: rgb(59 130 246);
+  color: #ffffff;
 }
 
-/* ============================================================
-   UTILITAIRES TAILWIND PERSONNALISES
-   ============================================================ */
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+.dark .btn-primary:hover {
+  background-color: rgb(37 99 235);
 }
 
-/* ============================================================
-   SCROLLBAR PERSONNALISEE
-   ============================================================ */
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.dark .btn-secondary {
+  background-color: rgb(51 65 85);
+  color: rgb(248 250 252);
 }
 
-::-webkit-scrollbar-track {
-  background: rgb(var(--muted));
-  border-radius: 4px;
+.dark .btn-secondary:hover {
+  background-color: rgb(71 85 105);
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgb(var(--primary));
-  border-radius: 4px;
+.dark .btn-outline {
+  border-color: rgb(59 130 246);
+  color: rgb(96 165 250);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--primary) / 0.8);
-}
-
-/* ============================================================
-   SELECTION DE TEXTE
-   ============================================================ */
-
-::selection {
-  background: rgb(var(--primary) / 0.3);
-  color: rgb(var(--foreground));
+.dark .btn-outline:hover {
+  background-color: rgb(59 130 246);
+  color: #ffffff;
 }

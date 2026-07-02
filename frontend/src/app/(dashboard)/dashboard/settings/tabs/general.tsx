@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { 
   Globe, Building, MapPin, Mail, Phone, 
@@ -10,7 +10,7 @@ import {
   Users, Award, Calendar
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import api from '@/lib/api';
+import { authApi } from '@/lib/api';
 
 // ============================================================
 // COMPOSANTS
@@ -90,35 +90,35 @@ export function GeneralTab({ user, getText }: { user: any; getText: (fr: string,
   const { language, setLanguage } = useLanguage();
   const [timezone, setTimezone] = useState('Indian/Antananarivo');
   const [saving, setSaving] = useState(false);
-  
-  // ✅ CORRIGE : Type securise pour la langue (seulement 'fr' ou 'mg')
   const [selectedLang, setSelectedLang] = useState<'fr' | 'mg'>(language || 'fr');
 
-  // ✅ CORRIGE : Type securise pour la langue (seulement 'fr' ou 'mg')
   const handleLanguageChange = async (lang: 'fr' | 'mg') => {
     setSelectedLang(lang);
     setLanguage(lang);
     
     try {
-      await api.put('/auth/profile', { language: lang });
+      await authApi.updateProfile({ preferred_language: lang });
       toast.success(getText('Langue mise a jour', 'Vita ny fanovana fiteny'));
     } catch (error) {
       console.error('Erreur sauvegarde langue:', error);
     }
   };
 
-  const handleSaveTimezone = () => {
+  const handleSaveTimezone = async () => {
     setSaving(true);
-    setTimeout(() => {
+    try {
+      await authApi.updateProfile({ timezone });
       toast.success(getText('Fuseau horaire mis a jour', 'Vita ny fanovana faritry ny fotoana'));
+    } catch (error) {
+      toast.error(getText('Erreur lors de la sauvegarde', 'Nisy hadisoana'));
+    } finally {
       setSaving(false);
-    }, 500);
+    }
   };
 
   return (
     <div className="space-y-6">
       
-      {/* Langue */}
       <SettingCard 
         title={getText('Langue', 'Fiteny')}
         description={getText('Choisissez votre langue preferee pour l\'interface', 'Fidio ny fiteny tianao ho an\'ny sehatra')}
@@ -154,7 +154,6 @@ export function GeneralTab({ user, getText }: { user: any; getText: (fr: string,
         </p>
       </SettingCard>
 
-      {/* Fuseau horaire */}
       <SettingCard 
         title={getText('Fuseau horaire', 'Faritry ny fotoana')}
         description={getText('Configurez votre fuseau horaire pour les dates et heures', 'Ampifanaraho ny faritry ny fotoana ho an\'ny daty sy ora')}
@@ -169,7 +168,6 @@ export function GeneralTab({ user, getText }: { user: any; getText: (fr: string,
             <option value="UTC">UTC</option>
             <option value="Europe/Paris">Europe/Paris (UTC+1)</option>
             <option value="Europe/London">Europe/London (UTC+0)</option>
-            <option value="America/New_York">America/New_York (UTC-4)</option>
           </select>
           <button
             onClick={handleSaveTimezone}
@@ -185,7 +183,6 @@ export function GeneralTab({ user, getText }: { user: any; getText: (fr: string,
         </p>
       </SettingCard>
 
-      {/* Informations de l'association */}
       <SettingCard 
         title={getText('Association Y-MaD', 'Fikambanana Y-MaD')}
         description={getText('Informations officielles de l\'association', 'Fampahalalana ofisialy momba ny fikambanana')}
@@ -257,7 +254,6 @@ export function GeneralTab({ user, getText }: { user: any; getText: (fr: string,
         </div>
       </SettingCard>
 
-      {/* Version */}
       <SettingCard title={getText('Version', 'Dikan-teny')}>
         <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
           <div>

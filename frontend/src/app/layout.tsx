@@ -7,18 +7,31 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
-import { ThemeProvider } from "@/contexts/ThemeContext"; // ✅ AJOUT
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Toaster } from "react-hot-toast";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Y-Mad - Youthful Madagascar",
-  description: "Association de jeunesse et développement à Madagascar",
-  keywords: "Y-Mad, ONG Madagascar, jeunesse, développement, emploi, formation",
-  authors: [{ name: "Y-Mad" }],
+  title: "Y-MaD - Young for Madagascar Development",
+  description: "Plateforme de gestion des offres d'emploi de l'ONG Y-MaD - Young for Madagascar Development",
+  keywords: "Y-MaD, Young for Madagascar Development, ONG Madagascar, jeunesse, développement, emploi, formation, Carion, Antananarivo",
+  authors: [{ name: "Y-MaD - Young for Madagascar Development" }],
   icons: {
     icon: "/favicon.ico",
+  },
+  openGraph: {
+    title: "Y-MaD - Young for Madagascar Development",
+    description: "Plateforme de gestion des offres d'emploi de l'ONG Y-MaD",
+    url: "https://y-mad.mg",
+    siteName: "Y-MaD - Young for Madagascar Development",
+    locale: "fr_FR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Y-MaD - Young for Madagascar Development",
+    description: "Plateforme de gestion des offres d'emploi de l'ONG Y-MaD",
   },
 };
 
@@ -28,9 +41,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" suppressHydrationWarning> 
+    <html lang="fr" suppressHydrationWarning>
       <body className={`${inter.className} antialiased`}>
-        {/*  ThemeProvider DOIT etre en premier */}
         <ThemeProvider>
           <AuthProvider>
             <LanguageProvider>

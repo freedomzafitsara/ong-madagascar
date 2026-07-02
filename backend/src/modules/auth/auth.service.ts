@@ -53,7 +53,6 @@ export class AuthService {
       phone: phone || null,
       role: userRole,
       is_active: true,
-      // Preferences par defaut
       preferred_language: 'fr',
       theme: 'light',
       font_size: 'medium',
@@ -101,7 +100,7 @@ export class AuthService {
       throw new UnauthorizedException('Votre compte est desactive');
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await user.validatePassword(password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
@@ -115,14 +114,6 @@ export class AuthService {
       role: user.role,
       first_name: user.first_name,
       last_name: user.last_name,
-      preferences: {
-        theme: user.theme,
-        font_size: user.font_size,
-        preferred_language: user.preferred_language,
-        sidebar_collapsed: user.sidebar_collapsed,
-        animations_enabled: user.animations_enabled,
-        density: user.density,
-      }
     };
 
     const token = this.jwtService.sign(payload);
@@ -138,8 +129,10 @@ export class AuthService {
         last_name: user.last_name,
         phone: user.phone,
         role: user.role,
+        avatar_url: user.avatar_url,
         is_active: user.is_active,
         last_login: user.last_login,
+        created_at: user.created_at,
         preferences: {
           theme: user.theme,
           font_size: user.font_size,
@@ -176,6 +169,7 @@ export class AuthService {
       last_name: user.last_name,
       phone: user.phone,
       role: user.role,
+      avatar_url: user.avatar_url,
       is_active: user.is_active,
       last_login: user.last_login,
       created_at: user.created_at,
@@ -203,12 +197,14 @@ export class AuthService {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
-    if (updateDto.first_name) user.first_name = updateDto.first_name;
-    if (updateDto.last_name) user.last_name = updateDto.last_name;
-    if (updateDto.phone) user.phone = updateDto.phone;
+    const allowedFields = ['first_name', 'last_name', 'phone', 'preferred_language', 'timezone'];
+    for (const field of allowedFields) {
+      if (updateDto[field] !== undefined) {
+        user[field] = updateDto[field];
+      }
+    }
 
     await this.userRepository.save(user);
-
     return this.getProfile(userId);
   }
 
@@ -220,7 +216,7 @@ export class AuthService {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
-    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    const isPasswordValid = await user.validatePassword(currentPassword);
     if (!isPasswordValid) {
       throw new BadRequestException('Mot de passe actuel incorrect');
     }
@@ -237,17 +233,147 @@ export class AuthService {
     return { success: true, message: 'Mot de passe modifie avec succes' };
   }
 
-  async uploadAvatar(userId: string, file: Express.Multer.File): Promise<any> {
+  // ============================================================
+  // GESTION DES PREFERENCES - APPARENCE
+  // ============================================================
+
+  async getPreferences(userId: string): Promise<any> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
-    const avatarUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    return {
+      theme: user.theme || 'light',
+      font_size: user.font_size || 'medium',
+      density: user.density || 'comfortable',
+      sidebar_collapsed: user.sidebar_collapsed || false,
+      animations_enabled: user.animations_enabled !== false,
+      preferred_language: user.preferred_language || 'fr',
+      timezone: user.timezone || 'Indian/Antananarivo',
+      email_notifications: user.email_notifications !== false,
+      push_notifications: user.push_notifications !== false,
+      job_alerts: user.job_alerts !== false,
+      project_updates: user.project_updates !== false,
+      blog_updates: user.blog_updates || false,
+      system_updates: user.system_updates !== false,
+    };
+  }
+
+  async updatePreferences(userId: string, preferencesDto: any): Promise<any> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouve');
+    }
+
+    // Champs de theme/apparence
+    const appearanceFields = ['theme', 'font_size', 'density', 'sidebar_collapsed', 'animations_enabled'];
+    for (const field of appearanceFields) {
+      if (preferencesDto[field] !== undefined) {
+        user[field] = preferencesDto[field];
+      }
+    }
+
+    // Champs de langue/fuseau horaire
+    const localeFields = ['preferred_language', 'timezone'];
+    for (const field of localeFields) {
+      if (preferencesDto[field] !== undefined) {
+        user[field] = preferencesDto[field];
+      }
+    }
+
+    // Champs de notifications
+    const notificationFields = [
+      'email_notifications', 'push_notifications', 'job_alerts',
+      'project_updates', 'blog_updates', 'system_updates'
+    ];
+    for (const field of notificationFields) {
+      if (preferencesDto[field] !== undefined) {
+        user[field] = preferencesDto[field];
+      }
+    }
+
+    await this.userRepository.save(user);
+    this.logger.log(`Preferences mises a jour pour l'utilisateur ${user.email}`);
+
+    return {
+      success: true,
+      message: 'Preferences mises a jour avec succes',
+      preferences: {
+        theme: user.theme,
+        font_size: user.font_size,
+        density: user.density,
+        sidebar_collapsed: user.sidebar_collapsed,
+        animations_enabled: user.animations_enabled,
+        preferred_language: user.preferred_language,
+        timezone: user.timezone,
+        email_notifications: user.email_notifications,
+        push_notifications: user.push_notifications,
+        job_alerts: user.job_alerts,
+        project_updates: user.project_updates,
+        blog_updates: user.blog_updates,
+        system_updates: user.system_updates,
+      }
+    };
+  }
+
+  // ============================================================
+  // MISE A JOUR UNIQUEMENT DES PREFERENCES APPARENCE
+  // ============================================================
+
+  async updateAppearancePreferences(userId: string, appearanceDto: any): Promise<any> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouve');
+    }
+
+    const fields = ['theme', 'font_size', 'density', 'sidebar_collapsed', 'animations_enabled'];
+    for (const field of fields) {
+      if (appearanceDto[field] !== undefined) {
+        user[field] = appearanceDto[field];
+      }
+    }
+
+    await this.userRepository.save(user);
+
+    return {
+      success: true,
+      message: 'Preferences d\'apparence mises a jour',
+      preferences: {
+        theme: user.theme,
+        font_size: user.font_size,
+        density: user.density,
+        sidebar_collapsed: user.sidebar_collapsed,
+        animations_enabled: user.animations_enabled,
+      }
+    };
+  }
+
+  // ============================================================
+  // MISE A JOUR DE L'AVATAR
+  // ============================================================
+
+  async updateAvatar(userId: string, avatarUrl: string): Promise<any> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouve');
+    }
+
     user.avatar_url = avatarUrl;
     await this.userRepository.save(user);
 
-    return { avatar_url: avatarUrl };
+    this.logger.log(`Avatar mis a jour pour ${user.email}: ${avatarUrl}`);
+
+    return {
+      id: user.id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      avatar_url: user.avatar_url,
+      phone: user.phone,
+      role: user.role,
+      is_active: user.is_active,
+    };
   }
 
   // ============================================================
@@ -266,7 +392,7 @@ export class AuthService {
 
     const resetToken = randomBytes(32).toString('hex');
     const resetTokenExpires = new Date();
-    resetTokenExpires.setMinutes(resetTokenExpires.getMinutes() + 1);
+    resetTokenExpires.setMinutes(resetTokenExpires.getMinutes() + 15);
 
     user.reset_token = resetToken;
     user.reset_token_expires = resetTokenExpires;
@@ -326,113 +452,8 @@ export class AuthService {
   }
 
   // ============================================================
-  // GESTION DES PREFERENCES UTILISATEUR
-  // ============================================================
-
-  async getPreferences(userId: string): Promise<any> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouve');
-    }
-
-    return {
-      preferred_language: user.preferred_language || 'fr',
-      timezone: user.timezone || 'Indian/Antananarivo',
-      theme: user.theme || 'light',
-      font_size: user.font_size || 'medium',
-      sidebar_collapsed: user.sidebar_collapsed || false,
-      animations_enabled: user.animations_enabled !== false,
-      density: user.density || 'comfortable',
-      email_notifications: user.email_notifications !== false,
-      push_notifications: user.push_notifications !== false,
-      job_alerts: user.job_alerts !== false,
-      project_updates: user.project_updates !== false,
-      blog_updates: user.blog_updates || false,
-      system_updates: user.system_updates !== false,
-    };
-  }
-
-  async updatePreferences(userId: string, preferencesDto: any): Promise<any> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouve');
-    }
-
-    // Mettre a jour les preferences
-    if (preferencesDto.preferred_language !== undefined) {
-      user.preferred_language = preferencesDto.preferred_language;
-    }
-    if (preferencesDto.timezone !== undefined) {
-      user.timezone = preferencesDto.timezone;
-    }
-    if (preferencesDto.theme !== undefined) {
-      user.theme = preferencesDto.theme;
-    }
-    if (preferencesDto.font_size !== undefined) {
-      user.font_size = preferencesDto.font_size;
-    }
-    if (preferencesDto.sidebar_collapsed !== undefined) {
-      user.sidebar_collapsed = preferencesDto.sidebar_collapsed;
-    }
-    if (preferencesDto.animations_enabled !== undefined) {
-      user.animations_enabled = preferencesDto.animations_enabled;
-    }
-    if (preferencesDto.density !== undefined) {
-      user.density = preferencesDto.density;
-    }
-    if (preferencesDto.email_notifications !== undefined) {
-      user.email_notifications = preferencesDto.email_notifications;
-    }
-    if (preferencesDto.push_notifications !== undefined) {
-      user.push_notifications = preferencesDto.push_notifications;
-    }
-    if (preferencesDto.job_alerts !== undefined) {
-      user.job_alerts = preferencesDto.job_alerts;
-    }
-    if (preferencesDto.project_updates !== undefined) {
-      user.project_updates = preferencesDto.project_updates;
-    }
-    if (preferencesDto.blog_updates !== undefined) {
-      user.blog_updates = preferencesDto.blog_updates;
-    }
-    if (preferencesDto.system_updates !== undefined) {
-      user.system_updates = preferencesDto.system_updates;
-    }
-
-    await this.userRepository.save(user);
-    this.logger.log(`Preferences mises a jour pour l'utilisateur ${user.email}`);
-
-    return {
-      success: true,
-      message: 'Preferences mises a jour avec succes',
-      preferences: {
-        preferred_language: user.preferred_language,
-        timezone: user.timezone,
-        theme: user.theme,
-        font_size: user.font_size,
-        sidebar_collapsed: user.sidebar_collapsed,
-        animations_enabled: user.animations_enabled,
-        density: user.density,
-        email_notifications: user.email_notifications,
-        push_notifications: user.push_notifications,
-        job_alerts: user.job_alerts,
-        project_updates: user.project_updates,
-        blog_updates: user.blog_updates,
-        system_updates: user.system_updates,
-      }
-    };
-  }
-
-  // ============================================================
   // GESTION DES UTILISATEURS - ADMIN
   // ============================================================
-
-  async getAllUsers(): Promise<any[]> {
-    return this.userRepository.find({
-      select: ['id', 'email', 'first_name', 'last_name', 'phone', 'role', 'is_active', 'last_login', 'created_at', 'updated_at'],
-      order: { created_at: 'DESC' },
-    });
-  }
 
   async getUsersPaginated(
     page: number = 1,
@@ -460,7 +481,7 @@ export class AuthService {
 
     const [data, total] = await this.userRepository.findAndCount({
       where,
-      select: ['id', 'email', 'first_name', 'last_name', 'phone', 'role', 'is_active', 'last_login', 'created_at', 'updated_at'],
+      select: ['id', 'email', 'first_name', 'last_name', 'phone', 'role', 'avatar_url', 'is_active', 'last_login', 'created_at', 'updated_at'],
       order: { created_at: 'DESC' },
       skip,
       take: limit,
@@ -484,13 +505,22 @@ export class AuthService {
     const candidate = await this.userRepository.count({ where: { role: UserRole.CANDIDATE } });
     const visitor = await this.userRepository.count({ where: { role: UserRole.VISITOR } });
 
-    return { total, active, inactive, super_admin, admin, user, candidate, visitor };
+    return { 
+      total, 
+      active, 
+      inactive, 
+      super_admin, 
+      admin, 
+      user, 
+      candidate, 
+      visitor 
+    };
   }
 
   async getUserById(id: string): Promise<any> {
     const user = await this.userRepository.findOne({
       where: { id },
-      select: ['id', 'email', 'first_name', 'last_name', 'phone', 'role', 'is_active', 'last_login', 'created_at', 'updated_at'],
+      select: ['id', 'email', 'first_name', 'last_name', 'phone', 'role', 'avatar_url', 'is_active', 'last_login', 'created_at', 'updated_at'],
     });
     
     if (!user) {
@@ -506,21 +536,19 @@ export class AuthService {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
-    if (updateDto.first_name) user.first_name = updateDto.first_name;
-    if (updateDto.last_name) user.last_name = updateDto.last_name;
-    if (updateDto.phone) user.phone = updateDto.phone;
+    const fields = ['first_name', 'last_name', 'phone', 'role'];
+    for (const field of fields) {
+      if (updateDto[field] !== undefined) {
+        if (field === 'role' && user.role === UserRole.SUPER_ADMIN) {
+          throw new ForbiddenException('Impossible de modifier le role du Super Admin');
+        }
+        user[field] = updateDto[field];
+      }
+    }
 
     await this.userRepository.save(user);
     
-    return {
-      id: user.id,
-      email: user.email,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      phone: user.phone,
-      role: user.role,
-      is_active: user.is_active,
-    };
+    return this.getUserById(id);
   }
 
   async getUsersForExport(role?: string): Promise<any[]> {
@@ -551,7 +579,15 @@ export class AuthService {
 
     this.logger.log(`Role modifie pour ${user.email}: ${role}`);
 
-    return { success: true, message: 'Role modifie avec succes' };
+    return { 
+      success: true, 
+      message: 'Role modifie avec succes',
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      }
+    };
   }
 
   async toggleUserStatus(userId: string): Promise<any> {
@@ -571,7 +607,8 @@ export class AuthService {
 
     return {
       success: true,
-      message: `Utilisateur ${user.is_active ? 'active' : 'desactive'} avec succes`
+      message: `Utilisateur ${user.is_active ? 'active' : 'desactive'} avec succes`,
+      is_active: user.is_active,
     };
   }
 
@@ -588,7 +625,10 @@ export class AuthService {
     await this.userRepository.delete(userId);
     this.logger.log(`Utilisateur supprime: ${user.email}`);
 
-    return { success: true, message: 'Utilisateur supprime avec succes' };
+    return { 
+      success: true, 
+      message: 'Utilisateur supprime avec succes' 
+    };
   }
 
   // ============================================================
@@ -604,7 +644,7 @@ export class AuthService {
     if (!existingAdmin) {
       const admin = this.userRepository.create({
         email: adminEmail,
-        password: process.env.SUPER_ADMIN_PASSWORD || 'Admin123!',
+        password: process.env.SUPER_ADMIN_PASSWORD || 'Admin2026',
         first_name: process.env.SUPER_ADMIN_FIRST_NAME || 'Admin',
         last_name: process.env.SUPER_ADMIN_LAST_NAME || 'Y-MaD',
         role: UserRole.SUPER_ADMIN,

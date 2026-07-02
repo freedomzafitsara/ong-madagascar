@@ -2,8 +2,9 @@
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 // ============================================================
 // TYPES
@@ -18,7 +19,12 @@ export interface User {
   role: 'visitor' | 'candidate' | 'admin' | 'super_admin';
   avatar_url?: string;
   is_active: boolean;
+  preferred_language?: string;
+  timezone?: string;
+  theme?: string;
   last_login?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface RegisterData {
@@ -44,7 +50,15 @@ interface AuthContextType {
   updateProfile: (data: Partial<User>) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   uploadAvatar: (file: File) => Promise<void>;
+  refreshUser: () => Promise<User | null>;
 }
+
+// ============================================================
+// CONSTANTES
+// ============================================================
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+const TOKEN_KEY = 'access_token';
 
 // ============================================================
 // CONTEXT
@@ -52,7 +66,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+// ============================================================
+// PROVIDER
+// ============================================================
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -61,41 +77,97 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   // ============================================================
-  // CHARGEMENT DE LA SESSION
+  // CHARGEMENT DE LA SESSION - UNIQUEMENT LE TOKEN
+  // ============================================================
+
+  const loadSession = useCallback(async (): Promise<User | null> => {
+    try {
+      const storedToken = localStorage.getItem(TOKEN_KEY);
+      
+      if (!storedToken) {
+        console.log('[Auth] Aucun token trouve');
+        return null;
+      }
+
+      console.log('[Auth] Token trouve, chargement depuis PostgreSQL...');
+
+      const response = await fetch(`${API_URL}/auth/profile`, {
+        headers: {
+          'Authorization': `Bearer ${storedToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.log('[Auth] Token invalide, nettoyage...');
+        localStorage.removeItem(TOKEN_KEY);
+        document.cookie = `${TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        if (response.status === 401) {
+          toast.error('Session expiree. Veuillez vous reconnecter.');
+        }
+        return null;
+      }
+
+      const data = await response.json();
+      
+      const userData: User = {
+        id: data.id,
+        email: data.email,
+        first_name: data.first_name || '',
+        last_name: data.last_name || '',
+        phone: data.phone || '',
+        role: data.role || 'visitor',
+        avatar_url: data.avatar_url || '',
+        is_active: data.is_active !== undefined ? data.is_active : true,
+        preferred_language: data.preferred_language || 'fr',
+        timezone: data.timezone || 'Indian/Antananarivo',
+        theme: data.theme || 'light',
+        last_login: data.last_login || new Date().toISOString(),
+        created_at: data.created_at || new Date().toISOString(),
+        updated_at: data.updated_at || new Date().toISOString(),
+      };
+
+      console.log('[Auth] Utilisateur charge depuis PostgreSQL:', userData.email);
+      return userData;
+      
+    } catch (error) {
+      console.error('[Auth] Erreur chargement session:', error);
+      localStorage.removeItem(TOKEN_KEY);
+      return null;
+    }
+  }, []);
+
+  // ============================================================
+  // INITIALISATION
   // ============================================================
 
   useEffect(() => {
-    const loadSession = () => {
+    const initSession = async () => {
+      setIsLoading(true);
       try {
-        const storedToken = localStorage.getItem('access_token');
-        const storedUser = localStorage.getItem('user');
-
-        if (storedToken && storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          // ✅ S'assurer que l'utilisateur a toutes les propriétés requises
-          if (parsedUser && parsedUser.id && parsedUser.email) {
-            setToken(storedToken);
-            setUser(parsedUser);
-          } else {
-            // Si les données sont invalides, nettoyer
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('user');
-          }
+        const userData = await loadSession();
+        const storedToken = localStorage.getItem(TOKEN_KEY);
+        
+        if (userData && storedToken) {
+          setToken(storedToken);
+          setUser(userData);
+        } else {
+          setToken(null);
+          setUser(null);
         }
       } catch (error) {
-        console.error('Erreur chargement session:', error);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
+        console.error('[Auth] Erreur initialisation:', error);
+        setToken(null);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadSession();
-  }, []);
+    initSession();
+  }, [loadSession]);
 
   // ============================================================
-  // VÉRIFICATIONS DES RÔLES
+  // VERIFICATIONS DES ROLES
   // ============================================================
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
@@ -104,11 +176,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user && !!token;
 
   // ============================================================
+  // RAFRAICHIR L'UTILISATEUR - DEPUIS POSTGRESQL
+  // ============================================================
+
+  const refreshUser = useCallback(async (): Promise<User | null> => {
+    if (!token) return null;
+
+    try {
+      console.log('[Auth] Rafraichissement utilisateur depuis PostgreSQL...');
+      
+      const response = await fetch(`${API_URL}/auth/profile`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem(TOKEN_KEY);
+          document.cookie = `${TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+          setToken(null);
+          setUser(null);
+          toast.error('Session expiree');
+          router.push('/login');
+        }
+        return null;
+      }
+
+      const data = await response.json();
+      
+      const userData: User = {
+        id: data.id,
+        email: data.email,
+        first_name: data.first_name || '',
+        last_name: data.last_name || '',
+        phone: data.phone || '',
+        role: data.role || 'visitor',
+        avatar_url: data.avatar_url || '',
+        is_active: data.is_active !== undefined ? data.is_active : true,
+        preferred_language: data.preferred_language || 'fr',
+        timezone: data.timezone || 'Indian/Antananarivo',
+        theme: data.theme || 'light',
+        last_login: data.last_login || new Date().toISOString(),
+        created_at: data.created_at || new Date().toISOString(),
+        updated_at: data.updated_at || new Date().toISOString(),
+      };
+
+      setUser(userData);
+      console.log('[Auth] Utilisateur rafraichi:', userData.email);
+      return userData;
+      
+    } catch (error) {
+      console.error('[Auth] Erreur rafraichissement:', error);
+      return null;
+    }
+  }, [token, router]);
+
+  // ============================================================
   // CONNEXION
   // ============================================================
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
+      console.log('[Auth] Tentative de connexion pour:', email);
+
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,13 +247,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erreur de connexion');
+        let errorMessage = 'Erreur de connexion';
+        try {
+          const error = await response.json();
+          errorMessage = error.message || error.error || errorMessage;
+        } catch {
+          // Ignorer
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
 
-      // ✅ S'assurer que l'utilisateur a toutes les propriétés
+      if (!data.access_token || !data.user) {
+        throw new Error('Donnees de connexion incomplete');
+      }
+
+      // UNIQUEMENT LE TOKEN EST STOCKE DANS LOCALSTORAGE
+      localStorage.setItem(TOKEN_KEY, data.access_token);
+      
+      // Cookie pour le middleware
+      document.cookie = `${TOKEN_KEY}=${data.access_token}; path=/; max-age=604800; SameSite=Lax`;
+
       const userData: User = {
         id: data.user.id,
         email: data.user.email,
@@ -132,33 +278,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: data.user.role || 'visitor',
         avatar_url: data.user.avatar_url || '',
         is_active: data.user.is_active !== undefined ? data.user.is_active : true,
+        preferred_language: data.user.preferred_language || 'fr',
+        timezone: data.user.timezone || 'Indian/Antananarivo',
+        theme: data.user.theme || 'light',
         last_login: data.user.last_login || new Date().toISOString(),
+        created_at: data.user.created_at || new Date().toISOString(),
+        updated_at: data.user.updated_at || new Date().toISOString(),
       };
-
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(userData));
 
       setToken(data.access_token);
       setUser(userData);
 
-      // Redirection selon le rôle
+      console.log('[Auth] Connexion reussie pour:', userData.email);
+
       if (userData.role === 'admin' || userData.role === 'super_admin') {
+        toast.success('Bienvenue Administrateur');
         router.push('/dashboard');
+      } else if (userData.role === 'candidate') {
+        toast.success('Connexion reussie');
+        router.push('/candidate/profile');
       } else {
         router.push('/');
       }
 
     } catch (error) {
+      console.error('[Auth] Erreur de connexion:', error);
       throw error;
     }
-  };
+  }, [router]);
 
   // ============================================================
   // INSCRIPTION
   // ============================================================
 
-  const register = async (data: RegisterData) => {
+  const register = useCallback(async (data: RegisterData) => {
     try {
+      console.log('[Auth] Tentative d\'inscription pour:', data.email);
+
       const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -166,37 +322,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erreur lors de l\'inscription');
+        let errorMessage = 'Erreur lors de l\'inscription';
+        try {
+          const error = await response.json();
+          errorMessage = error.message || error.error || errorMessage;
+        } catch {
+          // Ignorer
+        }
+        throw new Error(errorMessage);
       }
 
+      console.log('[Auth] Inscription reussie pour:', data.email);
+      toast.success('Inscription reussie ! Veuillez vous connecter.');
       router.push('/login?registered=true');
 
     } catch (error) {
+      console.error('[Auth] Erreur d\'inscription:', error);
       throw error;
     }
-  };
+  }, [router]);
 
   // ============================================================
-  // DÉCONNEXION
+  // DECONNEXION
   // ============================================================
 
-  const logout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user');
+  const logout = useCallback(() => {
+    console.log('[Auth] Deconnexion');
+    
+    localStorage.removeItem(TOKEN_KEY);
+    document.cookie = `${TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    
     setToken(null);
     setUser(null);
+    
+    toast.success('Deconnecte avec succes');
     router.push('/login');
-  };
+  }, [router]);
 
   // ============================================================
-  // MISE À JOUR DU PROFIL
+  // MISE A JOUR DU PROFIL
   // ============================================================
 
-  const updateProfile = async (data: Partial<User>) => {
-    if (!token) throw new Error('Non authentifié');
+  const updateProfile = useCallback(async (data: Partial<User>) => {
+    if (!token) throw new Error('Non authentifie');
 
     try {
+      console.log('[Auth] Mise a jour du profil dans PostgreSQL...');
+
       const response = await fetch(`${API_URL}/auth/profile`, {
         method: 'PUT',
         headers: {
@@ -207,38 +379,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erreur de mise à jour');
+        let errorMessage = 'Erreur de mise a jour';
+        try {
+          const error = await response.json();
+          errorMessage = error.message || error.error || errorMessage;
+        } catch {
+          // Ignorer
+        }
+        throw new Error(errorMessage);
       }
 
-      const updatedUser = await response.json();
+      const updatedData = await response.json();
       
-      // ✅ Mettre à jour l'utilisateur en conservant toutes les propriétés
       if (user) {
         const newUser: User = {
           ...user,
-          first_name: updatedUser.first_name || user.first_name,
-          last_name: updatedUser.last_name || user.last_name,
-          phone: updatedUser.phone || user.phone,
-          avatar_url: updatedUser.avatar_url || user.avatar_url,
+          first_name: updatedData.first_name || user.first_name,
+          last_name: updatedData.last_name || user.last_name,
+          phone: updatedData.phone || user.phone,
+          avatar_url: updatedData.avatar_url || user.avatar_url,
+          preferred_language: updatedData.preferred_language || user.preferred_language,
+          timezone: updatedData.timezone || user.timezone,
+          theme: updatedData.theme || user.theme,
+          updated_at: new Date().toISOString(),
         };
+        
         setUser(newUser);
-        localStorage.setItem('user', JSON.stringify(newUser));
+        console.log('[Auth] Profil mis a jour dans PostgreSQL');
+        toast.success('Profil mis a jour avec succes');
       }
 
     } catch (error) {
+      console.error('[Auth] Erreur mise a jour profil:', error);
       throw error;
     }
-  };
+  }, [token, user]);
 
   // ============================================================
   // CHANGEMENT DE MOT DE PASSE
   // ============================================================
 
-  const changePassword = async (currentPassword: string, newPassword: string) => {
-    if (!token) throw new Error('Non authentifié');
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    if (!token) throw new Error('Non authentifie');
 
     try {
+      console.log('[Auth] Changement de mot de passe dans PostgreSQL...');
+
       const response = await fetch(`${API_URL}/auth/change-password`, {
         method: 'PUT',
         headers: {
@@ -249,27 +435,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erreur de changement de mot de passe');
+        let errorMessage = 'Erreur de changement de mot de passe';
+        try {
+          const error = await response.json();
+          errorMessage = error.message || error.error || errorMessage;
+        } catch {
+          // Ignorer
+        }
+        throw new Error(errorMessage);
       }
 
+      console.log('[Auth] Mot de passe change avec succes');
+      toast.success('Mot de passe modifie avec succes');
+
     } catch (error) {
+      console.error('[Auth] Erreur changement mot de passe:', error);
       throw error;
     }
-  };
+  }, [token]);
 
   // ============================================================
   // UPLOAD AVATAR
   // ============================================================
 
-  const uploadAvatar = async (file: File) => {
-    if (!token) throw new Error('Non authentifié');
+  const uploadAvatar = useCallback(async (file: File) => {
+    if (!token) throw new Error('Non authentifie');
+    if (!file) throw new Error('Aucun fichier selectionne');
+
+    if (!file.type.startsWith('image/')) {
+      throw new Error('Le fichier doit etre une image');
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('L\'image ne doit pas depasser 5MB');
+    }
 
     const formData = new FormData();
-    formData.append('avatar', file);
+    formData.append('file', file);
+    formData.append('entityType', 'profile');
+    if (user?.id) {
+      formData.append('entityId', user.id);
+    }
 
     try {
-      const response = await fetch(`${API_URL}/auth/upload-avatar`, {
+      console.log('[Auth] Upload avatar...');
+
+      const response = await fetch(`${API_URL}/upload/single`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -278,51 +488,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erreur d\'upload');
+        let errorMessage = `Erreur HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch {
+          // Ignorer
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
       
-      //  Mettre à jour l'avatar
       if (user) {
+        const baseUrl = API_URL.replace('/api', '');
+        const avatarUrl = data.url || `${baseUrl}${data.path}` || data.data?.url;
+        
         const newUser: User = {
           ...user,
-          avatar_url: data.avatar_url,
+          avatar_url: avatarUrl,
         };
         setUser(newUser);
-        localStorage.setItem('user', JSON.stringify(newUser));
+        toast.success('Avatar mis a jour avec succes');
       }
 
     } catch (error) {
+      console.error('[Auth] Erreur upload avatar:', error);
       throw error;
     }
+  }, [token, user]);
+
+  // ============================================================
+  // VALEUR DU CONTEXT
+  // ============================================================
+
+  const value: AuthContextType = {
+    user,
+    token,
+    isLoading,
+    isAuthenticated,
+    isAdmin,
+    isCandidate,
+    isVisitor,
+    login,
+    register,
+    logout,
+    updateProfile,
+    changePassword,
+    uploadAvatar,
+    refreshUser,
   };
 
-  // ============================================================
-  // PROVIDER
-  // ============================================================
-
   return (
-    <AuthContext.Provider value={{
-      user,
-      token,
-      isLoading,
-      isAuthenticated,
-      isAdmin,
-      isCandidate,
-      isVisitor,
-      login,
-      register,
-      logout,
-      updateProfile,
-      changePassword,
-      uploadAvatar,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 }
+
+// ============================================================
+// HOOK PERSONNALISE
+// ============================================================
 
 export const useAuth = () => {
   const context = useContext(AuthContext);

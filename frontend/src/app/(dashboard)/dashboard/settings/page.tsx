@@ -2,30 +2,58 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { 
-  Settings, User, Shield, Palette, Bell, 
+  Settings, Shield, Palette, Bell, 
   Globe, Lock, Monitor, Moon, Sun, 
-  ChevronRight, CheckCircle, AlertCircle,
+  CheckCircle, AlertCircle,
   Loader2, Save, X, Eye, EyeOff,
   Mail, Phone, MapPin, Building, Award,
-  LogOut, Smartphone, Clock, Type,
-  Layout, Briefcase, FolderOpen, FileText,
-  Camera
+  LogOut, Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import api from '@/lib/api';
+import { authApi } from '@/lib/api';
 
 // ============================================================
-// TABS CONFIGURATION
+// TYPES
+// ============================================================
+
+interface Preferences {
+  language: string;
+  timezone: string;
+  theme: string;
+  font_size: string;
+  sidebar_collapsed: boolean;
+  animations_enabled: boolean;
+  density: string;
+  email_notifications: boolean;
+  push_notifications: boolean;
+  job_alerts: boolean;
+  project_updates: boolean;
+  blog_updates: boolean;
+  system_updates: boolean;
+}
+
+interface UserProfile {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone?: string;
+  role: string;
+  avatar_url?: string;
+  is_active?: boolean;
+}
+
+// ============================================================
+// TABS CONFIGURATION - SANS L'ONGLET PROFILE
 // ============================================================
 
 const TABS = [
   { id: 'general', labelFr: 'General', labelMg: 'Ankapobeny', icon: Settings },
-  { id: 'profile', labelFr: 'Profil', labelMg: 'Momba', icon: User },
   { id: 'security', labelFr: 'Securite', labelMg: 'Fiarovana', icon: Shield },
   { id: 'appearance', labelFr: 'Apparence', labelMg: 'Endrika', icon: Palette },
   { id: 'notifications', labelFr: 'Notifications', labelMg: 'Fampandrenesana', icon: Bell },
@@ -172,34 +200,40 @@ function ToggleSwitch({
 }
 
 // ============================================================
-// ONGLET GENERAL - CORRIGE (BILINGUISME FR/MG)
+// ONGLET GENERAL
 // ============================================================
 
-function GeneralTab({ user, getText }: { user: any; getText: (fr: string, mg: string) => string }) {
+function GeneralTab({ 
+  user, 
+  getText, 
+  preferences, 
+  setPreferences,
+  onSave 
+}: { 
+  user: UserProfile | null; 
+  getText: (fr: string, mg: string) => string;
+  preferences: Preferences;
+  setPreferences: (prefs: Preferences) => void;
+  onSave: () => Promise<void>;
+}) {
   const { language, setLanguage } = useLanguage();
-  const [selectedLang, setSelectedLang] = useState<'fr' | 'mg'>(language || 'fr');
-  const [timezone, setTimezone] = useState('Indian/Antananarivo');
   const [saving, setSaving] = useState(false);
 
-  // ✅ CORRIGE : Type securise pour la langue (seulement 'fr' ou 'mg')
   const handleLanguageChange = async (lang: 'fr' | 'mg') => {
-    setSelectedLang(lang);
+    setPreferences({ ...preferences, language: lang });
     setLanguage(lang);
     try {
-      await api.put('/auth/profile', { language: lang });
+      await authApi.updateProfile({ preferred_language: lang });
       toast.success(getText('Langue mise a jour', 'Vita ny fanovana fiteny'));
     } catch (error) {
       console.error('Erreur sauvegarde langue:', error);
     }
   };
 
-  const handleSaveTimezone = async () => {
+  const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put('/auth/profile', { timezone });
-      toast.success(getText('Fuseau horaire mis a jour', 'Vita ny fanovana faritry ny fotoana'));
-    } catch (error) {
-      toast.error(getText('Erreur lors de la sauvegarde', 'Nisy hadisoana'));
+      await onSave();
     } finally {
       setSaving(false);
     }
@@ -216,26 +250,26 @@ function GeneralTab({ user, getText }: { user: any; getText: (fr: string, mg: st
           <button
             onClick={() => handleLanguageChange('fr')}
             className={`px-4 py-2.5 rounded-lg border transition flex items-center gap-2 ${
-              selectedLang === 'fr' 
+              preferences.language === 'fr' 
                 ? 'border-blue-800 bg-blue-50 text-blue-800' 
                 : 'border-gray-300 text-gray-600 hover:border-blue-300'
             }`}
           >
             <Globe className="w-4 h-4" />
             <span className="font-medium">{getText('Francais', 'Frantsay')}</span>
-            {selectedLang === 'fr' && <CheckCircle className="w-4 h-4 text-blue-800" />}
+            {preferences.language === 'fr' && <CheckCircle className="w-4 h-4 text-blue-800" />}
           </button>
           <button
             onClick={() => handleLanguageChange('mg')}
             className={`px-4 py-2.5 rounded-lg border transition flex items-center gap-2 ${
-              selectedLang === 'mg' 
+              preferences.language === 'mg' 
                 ? 'border-blue-800 bg-blue-50 text-blue-800' 
                 : 'border-gray-300 text-gray-600 hover:border-blue-300'
             }`}
           >
             <Globe className="w-4 h-4" />
             <span className="font-medium">{getText('Malagasy', 'Malagasy')}</span>
-            {selectedLang === 'mg' && <CheckCircle className="w-4 h-4 text-blue-800" />}
+            {preferences.language === 'mg' && <CheckCircle className="w-4 h-4 text-blue-800" />}
           </button>
         </div>
         <p className="text-xs text-gray-400 mt-2">
@@ -249,8 +283,8 @@ function GeneralTab({ user, getText }: { user: any; getText: (fr: string, mg: st
       >
         <div className="flex flex-col sm:flex-row gap-3">
           <select
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
+            value={preferences.timezone}
+            onChange={(e) => setPreferences({ ...preferences, timezone: e.target.value })}
             className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none bg-white"
           >
             <option value="Indian/Antananarivo">Indian/Antananarivo (UTC+3)</option>
@@ -258,14 +292,6 @@ function GeneralTab({ user, getText }: { user: any; getText: (fr: string, mg: st
             <option value="Europe/Paris">Europe/Paris (UTC+1)</option>
             <option value="Europe/London">Europe/London (UTC+0)</option>
           </select>
-          <button
-            onClick={handleSaveTimezone}
-            disabled={saving}
-            className="px-6 py-2.5 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {getText('Enregistrer', 'Tehirizo')}
-          </button>
         </div>
       </SettingCard>
 
@@ -304,155 +330,15 @@ function GeneralTab({ user, getText }: { user: any; getText: (fr: string, mg: st
           </div>
         </div>
       </SettingCard>
-    </div>
-  );
-}
 
-// ============================================================
-// ONGLET PROFIL
-// ============================================================
-
-function ProfileTab({ user, getText, setSuccess, setError }: { 
-  user: any; 
-  getText: (fr: string, mg: string) => string;
-  setSuccess: (msg: string) => void;
-  setError: (msg: string) => void;
-}) {
-  const [firstName, setFirstName] = useState(user?.first_name || '');
-  const [lastName, setLastName] = useState(user?.last_name || '');
-  const [phone, setPhone] = useState(user?.phone || '');
-  const [saving, setSaving] = useState(false);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar_url || null);
-
-  const handleSave = async () => {
-    if (!firstName.trim() || !lastName.trim()) {
-      toast.error(getText('Le nom et le prenom sont requis', 'Ilaina ny anarana sy ny fianakaviana'));
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await api.put('/auth/profile', { 
-        first_name: firstName, 
-        last_name: lastName, 
-        phone: phone || null 
-      });
-      toast.success(getText('Profil mis a jour', 'Vita ny fanovana'));
-      setSuccess(getText('Profil mis a jour avec succes', 'Vita ny fanovana ny momba'));
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message || getText('Erreur', 'Nisy hadisoana');
-      toast.error(errorMsg);
-      setError(errorMsg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-    if (!validTypes.includes(file.type)) {
-      toast.error(getText('Format non supporte', 'Tsy tohana ny format'));
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error(getText('Image trop grande (max 5 Mo)', 'Lehibe loatra ny sary (farany 5 Mo)'));
-      return;
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append('avatar', file);
-      const response = await api.post('/auth/upload-avatar', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      if (response.data?.avatar_url) {
-        setAvatarPreview(response.data.avatar_url);
-        toast.success(getText('Avatar mis a jour', 'Vita ny fanovana sary'));
-      }
-    } catch (error) {
-      toast.error(getText('Erreur lors de l\'upload', 'Nisy hadisoana'));
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <SettingCard 
-        title={getText('Photo de profil', 'Sarin\'ny momba')}
-        description={getText('Telechargez une photo', 'Ampidiro sary')}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="px-6 py-2.5 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition disabled:opacity-50 flex items-center gap-2"
       >
-        <div className="flex flex-col sm:flex-row items-center gap-6">
-          <div className="relative">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 overflow-hidden border-4 border-gray-200 flex items-center justify-center">
-              {avatarPreview ? (
-                <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-12 h-12 text-blue-400" />
-              )}
-            </div>
-            <label className="absolute bottom-0 right-0 p-1.5 bg-blue-800 text-white rounded-full cursor-pointer hover:bg-blue-900 transition shadow-md">
-              <Camera className="w-4 h-4" />
-              <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-            </label>
-          </div>
-          <div className="text-center sm:text-left">
-            <p className="text-sm text-gray-600">JPG, PNG, WEBP, GIF</p>
-            <p className="text-xs text-gray-400">{getText('Taille max: 5 Mo', 'Habeny farany: 5 Mo')}</p>
-          </div>
-        </div>
-      </SettingCard>
-
-      <SettingCard 
-        title={getText('Informations personnelles', 'Fampahalalana manokana')}
-        description={getText('Mettez a jour vos informations', 'Havaozy ny momba anao')}
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SettingRow
-              label={getText('Prenom', 'Anarana')}
-              value={firstName}
-              onChange={setFirstName}
-              placeholder={getText('Votre prenom', 'Ny anaranao')}
-              icon={User}
-              required
-            />
-            <SettingRow
-              label={getText('Nom', 'Fianakaviana')}
-              value={lastName}
-              onChange={setLastName}
-              placeholder={getText('Votre nom', 'Ny fianakavianao')}
-              icon={User}
-              required
-            />
-          </div>
-          <SettingRow
-            label={getText('Email', 'Email')}
-            value={user?.email || ''}
-            onChange={() => {}}
-            icon={Mail}
-            disabled
-            helper={getText("L'email ne peut pas etre modifie", 'Tsy azo ovana ny email')}
-          />
-          <SettingRow
-            label={getText('Telephone', 'Telefaonina')}
-            value={phone}
-            onChange={setPhone}
-            placeholder="+261 XX XXX XX"
-            icon={Phone}
-          />
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-6 py-2.5 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition disabled:opacity-50 flex items-center gap-2"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {getText('Enregistrer', 'Tehirizo')}
-          </button>
-        </div>
-      </SettingCard>
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+        {getText('Enregistrer toutes les modifications', 'Tehirizo ny fanovana rehetra')}
+      </button>
     </div>
   );
 }
@@ -461,8 +347,13 @@ function ProfileTab({ user, getText, setSuccess, setError }: {
 // ONGLET SECURITE
 // ============================================================
 
-function SecurityTab({ user, getText, setSuccess, setError }: { 
-  user: any; 
+function SecurityTab({ 
+  user, 
+  getText, 
+  setSuccess, 
+  setError 
+}: { 
+  user: UserProfile | null; 
   getText: (fr: string, mg: string) => string;
   setSuccess: (msg: string) => void;
   setError: (msg: string) => void;
@@ -492,7 +383,7 @@ function SecurityTab({ user, getText, setSuccess, setError }: {
 
     setSaving(true);
     try {
-      await api.put('/auth/change-password', { currentPassword, newPassword });
+      await authApi.changePassword(currentPassword, newPassword);
       toast.success(getText('Mot de passe modifie', 'Vita ny fanovana'));
       setSuccess(getText('Mot de passe modifie avec succes', 'Vita ny fanovana ny teny miafina'));
       setCurrentPassword('');
@@ -587,16 +478,29 @@ function SecurityTab({ user, getText, setSuccess, setError }: {
 }
 
 // ============================================================
-// ONGLET APPARENCE
+// ONGLET APPARENCE - AVEC MODE CLAIR/SOMBRE
 // ============================================================
 
-function AppearanceTab({ getText }: { getText: (fr: string, mg: string) => string }) {
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('light');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium');
+function AppearanceTab({ 
+  getText, 
+  preferences, 
+  setPreferences,
+  onSave 
+}: { 
+  getText: (fr: string, mg: string) => string;
+  preferences: Preferences;
+  setPreferences: (prefs: Preferences) => void;
+  onSave: () => Promise<void>;
+}) {
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(preferences.theme as any || 'light');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(preferences.sidebar_collapsed || false);
+  const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>(preferences.font_size as any || 'medium');
+  const [saving, setSaving] = useState(false);
 
   const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
     setTheme(newTheme);
+    setPreferences({ ...preferences, theme: newTheme });
+    
     if (newTheme === 'dark') {
       document.documentElement.classList.add('dark');
       localStorage.setItem('theme', 'dark');
@@ -611,7 +515,25 @@ function AppearanceTab({ getText }: { getText: (fr: string, mg: string) => strin
         document.documentElement.classList.remove('dark');
       }
     }
-    toast.success(getText('Theme mis a jour', 'Vita ny fanovana loko'));
+  };
+
+  const handleFontSizeChange = (size: 'small' | 'medium' | 'large') => {
+    setFontSize(size);
+    setPreferences({ ...preferences, font_size: size });
+  };
+
+  const handleSidebarCollapse = (collapsed: boolean) => {
+    setSidebarCollapsed(collapsed);
+    setPreferences({ ...preferences, sidebar_collapsed: collapsed });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave();
+    } finally {
+      setSaving(false);
+    }
   };
 
   useEffect(() => {
@@ -679,24 +601,39 @@ function AppearanceTab({ getText }: { getText: (fr: string, mg: string) => strin
         description={getText('Ajustez la taille du texte', 'Ampifanaraho ny habeny ny soratra')}
       >
         <div className="flex flex-wrap gap-3">
-          {['small', 'medium', 'large'].map((size) => (
-            <button
-              key={size}
-              onClick={() => setFontSize(size as 'small' | 'medium' | 'large')}
-              className={`px-4 py-2.5 rounded-lg border transition ${
-                fontSize === size 
-                  ? 'border-blue-800 bg-blue-50 text-blue-800' 
-                  : 'border-gray-300 text-gray-600 hover:border-blue-300'
-              }`}
-            >
-              <span className={size === 'small' ? 'text-sm' : size === 'large' ? 'text-lg' : 'text-base'}>
-                {size === 'small' && getText('Petit', 'Kely')}
-                {size === 'medium' && getText('Moyen', 'Miary')}
-                {size === 'large' && getText('Grand', 'Lehibe')}
-              </span>
-              {fontSize === size && <CheckCircle className="w-4 h-4 text-blue-800 ml-2 inline" />}
-            </button>
-          ))}
+          <button
+            onClick={() => handleFontSizeChange('small')}
+            className={`px-4 py-2.5 rounded-lg border transition ${
+              fontSize === 'small' 
+                ? 'border-blue-800 bg-blue-50 text-blue-800' 
+                : 'border-gray-300 text-gray-600 hover:border-blue-300'
+            }`}
+          >
+            <span className="text-sm">{getText('Petit', 'Kely')}</span>
+            {fontSize === 'small' && <CheckCircle className="w-4 h-4 text-blue-800 ml-2 inline" />}
+          </button>
+          <button
+            onClick={() => handleFontSizeChange('medium')}
+            className={`px-4 py-2.5 rounded-lg border transition ${
+              fontSize === 'medium' 
+                ? 'border-blue-800 bg-blue-50 text-blue-800' 
+                : 'border-gray-300 text-gray-600 hover:border-blue-300'
+            }`}
+          >
+            <span className="text-base">{getText('Moyen', 'Miary')}</span>
+            {fontSize === 'medium' && <CheckCircle className="w-4 h-4 text-blue-800 ml-2 inline" />}
+          </button>
+          <button
+            onClick={() => handleFontSizeChange('large')}
+            className={`px-4 py-2.5 rounded-lg border transition ${
+              fontSize === 'large' 
+                ? 'border-blue-800 bg-blue-50 text-blue-800' 
+                : 'border-gray-300 text-gray-600 hover:border-blue-300'
+            }`}
+          >
+            <span className="text-lg">{getText('Grand', 'Lehibe')}</span>
+            {fontSize === 'large' && <CheckCircle className="w-4 h-4 text-blue-800 ml-2 inline" />}
+          </button>
         </div>
         <div className="mt-4 p-4 bg-gray-50 rounded-lg">
           <p className={`${fontSize === 'small' ? 'text-sm' : fontSize === 'large' ? 'text-lg' : 'text-base'} text-gray-600`}>
@@ -708,17 +645,18 @@ function AppearanceTab({ getText }: { getText: (fr: string, mg: string) => strin
       <SettingCard title={getText('Affichage', 'Fijerena')}>
         <ToggleSwitch
           enabled={sidebarCollapsed}
-          onChange={setSidebarCollapsed}
+          onChange={handleSidebarCollapse}
           label={getText('Barre laterale reduite', 'Ahena ny sisiny')}
           description={getText('Reduire la barre laterale', 'Ahena ny sisiny')}
         />
       </SettingCard>
 
       <button
-        onClick={() => toast.success(getText('Preferences sauvegardees', 'Vita ny fitehirizana'))}
-        className="px-6 py-2.5 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition flex items-center gap-2"
+        onClick={handleSave}
+        disabled={saving}
+        className="px-6 py-2.5 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition disabled:opacity-50 flex items-center gap-2"
       >
-        <Save className="w-4 h-4" />
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         {getText('Enregistrer les preferences', 'Tehirizo ny safidy')}
       </button>
     </div>
@@ -729,29 +667,23 @@ function AppearanceTab({ getText }: { getText: (fr: string, mg: string) => strin
 // ONGLET NOTIFICATIONS
 // ============================================================
 
-function NotificationsTab({ getText }: { getText: (fr: string, mg: string) => string }) {
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [pushNotifications, setPushNotifications] = useState(true);
-  const [jobAlerts, setJobAlerts] = useState(true);
-  const [projectUpdates, setProjectUpdates] = useState(true);
-  const [blogUpdates, setBlogUpdates] = useState(false);
-  const [systemUpdates, setSystemUpdates] = useState(true);
+function NotificationsTab({ 
+  getText, 
+  preferences, 
+  setPreferences,
+  onSave 
+}: { 
+  getText: (fr: string, mg: string) => string;
+  preferences: Preferences;
+  setPreferences: (prefs: Preferences) => void;
+  onSave: () => Promise<void>;
+}) {
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put('/auth/notification-preferences', {
-        email_notifications: emailNotifications,
-        push_notifications: pushNotifications,
-        job_alerts: jobAlerts,
-        project_updates: projectUpdates,
-        blog_updates: blogUpdates,
-        system_updates: systemUpdates,
-      });
-      toast.success(getText('Preferences sauvegardees', 'Vita ny fitehirizana'));
-    } catch (error) {
-      toast.error(getText('Erreur lors de la sauvegarde', 'Nisy hadisoana'));
+      await onSave();
     } finally {
       setSaving(false);
     }
@@ -765,14 +697,14 @@ function NotificationsTab({ getText }: { getText: (fr: string, mg: string) => st
       >
         <div className="space-y-3">
           <ToggleSwitch
-            enabled={emailNotifications}
-            onChange={setEmailNotifications}
+            enabled={preferences.email_notifications}
+            onChange={(val) => setPreferences({ ...preferences, email_notifications: val })}
             label={getText('Notifications par email', 'Fampandrenesana amin\'ny mail')}
             description={getText('Recevez dans votre boite email', 'Mahazoa amin\'ny mail')}
           />
           <ToggleSwitch
-            enabled={pushNotifications}
-            onChange={setPushNotifications}
+            enabled={preferences.push_notifications}
+            onChange={(val) => setPreferences({ ...preferences, push_notifications: val })}
             label={getText('Notifications push', 'Fampandrenesana push')}
             description={getText('Recevez dans votre navigateur', 'Mahazoa amin\'ny navigateur')}
           />
@@ -785,23 +717,23 @@ function NotificationsTab({ getText }: { getText: (fr: string, mg: string) => st
       >
         <div className="space-y-3">
           <ToggleSwitch
-            enabled={jobAlerts}
-            onChange={setJobAlerts}
+            enabled={preferences.job_alerts}
+            onChange={(val) => setPreferences({ ...preferences, job_alerts: val })}
             label={getText('Nouvelles offres d\'emploi', 'Asa vaovao')}
           />
           <ToggleSwitch
-            enabled={projectUpdates}
-            onChange={setProjectUpdates}
+            enabled={preferences.project_updates}
+            onChange={(val) => setPreferences({ ...preferences, project_updates: val })}
             label={getText('Mise a jour des projets', 'Fanovana tetikasa')}
           />
           <ToggleSwitch
-            enabled={blogUpdates}
-            onChange={setBlogUpdates}
+            enabled={preferences.blog_updates}
+            onChange={(val) => setPreferences({ ...preferences, blog_updates: val })}
             label={getText('Nouveaux articles', 'Lahatsoratra vaovao')}
           />
           <ToggleSwitch
-            enabled={systemUpdates}
-            onChange={setSystemUpdates}
+            enabled={preferences.system_updates}
+            onChange={(val) => setPreferences({ ...preferences, system_updates: val })}
             label={getText('Mise a jour systeme', 'Fanovana rafitra')}
           />
         </div>
@@ -831,13 +763,94 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [preferences, setPreferences] = useState<Preferences>({
+    language: 'fr',
+    timezone: 'Indian/Antananarivo',
+    theme: 'light',
+    font_size: 'medium',
+    sidebar_collapsed: false,
+    animations_enabled: true,
+    density: 'comfortable',
+    email_notifications: true,
+    push_notifications: true,
+    job_alerts: true,
+    project_updates: true,
+    blog_updates: false,
+    system_updates: true,
+  });
+  const [loading, setLoading] = useState(true);
 
   const getText = (fr: string, mg: string) => language === 'fr' ? fr : mg;
+
+  // ============================================================
+  // CHARGEMENT DES PREFERENCES
+  // ============================================================
+
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const response = await authApi.getPreferences();
+        if (response) {
+          setPreferences({
+            ...preferences,
+            ...response,
+          });
+        }
+      } catch (error: any) {
+        if (error.response?.status !== 404) {
+          console.error('Erreur chargement preferences:', error);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (isAuthenticated) {
+      loadPreferences();
+    } else {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  // ============================================================
+  // SAUVEGARDE DES PREFERENCES
+  // ============================================================
+
+  const handleSavePreferences = async () => {
+    try {
+      await authApi.updatePreferences(preferences);
+      toast.success(getText('Preferences sauvegardees', 'Vita ny fitehirizana'));
+      setSuccessMessage(getText('Preferences sauvegardees avec succes', 'Vita ny fitehirizana ny safidy'));
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || getText('Erreur', 'Nisy hadisoana');
+      toast.error(errorMsg);
+      setErrorMessage(errorMsg);
+      setTimeout(() => setErrorMessage(''), 3000);
+      throw error;
+    }
+  };
+
+  // ============================================================
+  // REDIRECTION SI NON AUTHENTIFIE
+  // ============================================================
 
   if (!isAuthenticated) {
     router.push('/login');
     return null;
   }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-blue-800 animate-spin" />
+      </div>
+    );
+  }
+
+  // ============================================================
+  // RENDU PRINCIPAL
+  // ============================================================
 
   return (
     <div className="max-w-6xl mx-auto pb-8">
@@ -851,18 +864,18 @@ export default function SettingsPage() {
           <p className="text-gray-500 text-sm">{getText('Configurez votre espace Y-MaD', 'Amboary ny toeranao Y-MaD')}</p>
         </div>
         {user?.role === 'super_admin' && (
-          <span className="ml-4 px-3 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full shadow-sm">
+          <span className="ml-4 px-3 py-1 bg-gradient-to-r from-blue-700 to-blue-800 text-white text-xs rounded-full shadow-sm">
             {getText('Super Admin', 'Super Admin')}
           </span>
         )}
       </div>
 
       {successMessage && (
-        <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-xl flex items-start gap-3">
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl flex items-start gap-3">
           <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <span className="text-sm">{successMessage}</span>
           <button onClick={() => setSuccessMessage('')} className="ml-auto">
-            <X className="w-4 h-4 text-green-500 hover:text-green-700" />
+            <X className="w-4 h-4 text-blue-500 hover:text-blue-700" />
           </button>
         </div>
       )}
@@ -899,25 +912,39 @@ export default function SettingsPage() {
         </div>
 
         <div className="md:col-span-3">
-          {activeTab === 'general' && <GeneralTab user={user} getText={getText} />}
-          {activeTab === 'profile' && (
-            <ProfileTab 
-              user={user} 
+          {activeTab === 'general' && (
+            <GeneralTab 
+              user={user as UserProfile} 
               getText={getText}
-              setSuccess={setSuccessMessage}
-              setError={setErrorMessage}
+              preferences={preferences}
+              setPreferences={setPreferences}
+              onSave={handleSavePreferences}
             />
           )}
           {activeTab === 'security' && (
             <SecurityTab 
-              user={user} 
+              user={user as UserProfile} 
               getText={getText}
               setSuccess={setSuccessMessage}
               setError={setErrorMessage}
             />
           )}
-          {activeTab === 'appearance' && <AppearanceTab getText={getText} />}
-          {activeTab === 'notifications' && <NotificationsTab getText={getText} />}
+          {activeTab === 'appearance' && (
+            <AppearanceTab 
+              getText={getText}
+              preferences={preferences}
+              setPreferences={setPreferences}
+              onSave={handleSavePreferences}
+            />
+          )}
+          {activeTab === 'notifications' && (
+            <NotificationsTab 
+              getText={getText}
+              preferences={preferences}
+              setPreferences={setPreferences}
+              onSave={handleSavePreferences}
+            />
+          )}
         </div>
       </div>
 
