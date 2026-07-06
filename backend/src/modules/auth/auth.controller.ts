@@ -1,29 +1,22 @@
 ﻿// backend/src/modules/auth/auth.controller.ts
 
-import { 
-  Controller, 
-  Post, 
-  Body, 
-  Get, 
-  UseGuards, 
-  Req, 
+import {
+  Controller,
+  Post,
+  Get,
   Put,
-  UploadedFile,
-  UseInterceptors,
-  Param,
   Patch,
-  Delete,
-  BadRequestException,
+  Body,
+  UseGuards,
+  Request,
+  Param,
   Query,
-  Res,
+  Delete,
+  HttpCode,
   HttpStatus,
-  Logger
+  BadRequestException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { Response } from 'express';
-import { memoryStorage } from 'multer';
 import { AuthService } from './auth.service';
-import { UploadService } from '../upload/upload.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
@@ -32,16 +25,7 @@ import { UserRole } from '../../entities/user.entity';
 
 @Controller('auth')
 export class AuthController {
-  private readonly logger = new Logger(AuthController.name);
-
-  constructor(
-    private readonly authService: AuthService,
-    private readonly uploadService: UploadService,
-  ) {}
-
-  // ============================================================
-  // ROUTES PUBLIQUES
-  // ============================================================
+  constructor(private readonly authService: AuthService) {}
 
   @Public()
   @Post('register')
@@ -51,142 +35,72 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: any) {
     return this.authService.login(loginDto);
   }
 
-  @Public()
-  @Post('forgot-password')
-  async forgotPassword(@Body('email') email: string) {
-    return this.authService.forgotPassword(email);
-  }
-
-  @Public()
-  @Post('reset-password')
-  async resetPassword(@Body() resetDto: any) {
-    return this.authService.resetPassword(resetDto);
-  }
-
-  // ============================================================
-  // ROUTES PROTEGEES - PROFIL
-  // ============================================================
-
   @UseGuards(JwtAuthGuard)
   @Get('profile')
-  async getProfile(@Req() req: any) {
+  async getProfile(@Request() req: any) {
     return this.authService.getProfile(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Put('profile')
-  async updateProfile(@Req() req: any, @Body() updateDto: any) {
+  async updateProfile(@Request() req: any, @Body() updateDto: any) {
     return this.authService.updateProfile(req.user.id, updateDto);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Put('change-password')
-  async changePassword(@Req() req: any, @Body() changePasswordDto: any) {
+  @Patch('change-password')
+  async changePassword(@Request() req: any, @Body() changePasswordDto: any) {
     return this.authService.changePassword(req.user.id, changePasswordDto);
   }
 
-  // ============================================================
-  // ROUTES - UPLOAD AVATAR
-  // ============================================================
-
-  @UseGuards(JwtAuthGuard)
-  @Post('upload-avatar')
-  @UseInterceptors(
-    FileInterceptor('avatar', {
-      storage: memoryStorage(),
-      limits: {
-        fileSize: 5 * 1024 * 1024,
-      },
-      fileFilter: (req, file, callback) => {
-        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-        if (allowedTypes.includes(file.mimetype)) {
-          callback(null, true);
-        } else {
-          callback(new BadRequestException('Format d\'image non supporte'), false);
-        }
-      },
-    }),
-  )
-  async uploadAvatar(
-    @Req() req: any,
-    @UploadedFile() file: Express.Multer.File,
-  ) {
-    if (!file) {
-      throw new BadRequestException('Aucun fichier fourni');
-    }
-
-    const userId = req.user.id;
-    this.logger.log(`Upload avatar pour l'utilisateur ${userId}: ${file.originalname}`);
-
-    try {
-      const uploadedFile = await this.uploadService.uploadFile(
-        file,
-        'profile',
-        userId,
-      );
-
-      const avatarUrl = uploadedFile.url;
-      this.logger.log(`URL de l'avatar: ${avatarUrl}`);
-
-      const updatedUser = await this.authService.updateAvatar(userId, avatarUrl);
-
-      return {
-        success: true,
-        avatar_url: avatarUrl,
-        file: {
-          id: uploadedFile.id,
-          fileName: uploadedFile.filename,
-          originalName: uploadedFile.originalName,
-          fileSize: uploadedFile.size,
-          format: uploadedFile.format,
-          url: avatarUrl,
-        },
-        user: updatedUser,
-      };
-    } catch (error) {
-      this.logger.error(`Erreur upload avatar: ${error.message}`);
-      throw new BadRequestException(`Erreur lors de l'upload de l'avatar: ${error.message}`);
-    }
-  }
-
-  // ============================================================
-  // ROUTES - PREFERENCES
-  // ============================================================
-
   @UseGuards(JwtAuthGuard)
   @Get('preferences')
-  async getPreferences(@Req() req: any) {
+  async getPreferences(@Request() req: any) {
     return this.authService.getPreferences(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Put('preferences')
-  async updatePreferences(
-    @Req() req: any,
-    @Body() preferencesDto: any,
-  ) {
+  async updatePreferences(@Request() req: any, @Body() preferencesDto: any) {
     return this.authService.updatePreferences(req.user.id, preferencesDto);
   }
 
-  // ============================================================
-  // ROUTES - APPARENCE (PREFERENCES SPECIFIQUES)
-  // ============================================================
-
   @UseGuards(JwtAuthGuard)
-  @Put('appearance')
-  async updateAppearance(
-    @Req() req: any,
-    @Body() appearanceDto: any,
-  ) {
+  @Patch('appearance')
+  async updateAppearance(@Request() req: any, @Body() appearanceDto: any) {
     return this.authService.updateAppearancePreferences(req.user.id, appearanceDto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Patch('avatar')
+  async updateAvatar(@Request() req: any, @Body() body: { avatarUrl: string }) {
+    return this.authService.updateAvatar(req.user.id, body.avatarUrl);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() body: { email: string }) {
+    if (!body.email) {
+      throw new BadRequestException('Email requis');
+    }
+    return this.authService.forgotPassword(body.email);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() resetDto: any) {
+    return this.authService.resetPassword(resetDto);
+  }
+
   // ============================================================
-  // ROUTES ADMIN - GESTION DES UTILISATEURS
+  // ROUTES ADMIN
   // ============================================================
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -199,56 +113,27 @@ export class AuthController {
     @Query('status') status?: string,
     @Query('search') search?: string,
   ) {
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 10;
-    
-    return this.authService.getUsersPaginated(pageNum, limitNum, role, status, search);
+    return this.authService.getUsersPaginated(
+      parseInt(page, 10),
+      parseInt(limit, 10),
+      role,
+      status,
+      search,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Get('users/stats')
   async getUsersStats() {
     return this.authService.getUsersStats();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Get('users/export')
-  async exportUsers(
-    @Query('role') role: string,
-    @Res() res: Response,
-  ) {
-    const users = await this.authService.getUsersForExport(role);
-    
-    if (users.length === 0) {
-      return res.status(HttpStatus.NOT_FOUND).json({
-        success: false,
-        message: 'Aucun utilisateur a exporter',
-      });
-    }
-
-    const headers = ['ID', 'Nom', 'Prenom', 'Email', 'Telephone', 'Role', 'Statut', 'Date creation', 'Derniere connexion'];
-    const rows = users.map((u: any) => [
-      u.id,
-      u.last_name || '',
-      u.first_name || '',
-      u.email,
-      u.phone || '',
-      u.role,
-      u.is_active ? 'Actif' : 'Inactif',
-      u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : '',
-      u.last_login ? new Date(u.last_login).toLocaleDateString('fr-FR') : '',
-    ]);
-
-    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
-    const buffer = Buffer.from('\uFEFF' + csvContent, 'utf-8');
-
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename=utilisateurs_${new Date().toISOString().split('T')[0]}.csv`);
-    res.setHeader('Content-Length', buffer.length);
-    
-    return res.send(buffer);
+  async exportUsers(@Query('role') role?: string) {
+    return this.authService.getUsersForExport(role);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -261,18 +146,15 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put('users/:id')
-  async updateUser(
-    @Param('id') id: string,
-    @Body() updateDto: any,
-  ) {
+  async updateUser(@Param('id') id: string, @Body() updateDto: any) {
     return this.authService.updateUser(id, updateDto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Patch('users/:id/role')
-  async updateUserRole(@Param('id') id: string, @Body('role') role: UserRole) {
-    return this.authService.updateUserRole(id, role);
+  async updateUserRole(@Param('id') id: string, @Body() body: { role: UserRole }) {
+    return this.authService.updateUserRole(id, body.role);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -10,7 +10,7 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private isConnected = false;
 
-  private readonly TOKEN_EXPIRY_MINUTES = 1;
+  private readonly TOKEN_EXPIRY_MINUTES = 15;
 
   constructor(private configService: ConfigService) {
     this.initializeTransporter();
@@ -22,10 +22,8 @@ export class EmailService {
     const user = this.configService.get<string>('SMTP_USER', 'apikey');
     const pass = this.configService.get<string>('SMTP_PASS');
 
-    if (!pass || pass === 'votre-mot-de-passe' || pass.includes('SG.')) {
+    if (!pass || pass === 'votre-mot-de-passe' || !pass.includes('SG.')) {
       this.logger.warn('Cle API SendGrid manquante ou invalide dans le fichier .env');
-      this.logger.warn('Veuillez creer une nouvelle cle sur https://app.sendgrid.com');
-      this.logger.warn('Allez dans Settings - API Keys - Create API Key');
     }
 
     this.logger.log(`Configuration SMTP: ${host}:${port}`);
@@ -34,14 +32,8 @@ export class EmailService {
       host,
       port,
       secure: false,
-      auth: {
-        user,
-        pass,
-      },
-      tls: {
-        rejectUnauthorized: false,
-        ciphers: 'SSLv3',
-      },
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false },
       requireTLS: true,
       connectionTimeout: 10000,
     });
@@ -56,18 +48,7 @@ export class EmailService {
       this.logger.log('Connexion SMTP etablie avec succes');
     } catch (error) {
       this.isConnected = false;
-      this.logger.error('Erreur de connexion SMTP:');
-      this.logger.error(`   ${error.message}`);
-
-      if (error.message.includes('535')) {
-        this.logger.error('   La cle API est invalide ou a expire.');
-        this.logger.error('   Solution: Creez une nouvelle cle sur https://app.sendgrid.com');
-        this.logger.error('   Allez dans Settings - API Keys - Create API Key');
-      } else if (error.message.includes('ETIMEDOUT')) {
-        this.logger.error('   Connexion impossible. Verifiez votre firewall.');
-      } else if (error.message.includes('ECONNREFUSED')) {
-        this.logger.error('   Serveur SMTP inaccessible. Verifiez le host et le port.');
-      }
+      this.logger.error('Erreur de connexion SMTP:', error.message);
     }
   }
 
@@ -76,70 +57,65 @@ export class EmailService {
       await this.verifyConnection();
     }
     if (!this.isConnected) {
-      throw new Error('Service email non disponible. Veuillez verifier la configuration SMTP.');
+      throw new Error('Service email non disponible');
     }
   }
 
   // ============================================================
-  // ✅ ENVOI D'EMAIL DE REPONSE AUX MESSAGES DE CONTACT
+  // ENVOI D'EMAIL GENERIQUE
   // ============================================================
 
-  async sendReplyEmail(
-    to: string,
-    clientName: string,
-    subject: string,
-    originalMessage: string,
-    adminReply: string
-  ): Promise<void> {
+  async sendEmail(data: { to: string; subject: string; html: string }): Promise<{ success: boolean; messageId?: string }> {
     await this.ensureConnected();
 
     const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
     const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
 
-    const emailSubject = `RE: ${subject} - Y-MaD Association`;
-    const html = this.getReplyEmailHtml(clientName, originalMessage, adminReply);
-    const text = this.getReplyEmailText(clientName, originalMessage, adminReply);
-
     try {
       const info = await this.transporter.sendMail({
         from: `"${fromName}" <${fromEmail}>`,
-        to,
-        subject: emailSubject,
-        html,
-        text,
+        to: data.to,
+        subject: data.subject,
+        html: data.html,
+        headers: {
+          'X-Priority': '3',
+          'X-MSMail-Priority': 'Normal',
+          'Importance': 'normal',
+          'X-Mailer': 'Y-MaD Platform',
+        },
       });
 
-      this.logger.log(`Email de reponse envoye a ${to}`);
-      this.logger.log(`   Message ID: ${info.messageId}`);
+      this.logger.log(`Email envoye a ${data.to}`);
+      return { success: true, messageId: info.messageId };
     } catch (error) {
-      this.logger.error(`Erreur envoi email de reponse a ${to}:`, error.message);
-      throw new Error('Erreur lors de l\'envoi de la reponse');
+      this.logger.error(`Erreur envoi email a ${data.to}:`, error.message);
+      return { success: false };
     }
   }
 
   // ============================================================
-  // TEMPLATE DE REPONSE (HTML)
+  // ✅ ENVOI D'EMAIL DE BIENVENUE
   // ============================================================
 
-  private getReplyEmailHtml(clientName: string, originalMessage: string, adminReply: string): string {
-    return `
+  async sendWelcomeEmail(to: string, firstName: string): Promise<void> {
+    await this.ensureConnected();
+
+    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
+
+    const subject = 'Bienvenue sur Y-MaD !';
+    const html = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Reponse Y-MaD</title>
+        <title>Bienvenue sur Y-MaD</title>
         <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
-          .header p { margin: 5px 0 0; opacity: 0.9; font-size: 16px; }
-          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; }
-          .reply-box { background: #dbeafe; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3B82F6; }
-          .reply-box .label { font-weight: bold; color: #1E3A8A; margin-bottom: 8px; }
-          .original-box { background: #f1f5f9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1E3A8A; }
-          .original-box .label { font-weight: bold; color: #64748b; margin-bottom: 8px; }
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #1E3A8A; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px; }
+          .button { display: inline-block; background: #1E3A8A; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; }
           .footer { text-align: center; font-size: 12px; color: #94a3b8; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px; }
-          .signature { color: #64748b; margin-top: 20px; }
         </style>
       </head>
       <body>
@@ -148,67 +124,36 @@ export class EmailService {
           <p>Young for Madagascar Development</p>
         </div>
         <div class="content">
-          <p style="font-size: 18px;">Bonjour ${clientName},</p>
-          
-          <p>Nous vous remercions pour votre message. Voici la reponse de notre equipe :</p>
-          
-          <div class="reply-box">
-            <div class="label">📩 Reponse de l'equipe Y-MaD</div>
-            <p>${adminReply}</p>
+          <h2>Bonjour ${firstName},</h2>
+          <p>Nous sommes ravis de vous accueillir sur la plateforme Y-MaD !</p>
+          <p>Votre compte a ete cree avec succes.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000')}/login" class="button">Se connecter</a>
           </div>
-          
-          <div class="original-box">
-            <div class="label">📝 Votre message original</div>
-            <p>${originalMessage}</p>
-          </div>
-          
-          <p class="signature">
-            L'equipe Y-MaD reste a votre disposition pour toute question supplementaire.
-          </p>
           <p style="color: #64748b;">L'equipe Y-MaD</p>
         </div>
         <div class="footer">
-          <p>© 2025 Y-MaD Association - Young for Madagascar Development</p>
-          <p>Carion, Antananarivo, Madagascar • +261 32 04 856 97</p>
-          <p style="font-size: 11px; color: #94a3b8;">Cet email a ete envoye automatiquement, merci de ne pas y repondre.</p>
+          <p>© 2025 Y-MaD Association - Carion, Antananarivo, Madagascar</p>
         </div>
       </body>
       </html>
     `;
+
+    try {
+      await this.transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject,
+        html,
+      });
+      this.logger.log(`Email de bienvenue envoye a ${to}`);
+    } catch (error) {
+      this.logger.error(`Erreur envoi email de bienvenue a ${to}:`, error.message);
+    }
   }
 
   // ============================================================
-  // TEMPLATE DE REPONSE (TEXTE)
-  // ============================================================
-
-  private getReplyEmailText(clientName: string, originalMessage: string, adminReply: string): string {
-    return `
-Bonjour ${clientName},
-
-Nous vous remercions pour votre message. Voici la reponse de notre equipe :
-
---- REPONSE DE L'EQUIPE Y-MaD ---
-${adminReply}
-----------------------------------
-
---- VOTRE MESSAGE ORIGINAL ---
-${originalMessage}
------------------------------
-
-L'equipe Y-MaD reste a votre disposition pour toute question supplementaire.
-
-L'equipe Y-MaD
-
----
-Y-MaD Association - Young for Madagascar Development
-Carion, Antananarivo, Madagascar
-Email: ymad.mg@gmail.com
-Tel: +261 32 04 856 97
-    `;
-  }
-
-  // ============================================================
-  // ENVOI D'EMAIL DE REINITIALISATION DU MOT DE PASSE
+  // ✅ ENVOI D'EMAIL DE REINITIALISATION DU MOT DE PASSE
   // ============================================================
 
   async sendResetPasswordEmail(to: string, token: string, firstName?: string): Promise<void> {
@@ -220,169 +165,19 @@ Tel: +261 32 04 856 97
     const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
 
     const subject = 'Reinitialisation de votre mot de passe - Y-MaD';
-    const html = this.getResetPasswordEmailHtml(resetLink, firstName);
-    const text = this.getResetPasswordEmailText(resetLink, firstName);
-
-    try {
-      const info = await this.transporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
-        to,
-        subject,
-        html,
-        text,
-      });
-
-      this.logger.log(`Email de reinitialisation envoye a ${to}`);
-      this.logger.log(`   Message ID: ${info.messageId}`);
-    } catch (error) {
-      this.logger.error(`Erreur envoi email a ${to}:`, error.message);
-      if (error.message.includes('535')) {
-        this.logger.error('   La cle API est invalide. Creez une nouvelle cle SendGrid.');
-      }
-      throw new Error('Erreur lors de l\'envoi de l\'email');
-    }
-  }
-
-  // ============================================================
-  // ENVOI D'EMAIL DE CONFIRMATION DE REINITIALISATION
-  // ============================================================
-
-  async sendResetConfirmationEmail(to: string, firstName: string): Promise<void> {
-    await this.ensureConnected();
-
-    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
-
-    const subject = 'Confirmation - Votre mot de passe a ete reinitialise';
-    const html = this.getResetConfirmationHtml(firstName);
-    const text = this.getResetConfirmationText(firstName);
-
-    try {
-      const info = await this.transporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
-        to,
-        subject,
-        html,
-        text,
-      });
-
-      this.logger.log(`Email de confirmation de reinitialisation envoye a ${to}`);
-    } catch (error) {
-      this.logger.error(`Erreur envoi email de confirmation a ${to}:`, error.message);
-    }
-  }
-
-  // ============================================================
-  // ENVOI D'EMAIL DE BIENVENUE
-  // ============================================================
-
-  async sendWelcomeEmail(to: string, firstName: string): Promise<void> {
-    await this.ensureConnected();
-
-    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
-
-    const subject = 'Bienvenue chez Y-MaD - Votre inscription est confirmee';
-    const html = this.getWelcomeEmailHtml(firstName);
-    const text = this.getWelcomeEmailText(firstName);
-
-    try {
-      const info = await this.transporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
-        to,
-        subject,
-        html,
-        text,
-      });
-
-      this.logger.log(`Email de bienvenue envoye a ${to}`);
-    } catch (error) {
-      this.logger.error(`Erreur envoi email de bienvenue a ${to}:`, error.message);
-    }
-  }
-
-  // ============================================================
-  // ENVOI D'EMAIL DE CONFIRMATION DE CANDIDATURE
-  // ============================================================
-
-  async sendApplicationConfirmationEmail(to: string, firstName: string, jobTitle: string): Promise<void> {
-    await this.ensureConnected();
-
-    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
-
-    const subject = 'Confirmation de votre candidature - Y-MaD';
-    const html = this.getApplicationConfirmationEmailHtml(firstName, jobTitle);
-    const text = this.getApplicationConfirmationEmailText(firstName, jobTitle);
-
-    try {
-      const info = await this.transporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
-        to,
-        subject,
-        html,
-        text,
-      });
-
-      this.logger.log(`Email de confirmation de candidature envoye a ${to}`);
-    } catch (error) {
-      this.logger.error(`Erreur envoi email de confirmation a ${to}:`, error.message);
-    }
-  }
-
-  // ============================================================
-  // ENVOI D'EMAIL DE STATUT DE CANDIDATURE
-  // ============================================================
-
-  async sendApplicationStatusEmail(to: string, firstName: string, jobTitle: string, status: string): Promise<void> {
-    await this.ensureConnected();
-
-    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
-
-    const subject = 'Mise a jour de votre candidature - Y-MaD';
-    const html = this.getApplicationStatusEmailHtml(firstName, jobTitle, status);
-    const text = this.getApplicationStatusEmailText(firstName, jobTitle, status);
-
-    try {
-      const info = await this.transporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
-        to,
-        subject,
-        html,
-        text,
-      });
-
-      this.logger.log(`Email de statut de candidature envoye a ${to}`);
-    } catch (error) {
-      this.logger.error(`Erreur envoi email de statut a ${to}:`, error.message);
-    }
-  }
-
-  // ============================================================
-  // TEMPLATES - REINITIALISATION
-  // ============================================================
-
-  private getResetPasswordEmailHtml(resetLink: string, firstName?: string): string {
-    const greeting = firstName ? `Bonjour ${firstName},` : 'Bonjour,';
-
-    return `
+    const html = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Reinitialisation du mot de passe - Y-MaD</title>
+        <title>Reinitialisation du mot de passe</title>
         <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
-          .header p { margin: 5px 0 0; opacity: 0.9; font-size: 16px; }
-          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; }
-          .button { display: inline-block; background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white !important; text-decoration: none; padding: 14px 35px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 20px 0; }
-          .button:hover { background: linear-gradient(135deg, #1a3a7a, #2563eb); }
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #1E3A8A; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px; }
+          .button { display: inline-block; background: #1E3A8A; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; }
+          .security-note { background: #f1f5f9; padding: 15px; border-radius: 8px; margin: 20px 0; }
           .footer { text-align: center; font-size: 12px; color: #94a3b8; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px; }
-          .security-note { background: #f1f5f9; padding: 15px; border-radius: 8px; font-size: 14px; color: #475569; margin: 20px 0; }
         </style>
       </head>
       <body>
@@ -391,254 +186,72 @@ Tel: +261 32 04 856 97
           <p>Young for Madagascar Development</p>
         </div>
         <div class="content">
-          <p style="font-size: 18px; color: #1e293b;">${greeting}</p>
-          <p>Nous avons recu une demande de reinitialisation de votre mot de passe pour votre compte Y-MaD.</p>
-          <p>Cliquez sur le bouton ci-dessous pour creer un nouveau mot de passe :</p>
-          <div style="text-align: center;">
+          <h2>${firstName ? `Bonjour ${firstName},` : 'Bonjour,'}</h2>
+          <p>Nous avons recu une demande de reinitialisation de votre mot de passe.</p>
+          <div style="text-align: center; margin: 30px 0;">
             <a href="${resetLink}" class="button">Reinitialiser mon mot de passe</a>
           </div>
           <div class="security-note">
             <strong>Lien securise</strong><br>
-            Ce lien est valable pendant <strong>${this.TOKEN_EXPIRY_MINUTES} minute(s)</strong>.<br>
-            Si vous n'etes pas a l'origine de cette demande, ignorez simplement cet email.<br>
-            Votre mot de passe ne sera pas modifie.
+            Ce lien est valable pendant <strong>15 minutes</strong>.<br>
+            Si vous n'etes pas a l'origine de cette demande, ignorez cet email.
           </div>
-          <p style="font-size: 14px; color: #64748b;">Si le bouton ne fonctionne pas, copiez et collez le lien suivant dans votre navigateur :</p>
-          <p style="font-size: 12px; color: #3B82F6; word-break: break-all; background: #eef2ff; padding: 10px; border-radius: 6px;">${resetLink}</p>
-          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-          <p style="font-size: 14px; color: #64748b;">
-            Pour toute question, contactez-nous a
-            <a href="mailto:ymad.mg@gmail.com" style="color: #1E3A8A;">ymad.mg@gmail.com</a>
-          </p>
-        </div>
-        <div class="footer">
-          <p>© 2025 Y-MaD Association - Young for Madagascar Development</p>
-          <p>Carion, Antananarivo, Madagascar • +261 32 04 856 97</p>
-          <p>Cet email a ete envoye automatiquement, merci de ne pas y repondre.</p>
-        </div>
-      </body>
-      </html>
-    `;
-  }
-
-  private getResetPasswordEmailText(resetLink: string, firstName?: string): string {
-    const greeting = firstName ? `Bonjour ${firstName},` : 'Bonjour,';
-
-    return `
-${greeting}
-
-Nous avons recu une demande de reinitialisation de votre mot de passe pour votre compte Y-MaD.
-
-Pour creer un nouveau mot de passe, veuillez cliquer sur le lien suivant :
-${resetLink}
-
-Ce lien est valable pendant ${this.TOKEN_EXPIRY_MINUTES} minute(s).
-
-Si vous n'etes pas a l'origine de cette demande, ignorez simplement cet email.
-
----
-Y-MaD Association - Young for Madagascar Development
-Carion, Antananarivo, Madagascar
-Email: ymad.mg@gmail.com
-Tel: +261 32 04 856 97
-    `;
-  }
-
-  // ============================================================
-  // TEMPLATES - CONFIRMATION
-  // ============================================================
-
-  private getResetConfirmationHtml(firstName: string): string {
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Confirmation - Y-MaD</title>
-        <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; }
-          .footer { text-align: center; font-size: 12px; color: #94a3b8; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>Y-MaD</h1>
-          <p>Confirmation de reinitialisation</p>
-        </div>
-        <div class="content">
-          <p style="font-size: 18px;">Bonjour ${firstName},</p>
-          <p>Votre mot de passe a ete reinitialise avec succes.</p>
-          <p>Si vous n'etes pas a l'origine de cette modification, veuillez nous contacter immediatement.</p>
           <p style="color: #64748b;">L'equipe Y-MaD</p>
         </div>
         <div class="footer">
-          <p>© 2025 Y-MaD Association - Young for Madagascar Development</p>
+          <p>© 2025 Y-MaD Association - Carion, Antananarivo, Madagascar</p>
         </div>
       </body>
       </html>
     `;
-  }
 
-  private getResetConfirmationText(firstName: string): string {
-    return `
-Bonjour ${firstName},
-
-Votre mot de passe a ete reinitialise avec succes.
-
-Si vous n'etes pas a l'origine de cette modification, veuillez nous contacter immediatement.
-
-L'equipe Y-MaD
-    `;
-  }
-
-  // ============================================================
-  // TEMPLATES - BIENVENUE
-  // ============================================================
-
-  private getWelcomeEmailHtml(firstName: string): string {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
-
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Bienvenue chez Y-MaD</title>
-        <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; }
-          .footer { text-align: center; font-size: 12px; color: #94a3b8; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>Y-MaD</h1>
-          <p>Bienvenue dans la communaute Y-MaD</p>
-        </div>
-        <div class="content">
-          <p style="font-size: 18px;">Bonjour ${firstName},</p>
-          <p>Nous sommes ravis de vous accueillir au sein de la communaute Y-MaD !</p>
-          <p>Votre inscription a ete confirmee avec succes. Vous pouvez maintenant :</p>
-          <ul>
-            <li>Consulter les offres d'emploi disponibles</li>
-            <li>Postuler aux offres qui vous interessent</li>
-            <li>Suivre vos candidatures en temps reel</li>
-          </ul>
-          <p>Pour commencer, connectez-vous a votre espace :</p>
-          <div style="text-align: center;">
-            <a href="${frontendUrl}/login" style="display: inline-block; background: #1E3A8A; color: white; text-decoration: none; padding: 12px 30px; border-radius: 8px; font-weight: 600;">
-              Se connecter
-            </a>
-          </div>
-          <p style="margin-top: 20px;">A tres bientot sur Y-MaD !</p>
-          <p style="color: #64748b;">L'equipe Y-MaD</p>
-        </div>
-        <div class="footer">
-          <p>© 2025 Y-MaD Association - Young for Madagascar Development</p>
-        </div>
-      </body>
-      </html>
-    `;
-  }
-
-  private getWelcomeEmailText(firstName: string): string {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
-
-    return `
-Bonjour ${firstName},
-
-Nous sommes ravis de vous accueillir au sein de la communaute Y-MaD !
-
-Votre inscription a ete confirmee avec succes.
-
-Pour commencer, connectez-vous a votre espace :
-${frontendUrl}/login
-
-A tres bientot sur Y-MaD !
-
-L'equipe Y-MaD
-    `;
+    try {
+      await this.transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject,
+        html,
+      });
+      this.logger.log(`Email de reinitialisation envoye a ${to}`);
+    } catch (error) {
+      this.logger.error(`Erreur envoi email de reinitialisation a ${to}:`, error.message);
+    }
   }
 
   // ============================================================
-  // TEMPLATES - CANDIDATURE
+  // ENVOI D'EMAIL DE STATUT DE CANDIDATURE
   // ============================================================
 
-  private getApplicationConfirmationEmailHtml(firstName: string, jobTitle: string): string {
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Confirmation de candidature - Y-MaD</title>
-        <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; }
-          .footer { text-align: center; font-size: 12px; color: #94a3b8; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>Y-MaD</h1>
-          <p>Confirmation de votre candidature</p>
-        </div>
-        <div class="content">
-          <p style="font-size: 18px;">Bonjour ${firstName},</p>
-          <p>Nous accusons reception de votre candidature pour le poste de :</p>
-          <p style="font-size: 20px; font-weight: bold; color: #1E3A8A; text-align: center; padding: 10px; background: #eef2ff; border-radius: 8px;">
-            ${jobTitle}
-          </p>
-          <p>Votre dossier est actuellement en cours d'examen par notre equipe.</p>
-          <p>Nous vous tiendrons informer de l'avancement de votre candidature.</p>
-          <p style="color: #64748b;">L'equipe Y-MaD</p>
-        </div>
-        <div class="footer">
-          <p>© 2025 Y-MaD Association - Young for Madagascar Development</p>
-        </div>
-      </body>
-      </html>
-    `;
-  }
+  async sendApplicationStatusEmail(
+    to: string,
+    firstName: string,
+    jobTitle: string,
+    status: 'accepted' | 'rejected' | 'shortlisted' | 'reviewing'
+  ): Promise<void> {
+    await this.ensureConnected();
 
-  private getApplicationConfirmationEmailText(firstName: string, jobTitle: string): string {
-    return `
-Bonjour ${firstName},
+    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
 
-Nous accusons reception de votre candidature pour le poste de :
-${jobTitle}
-
-Votre dossier est actuellement en cours d'examen par notre equipe.
-Nous vous tiendrons informer de l'avancement de votre candidature.
-
-L'equipe Y-MaD
-    `;
-  }
-
-  private getApplicationStatusEmailHtml(firstName: string, jobTitle: string, status: string): string {
-    const statusMessages: Record<string, { fr: string; color: string }> = {
-      submitted: { fr: 'Recue', color: '#3B82F6' },
-      reviewing: { fr: 'En cours d\'examen', color: '#F59E0B' },
-      preselected: { fr: 'Preselectionnee', color: '#10B981' },
-      rejected: { fr: 'Rejetee', color: '#EF4444' },
-      hired: { fr: 'Recrute', color: '#059669' },
+    const statusLabels: Record<string, { fr: string; color: string }> = {
+      accepted: { fr: 'Acceptee', color: '#22c55e' },
+      rejected: { fr: 'Refusee', color: '#ef4444' },
+      shortlisted: { fr: 'Preselectionnee', color: '#3b82f6' },
+      reviewing: { fr: 'En revision', color: '#f59e0b' },
     };
 
-    const statusInfo = statusMessages[status] || { fr: status, color: '#6B7280' };
-
-    return `
+    const statusInfo = statusLabels[status] || { fr: status, color: '#6b7280' };
+    const subject = `Mise a jour de votre candidature - ${jobTitle}`;
+    const html = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Mise a jour - Y-MaD</title>
+        <title>Mise a jour de votre candidature</title>
         <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; }
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #1E3A8A; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px; }
           .status { display: inline-block; padding: 8px 25px; border-radius: 20px; font-weight: 600; color: white; background: ${statusInfo.color}; margin: 15px 0; }
           .footer { text-align: center; font-size: 12px; color: #94a3b8; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px; }
         </style>
@@ -646,12 +259,12 @@ L'equipe Y-MaD
       <body>
         <div class="header">
           <h1>Y-MaD</h1>
-          <p>Mise a jour de votre candidature</p>
+          <p>Young for Madagascar Development</p>
         </div>
         <div class="content">
-          <p style="font-size: 18px;">Bonjour ${firstName},</p>
+          <h2>Bonjour ${firstName},</h2>
           <p>Le statut de votre candidature pour le poste de :</p>
-          <p style="font-size: 18px; font-weight: bold; color: #1E3A8A;">${jobTitle}</p>
+          <p style="font-size: 18px; font-weight: bold; color: #1E3A8A; text-align: center;">${jobTitle}</p>
           <p>a ete mis a jour :</p>
           <div style="text-align: center;">
             <span class="status">${statusInfo.fr.toUpperCase()}</span>
@@ -659,33 +272,87 @@ L'equipe Y-MaD
           <p style="color: #64748b;">L'equipe Y-MaD</p>
         </div>
         <div class="footer">
-          <p>© 2025 Y-MaD Association - Young for Madagascar Development</p>
+          <p>© 2025 Y-MaD Association - Carion, Antananarivo, Madagascar</p>
         </div>
       </body>
       </html>
     `;
+
+    try {
+      await this.transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject,
+        html,
+      });
+      this.logger.log(`Email de statut de candidature envoye a ${to}`);
+    } catch (error) {
+      this.logger.error(`Erreur envoi email de statut a ${to}:`, error.message);
+    }
   }
 
-  private getApplicationStatusEmailText(firstName: string, jobTitle: string, status: string): string {
-    const statusMessages: Record<string, string> = {
-      submitted: 'Recue',
-      reviewing: 'En cours d\'examen',
-      preselected: 'Preselectionnee',
-      rejected: 'Rejetee',
-      hired: 'Recrute',
-    };
+  // ============================================================
+  // ENVOI D'EMAIL DE REPONSE PERSONNALISEE
+  // ============================================================
 
-    const statusFr = statusMessages[status] || status;
+  async sendCustomReplyEmail(
+    to: string,
+    firstName: string,
+    jobTitle: string,
+    replyMessage: string
+  ): Promise<void> {
+    await this.ensureConnected();
 
-    return `
-Bonjour ${firstName},
+    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
 
-Le statut de votre candidature pour le poste de :
-${jobTitle}
-
-a ete mis a jour : ${statusFr.toUpperCase()}
-
-L'equipe Y-MaD
+    const subject = `Reponse a votre candidature - ${jobTitle}`;
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Reponse a votre candidature</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #1E3A8A; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px; }
+          .reply-box { background: #dbeafe; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3B82F6; }
+          .footer { text-align: center; font-size: 12px; color: #94a3b8; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Y-MaD</h1>
+          <p>Young for Madagascar Development</p>
+        </div>
+        <div class="content">
+          <h2>Bonjour ${firstName},</h2>
+          <p>Nous faisons suite a votre candidature pour le poste de :</p>
+          <p style="font-size: 18px; font-weight: bold; color: #1E3A8A; text-align: center;">${jobTitle}</p>
+          <div class="reply-box">
+            <p><strong>Reponse de l'equipe Y-MaD</strong></p>
+            <p>${replyMessage}</p>
+          </div>
+          <p style="color: #64748b;">L'equipe Y-MaD</p>
+        </div>
+        <div class="footer">
+          <p>© 2025 Y-MaD Association - Carion, Antananarivo, Madagascar</p>
+        </div>
+      </body>
+      </html>
     `;
+
+    try {
+      await this.transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject,
+        html,
+      });
+      this.logger.log(`Email de reponse personnalisee envoye a ${to}`);
+    } catch (error) {
+      this.logger.error(`Erreur envoi email de reponse a ${to}:`, error.message);
+    }
   }
 }

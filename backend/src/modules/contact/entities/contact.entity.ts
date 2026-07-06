@@ -1,23 +1,15 @@
 ﻿// backend/src/modules/contact/entities/contact.entity.ts
 
-import { 
-  Entity, 
-  Column, 
-  PrimaryGeneratedColumn, 
-  CreateDateColumn, 
-  UpdateDateColumn, 
-  Index 
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
-@Entity('contact_messages')
+@Entity('contacts')
+@Index(['email', 'created_at'])
 @Index(['status'])
-@Index(['created_at'])
-@Index(['email'])
 export class Contact {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'name', length: 255 })
+  @Column({ length: 255 })
   name: string;
 
   @Column({ length: 255 })
@@ -26,27 +18,30 @@ export class Contact {
   @Column({ length: 50, nullable: true })
   phone: string;
 
-  @Column({ length: 500, nullable: true })
+  @Column({ length: 255 })
   subject: string;
 
   @Column({ type: 'text' })
   message: string;
 
-  @Column({ default: 'unread' })
-  status: string;
-
-  @Column({ name: 'ip_address', length: 45, nullable: true })
-  ip_address: string;
+  @Column({
+    type: 'enum',
+    enum: ['unread', 'read', 'replied', 'archived'],
+    default: 'unread',
+  })
+  status: 'unread' | 'read' | 'replied' | 'archived';
 
   @Column({ name: 'admin_notes', type: 'text', nullable: true })
   admin_notes: string;
 
-  @Column({ name: 'replied_at', nullable: true })
-  replied_at: Date;
+  @Column({ name: 'ip_address', length: 45, nullable: true })
+  ip_address: string;
 
-  // ✅ CORRIGE : Utiliser le nom exact de la colonne en base
-  @Column({ name: 'replied_by_id', nullable: true })
-  replied_by_id: string;
+  @Column({ name: 'read_at', type: 'timestamp', nullable: true })
+  read_at: Date;
+
+  @Column({ name: 'replied_at', type: 'timestamp', nullable: true })
+  replied_at: Date;
 
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;

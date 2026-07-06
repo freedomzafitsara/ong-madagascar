@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -17,6 +17,17 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 
+// ============================================================
+// CONSTANTES
+// ============================================================
+
+const ADMIN_ROLES = ['super_admin', 'admin'] as const;
+type AdminRole = typeof ADMIN_ROLES[number];
+
+// ============================================================
+// COMPOSANT PRINCIPAL
+// ============================================================
+
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
@@ -24,14 +35,13 @@ export default function Header() {
   const { isAuthenticated, user, logout } = useAuth();
   
   // ============================================================
-  // ETATS
+  // ÉTATS
   // ============================================================
   
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
   const [isUserOpen, setIsUserOpen] = useState<boolean>(false);
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
-  const [isMobile, setIsMobile] = useState<boolean>(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   
   // ============================================================
@@ -46,47 +56,40 @@ export default function Header() {
   // TRADUCTION
   // ============================================================
 
-  const getText = (fr: string, mg: string): string => {
+  const t = useCallback((fr: string, mg: string): string => {
     return language === 'fr' ? fr : mg;
-  };
+  }, [language]);
 
   // ============================================================
   // EFFETS
   // ============================================================
 
-  // Détecter le scroll
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 10);
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Détecter la taille de l'écran
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    if (!user?.avatar_url) {
+      setAvatarUrl(null);
+      return;
+    }
 
-  // Mettre à jour l'avatar quand l'utilisateur change
-  useEffect(() => {
-    if (user?.avatar_url) {
+    try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
-      const avatarUrl = user.avatar_url.startsWith('http') 
+      const url = user.avatar_url.startsWith('http') 
         ? user.avatar_url 
         : `${baseUrl}${user.avatar_url}`;
-      setAvatarUrl(avatarUrl);
-    } else {
+      setAvatarUrl(url);
+    } catch (error) {
+      console.error('[Header] Erreur de chargement de l\'avatar:', error);
       setAvatarUrl(null);
     }
   }, [user]);
 
-  // Fermer les menus au clic extérieur
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -103,91 +106,165 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fermer le menu mobile quand on change de page
   useEffect(() => {
     setIsMenuOpen(false);
   }, [pathname]);
 
   // ============================================================
-  // NAVIGATION
+  // FONCTIONS UTILITAIRES
   // ============================================================
 
-  const navLinks = [
+  const navLinks = useMemo(() => [
     { nameFr: 'Accueil', nameMg: 'Fandraisana', href: '/', icon: Home },
     { nameFr: 'Projets', nameMg: 'Tetikasa', href: '/projects', icon: FolderTree },
     { nameFr: 'Offres d\'emploi', nameMg: 'Toerana asa', href: '/jobs', icon: Briefcase },
     { nameFr: 'Blog', nameMg: 'Vaovao', href: '/blog', icon: Newspaper },
     { nameFr: 'Contact', nameMg: 'Fifandraisana', href: '/contact', icon: Mail },
-  ];
+  ], []);
 
-  const getNavName = (link: typeof navLinks[0]) => {
+  const getNavName = useCallback((link: typeof navLinks[0]) => {
     return language === 'fr' ? link.nameFr : link.nameMg;
-  };
+  }, [language]);
 
-  const isActiveLink = (href: string) => {
+  const isActiveLink = useCallback((href: string) => {
     if (href === '/') return pathname === href;
     return pathname.startsWith(href);
-  };
+  }, [pathname]);
 
-  // ============================================================
-  // UTILISATEUR
-  // ============================================================
-
-  const getUserInitial = (): string => {
+  const getUserInitial = useCallback((): string => {
     if (user?.first_name) return user.first_name.charAt(0).toUpperCase();
     if (user?.email) return user.email.charAt(0).toUpperCase();
     return 'A';
-  };
+  }, [user]);
 
-  const getUserFullName = (): string => {
+  const getUserFullName = useCallback((): string => {
     if (user?.first_name && user?.last_name) {
       return `${user.first_name} ${user.last_name}`;
     }
     if (user?.first_name) return user.first_name;
     if (user?.email) return user.email.split('@')[0];
     return 'Utilisateur';
-  };
+  }, [user]);
 
-  const hasDashboardAccess = (): boolean => {
+  const hasDashboardAccess = useCallback((): boolean => {
     return user?.role === 'super_admin' || user?.role === 'admin';
-  };
+  }, [user]);
 
-  const isCandidate = (): boolean => {
+  const isCandidate = useCallback((): boolean => {
     return user?.role === 'candidate';
-  };
+  }, [user]);
+
+  const getUserRoleLabel = useCallback((): string => {
+    const role = user?.role;
+    if (role === 'super_admin') return 'Super Admin';
+    if (role === 'admin') return 'Admin';
+    if (role === 'candidate') return t('Candidat', 'Mpangataka');
+    if (role === 'visitor') return t('Visiteur', 'Mpitsidika');
+    return role || 'Utilisateur';
+  }, [user, t]);
 
   // ============================================================
-  // ACTIONS
+  // GESTIONNAIRES D'ÉVÉNEMENTS
   // ============================================================
 
-  const handleLanguageChange = (lang: 'fr' | 'mg') => {
+  const handleLanguageChange = useCallback((lang: 'fr' | 'mg') => {
     setLanguage(lang);
     setIsLangOpen(false);
-  };
+  }, [setLanguage]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     setIsUserOpen(false);
     setIsMenuOpen(false);
     logout();
-    toast.success(getText(
-      'Deconnexion reussie',
-      'Vita ny fivoahana'
-    ));
+    toast.success(t('Déconnexion réussie', 'Vita ny fivoahana'));
     router.push('/');
-  };
+  }, [logout, router, t]);
 
-  const handleProfileClick = () => {
+  const handleProfileClick = useCallback(() => {
     setIsUserOpen(false);
     setIsMenuOpen(false);
     
-    if (hasDashboardAccess()) {
+    if (!isAuthenticated || !user) {
+      toast(t(
+        'Veuillez vous connecter pour accéder à votre profil.',
+        'Mba midira aloha vao hahita ny momba anao.'
+      ), {
+        duration: 4000,
+        style: { background: '#3b82f6', color: '#ffffff' },
+      });
+      router.push('/login');
+      return;
+    }
+
+    const role = user.role;
+    
+    if (role === 'super_admin' || role === 'admin') {
       router.push('/dashboard/profil-admin');
-    } else if (isCandidate()) {
+    } else if (role === 'candidate') {
       router.push('/candidate/profil-candidat');
     } else {
-      router.push('/profile');
+      toast(t(
+        'Votre espace personnel est en cours de configuration.',
+        'Ny toeranao manokana dia mbola amboarina.'
+      ), {
+        duration: 4000,
+        style: { background: '#f59e0b', color: '#ffffff' },
+      });
+      router.push('/');
     }
-  };
+  }, [isAuthenticated, user, router, t]);
+
+  // ============================================================
+  // ✅ GESTIONNAIRE DASHBOARD - CORRIGÉ
+  // ============================================================
+
+  const handleDashboardClick = useCallback((e?: React.MouseEvent) => {
+    // Empêcher le comportement par défaut si c'est un événement
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    setIsUserOpen(false);
+    setIsMenuOpen(false);
+    
+    // ✅ DEBUG - Afficher l'état actuel
+    console.log('[Header] handleDashboardClick - État:', {
+      isAuthenticated,
+      user,
+      role: user?.role,
+      hasAccess: hasDashboardAccess()
+    });
+    
+    if (!isAuthenticated || !user) {
+      toast(t(
+        'Veuillez vous connecter pour accéder au tableau de bord.',
+        'Mba midira aloha vao hahita ny dashboard.'
+      ), {
+        duration: 4000,
+        style: { background: '#3b82f6', color: '#ffffff' },
+      });
+      router.push('/login');
+      return;
+    }
+
+    const role = user.role;
+    
+    if (role === 'admin' || role === 'super_admin') {
+      // ✅ NAVIGATION SIMPLE avec Next.js
+      console.log('[Header] Navigation vers /dashboard');
+      router.push('/dashboard');
+    } else {
+      toast(t(
+        'Vous n\'avez pas les droits pour accéder au tableau de bord.',
+        'Tsy manana zo hiditra amin\'ny dashboard ianao.'
+      ), {
+        duration: 4000,
+        style: { background: '#ef4444', color: '#ffffff' },
+      });
+      router.push('/');
+    }
+  }, [isAuthenticated, user, router, t, hasDashboardAccess]);
 
   // ============================================================
   // RENDU
@@ -205,9 +282,7 @@ export default function Header() {
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16">
             
-            {/* ============================================================
-            LOGO - Y-MaD Young for Madagascar Development
-            ============================================================ */}
+            {/* LOGO */}
             <Link 
               href="/" 
               className="flex items-center gap-2 sm:gap-3 group flex-shrink-0"
@@ -227,14 +302,12 @@ export default function Header() {
                   Young for <span className="text-blue-400 font-semibold">Madagascar</span> Development
                 </p>
                 <p className="text-white/50 text-[8px] sm:text-[10px] leading-tight tracking-wide">
-                  {getText('Plateforme de gestion des offres d\'emploi', 'Fitantanana ny asa')}
+                  {t('Plateforme de gestion des offres d\'emploi', 'Fitantanana ny asa')}
                 </p>
               </div>
             </Link>
 
-            {/* ============================================================
-            NAVIGATION DESKTOP
-            ============================================================ */}
+            {/* NAVIGATION DESKTOP */}
             <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1">
               {navLinks.map((link) => (
                 <Link
@@ -252,17 +325,15 @@ export default function Header() {
               ))}
             </nav>
 
-            {/* ============================================================
-            ACTIONS
-            ============================================================ */}
+            {/* ACTIONS */}
             <div className="flex items-center gap-1 sm:gap-2 lg:gap-3">
               
-              {/* Sélecteur de langue */}
+              {/* SÉLECTEUR DE LANGUE */}
               <div className="relative" ref={langRef}>
                 <button
                   onClick={() => setIsLangOpen(!isLangOpen)}
                   className="flex items-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs sm:text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
-                  aria-label={getText('Changer la langue', 'Hanova ny fiteny')}
+                  aria-label={t('Changer la langue', 'Hanova ny fiteny')}
                 >
                   <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span className="font-mono text-[10px] sm:text-xs">{language.toUpperCase()}</span>
@@ -277,7 +348,7 @@ export default function Header() {
                         language === 'fr' ? 'text-blue-400 bg-gray-700' : 'text-gray-300 hover:bg-gray-700'
                       }`}
                     >
-                      Francais
+                      Français
                     </button>
                     <button
                       onClick={() => handleLanguageChange('mg')}
@@ -291,15 +362,13 @@ export default function Header() {
                 )}
               </div>
 
-              {/* ============================================================
-              MENU UTILISATEUR
-              ============================================================ */}
+              {/* MENU UTILISATEUR */}
               {isAuthenticated ? (
                 <div className="relative" ref={userRef}>
                   <button
                     onClick={() => setIsUserOpen(!isUserOpen)}
                     className="flex items-center gap-1 sm:gap-2 px-1.5 py-1 sm:px-2 sm:py-1 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
-                    aria-label={getText('Menu utilisateur', 'Mpampiasa')}
+                    aria-label={t('Menu utilisateur', 'Mpampiasa')}
                   >
                     <div className="relative">
                       <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden border-2 border-blue-400/50">
@@ -358,10 +427,7 @@ export default function Header() {
                           </div>
                         </div>
                         <span className="inline-block mt-2 text-xs px-2 py-0.5 bg-blue-600 rounded-full text-white">
-                          {user?.role === 'super_admin' ? 'Super Admin' :
-                           user?.role === 'admin' ? 'Admin' :
-                           user?.role === 'candidate' ? getText('Candidat', 'Mpangataka') :
-                           getText('Visiteur', 'Mpitsidika')}
+                          {getUserRoleLabel()}
                         </span>
                       </div>
                       
@@ -370,7 +436,7 @@ export default function Header() {
                         className="flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
                       >
                         <UserCircle className="w-4 h-4" />
-                        {getText('Mon profil', 'Ny momba ahy')}
+                        {t('Mon profil', 'Ny momba ahy')}
                         <ChevronRight className="w-3 h-3 ml-auto text-gray-500" />
                       </button>
                       
@@ -382,7 +448,7 @@ export default function Header() {
                             className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
                           >
                             <FileText className="w-4 h-4" />
-                            {getText('Mes candidatures', 'Ny fangatahako')}
+                            {t('Mes candidatures', 'Ny fangatahako')}
                           </Link>
                           <Link
                             href="/candidate/saved-jobs"
@@ -390,19 +456,21 @@ export default function Header() {
                             className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
                           >
                             <Heart className="w-4 h-4" />
-                            {getText('Offres sauvegardees', 'Asa voatahiry')}
+                            {t('Offres sauvegardées', 'Asa voatahiry')}
                           </Link>
                         </>
                       )}
                       
+                      {/* ✅ LIEN DASHBOARD CORRIGÉ - On utilise un Link avec onClick */}
                       {hasDashboardAccess() && (
                         <Link
                           href="/dashboard"
-                          onClick={() => setIsUserOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                          onClick={handleDashboardClick}
+                          className="flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
                         >
                           <LayoutDashboard className="w-4 h-4" />
-                          {getText('Administration', 'Fitantanana')}
+                          {t('Administration', 'Fitantanana')}
+                          <ChevronRight className="w-3 h-3 ml-auto text-gray-500" />
                         </Link>
                       )}
                       
@@ -413,7 +481,7 @@ export default function Header() {
                         className="flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-900/20 transition-colors"
                       >
                         <LogOut className="w-4 h-4" />
-                        {getText('Deconnexion', 'Fivoahana')}
+                        {t('Déconnexion', 'Fivoahana')}
                       </button>
                     </div>
                   )}
@@ -423,30 +491,27 @@ export default function Header() {
                   href="/login"
                   className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm whitespace-nowrap"
                 >
-                  {getText('Connexion', 'Hiditra')}
+                  {t('Connexion', 'Hiditra')}
                 </Link>
               )}
 
-              {/* Bouton menu mobile */}
+              {/* BOUTON MENU MOBILE */}
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="lg:hidden w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gray-700 flex items-center justify-center text-gray-300 hover:text-white hover:bg-gray-600 transition-colors"
-                aria-label={getText('Menu', 'Menio')}
+                aria-label={t('Menu', 'Menio')}
               >
                 {isMenuOpen ? <X className="w-4 h-4 sm:w-5 sm:h-5" /> : <Menu className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
             </div>
           </div>
 
-          {/* ============================================================
-          MENU MOBILE
-          ============================================================ */}
+          {/* MENU MOBILE */}
           {isMenuOpen && (
             <div 
               ref={menuRef}
               className="lg:hidden py-3 border-t border-gray-700 max-h-[calc(100vh-4rem)] overflow-y-auto"
             >
-              {/* Navigation mobile */}
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
@@ -463,7 +528,6 @@ export default function Header() {
                 </Link>
               ))}
               
-              {/* Liens utilisateur mobile */}
               {isAuthenticated && (
                 <div className="mt-2 pt-2 border-t border-gray-700">
                   <button
@@ -487,7 +551,7 @@ export default function Header() {
                       </div>
                       <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-gray-800"></div>
                     </div>
-                    {getText('Mon profil', 'Ny momba ahy')}
+                    {t('Mon profil', 'Ny momba ahy')}
                   </button>
                   
                   {isCandidate() && (
@@ -498,7 +562,7 @@ export default function Header() {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
                       >
                         <FileText className="w-4 h-4" />
-                        {getText('Mes candidatures', 'Ny fangatahako')}
+                        {t('Mes candidatures', 'Ny fangatahako')}
                       </Link>
                       <Link
                         href="/candidate/saved-jobs"
@@ -506,25 +570,25 @@ export default function Header() {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
                       >
                         <Heart className="w-4 h-4" />
-                        {getText('Offres sauvegardees', 'Asa voatahiry')}
+                        {t('Offres sauvegardées', 'Asa voatahiry')}
                       </Link>
                     </>
                   )}
                   
+                  {/* ✅ LIEN DASHBOARD MOBILE CORRIGÉ */}
                   {hasDashboardAccess() && (
                     <Link
                       href="/dashboard"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
+                      onClick={handleDashboardClick}
+                      className="flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
                     >
                       <LayoutDashboard className="w-4 h-4" />
-                      {getText('Administration', 'Fitantanana')}
+                      {t('Administration', 'Fitantanana')}
                     </Link>
                   )}
                 </div>
               )}
               
-              {/* Langues et auth mobile */}
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-700">
                 <div className="flex gap-2">
                   <button
@@ -550,7 +614,7 @@ export default function Header() {
                     onClick={handleLogout} 
                     className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded-md hover:bg-red-900/20 transition-colors"
                   >
-                    {getText('Deconnexion', 'Fivoahana')}
+                    {t('Déconnexion', 'Fivoahana')}
                   </button>
                 ) : (
                   <Link 
@@ -558,12 +622,11 @@ export default function Header() {
                     onClick={() => setIsMenuOpen(false)} 
                     className="text-xs text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded-md hover:bg-blue-900/20 transition-colors"
                   >
-                    {getText('Connexion', 'Hiditra')}
+                    {t('Connexion', 'Hiditra')}
                   </Link>
                 )}
               </div>
               
-              {/* Version mobile */}
               <div className="mt-3 pt-3 border-t border-gray-700">
                 <p className="text-[10px] text-gray-500 text-center">
                   Y-MaD - Young for Madagascar Development
@@ -574,7 +637,6 @@ export default function Header() {
         </div>
       </header>
 
-      {/* Espace réservé pour le header fixe */}
       <div className="h-14 sm:h-16"></div>
     </>
   );

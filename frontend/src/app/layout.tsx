@@ -15,7 +15,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Y-MaD - Young for Madagascar Development",
   description: "Plateforme de gestion des offres d'emploi de l'ONG Y-MaD - Young for Madagascar Development",
-  keywords: "Y-MaD, Young for Madagascar Development, ONG Madagascar, jeunesse, développement, emploi, formation, Carion, Antananarivo",
+  keywords: "Y-MaD, Young for Madagascar Development, ONG Madagascar, jeunesse, developpement, emploi, formation, Carion, Antananarivo",
   authors: [{ name: "Y-MaD - Young for Madagascar Development" }],
   icons: {
     icon: "/favicon.ico",
@@ -43,8 +43,11 @@ export default function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className={`${inter.className} antialiased`}>
-        <ThemeProvider>
-          <AuthProvider>
+        {/*  ORDRE CORRECT : AuthProvider doit être le premier */}
+        <AuthProvider>
+          {/*  ThemeProvider utilise useAuth(), donc il doit être à l'intérieur d'AuthProvider */}
+          <ThemeProvider>
+            {/*  LanguageProvider est indépendant, peut être à l'intérieur ou à l'extérieur */}
             <LanguageProvider>
               <Toaster 
                 position="top-right"
@@ -59,8 +62,8 @@ export default function RootLayout({
               <main className="min-h-screen">{children}</main>
               <Footer />
             </LanguageProvider>
-          </AuthProvider>
-        </ThemeProvider>
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );

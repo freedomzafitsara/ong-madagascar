@@ -59,6 +59,50 @@ interface AuthContextType {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 const TOKEN_KEY = 'access_token';
+const USER_COOKIE_KEY = 'user';
+const USER_ROLE_COOKIE_KEY = 'user_role';
+const COOKIE_MAX_AGE = 604800; // 7 jours
+
+// ============================================================
+// FONCTIONS UTILITAIRES POUR LES COOKIES
+// ============================================================
+
+function setCookie(name: string, value: string, maxAge: number = COOKIE_MAX_AGE): void {
+  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax`;
+}
+
+function getCookie(name: string): string | null {
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [key, value] = cookie.trim().split('=');
+    if (key === name) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function deleteCookie(name: string): void {
+  document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}
+
+function setUserCookie(userData: User): void {
+  const userCookieData = {
+    id: userData.id,
+    email: userData.email,
+    role: userData.role,
+    first_name: userData.first_name,
+    last_name: userData.last_name,
+  };
+  setCookie(USER_COOKIE_KEY, encodeURIComponent(JSON.stringify(userCookieData)));
+  setCookie(USER_ROLE_COOKIE_KEY, userData.role);
+}
+
+function deleteUserCookies(): void {
+  deleteCookie(TOKEN_KEY);
+  deleteCookie(USER_COOKIE_KEY);
+  deleteCookie(USER_ROLE_COOKIE_KEY);
+}
 
 // ============================================================
 // CONTEXT
@@ -77,19 +121,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   // ============================================================
-  // CHARGEMENT DE LA SESSION - UNIQUEMENT LE TOKEN
+  // CHARGEMENT DE LA SESSION
   // ============================================================
 
   const loadSession = useCallback(async (): Promise<User | null> => {
     try {
-      const storedToken = localStorage.getItem(TOKEN_KEY);
+      let storedToken = localStorage.getItem(TOKEN_KEY);
+      
+      if (!storedToken) {
+        storedToken = getCookie(TOKEN_KEY);
+        if (storedToken) {
+          localStorage.setItem(TOKEN_KEY, storedToken);
+        }
+      }
       
       if (!storedToken) {
         console.log('[Auth] Aucun token trouve');
         return null;
       }
 
-      console.log('[Auth] Token trouve, chargement depuis PostgreSQL...');
+      console.log('[Auth] Token trouve, chargement du profil...');
 
       const response = await fetch(`${API_URL}/auth/profile`, {
         headers: {
@@ -100,9 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok) {
         console.log('[Auth] Token invalide, nettoyage...');
         localStorage.removeItem(TOKEN_KEY);
-        document.cookie = `${TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        deleteUserCookies();
         if (response.status === 401) {
-          toast.error('Session expiree. Veuillez vous reconnecter.');
+          toast.error('Session expirée. Veuillez vous reconnecter.');
         }
         return null;
       }
@@ -126,12 +177,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updated_at: data.updated_at || new Date().toISOString(),
       };
 
-      console.log('[Auth] Utilisateur charge depuis PostgreSQL:', userData.email);
+      setUserCookie(userData);
+
+      console.log('[Auth] Utilisateur charge:', userData.email, 'Role:', userData.role);
       return userData;
       
     } catch (error) {
       console.error('[Auth] Erreur chargement session:', error);
       localStorage.removeItem(TOKEN_KEY);
+      deleteUserCookies();
       return null;
     }
   }, []);
@@ -150,9 +204,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (userData && storedToken) {
           setToken(storedToken);
           setUser(userData);
+          console.log('[Auth] Session initialisee pour:', userData.email);
         } else {
           setToken(null);
           setUser(null);
+          console.log('[Auth] Aucune session active');
         }
       } catch (error) {
         console.error('[Auth] Erreur initialisation:', error);
@@ -176,14 +232,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user && !!token;
 
   // ============================================================
-  // RAFRAICHIR L'UTILISATEUR - DEPUIS POSTGRESQL
+  // RAFRAICHIR L'UTILISATEUR
   // ============================================================
 
   const refreshUser = useCallback(async (): Promise<User | null> => {
     if (!token) return null;
 
     try {
-      console.log('[Auth] Rafraichissement utilisateur depuis PostgreSQL...');
+      console.log('[Auth] Rafraichissement utilisateur...');
       
       const response = await fetch(`${API_URL}/auth/profile`, {
         headers: {
@@ -193,12 +249,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) {
         if (response.status === 401) {
+          console.log('[Auth] Token invalide, deconnexion...');
           localStorage.removeItem(TOKEN_KEY);
-          document.cookie = `${TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+          deleteUserCookies();
           setToken(null);
           setUser(null);
-          toast.error('Session expiree');
-          router.push('/login');
+          toast.error('Session expirée. Veuillez vous reconnecter.');
+          if (!window.location.pathname.includes('/login')) {
+            router.push('/login');
+          }
         }
         return null;
       }
@@ -223,6 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
 
       setUser(userData);
+      setUserCookie(userData);
       console.log('[Auth] Utilisateur rafraichi:', userData.email);
       return userData;
       
@@ -247,7 +307,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        let errorMessage = 'Erreur de connexion';
+        let errorMessage = 'Email ou mot de passe incorrect';
         try {
           const error = await response.json();
           errorMessage = error.message || error.error || errorMessage;
@@ -263,11 +323,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Donnees de connexion incomplete');
       }
 
-      // UNIQUEMENT LE TOKEN EST STOCKE DANS LOCALSTORAGE
+      // Stocker le token
       localStorage.setItem(TOKEN_KEY, data.access_token);
-      
-      // Cookie pour le middleware
-      document.cookie = `${TOKEN_KEY}=${data.access_token}; path=/; max-age=604800; SameSite=Lax`;
+      setCookie(TOKEN_KEY, data.access_token);
 
       const userData: User = {
         id: data.user.id,
@@ -288,21 +346,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setToken(data.access_token);
       setUser(userData);
+      setUserCookie(userData);
 
       console.log('[Auth] Connexion reussie pour:', userData.email);
+      console.log('[Auth] Role:', userData.role);
 
-      if (userData.role === 'admin' || userData.role === 'super_admin') {
-        toast.success('Bienvenue Administrateur');
-        router.push('/dashboard');
-      } else if (userData.role === 'candidate') {
-        toast.success('Connexion reussie');
-        router.push('/candidate/profile');
-      } else {
-        router.push('/');
-      }
+      // Redirection selon le role
+      setTimeout(() => {
+        if (userData.role === 'admin' || userData.role === 'super_admin') {
+          toast.success('Bienvenue Administrateur');
+          console.log('[Auth] Redirection vers /dashboard');
+          router.push('/dashboard');
+        } else if (userData.role === 'candidate') {
+          toast.success('Connexion reussie');
+          router.push('/candidate/profil-candidat');
+        } else {
+          toast.success('Connexion reussie');
+          router.push('/');
+        }
+      }, 100);
 
     } catch (error) {
       console.error('[Auth] Erreur de connexion:', error);
+      toast.error(error instanceof Error ? error.message : 'Erreur de connexion');
       throw error;
     }
   }, [router]);
@@ -338,6 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     } catch (error) {
       console.error('[Auth] Erreur d\'inscription:', error);
+      toast.error(error instanceof Error ? error.message : 'Erreur d\'inscription');
       throw error;
     }
   }, [router]);
@@ -350,7 +417,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('[Auth] Deconnexion');
     
     localStorage.removeItem(TOKEN_KEY);
-    document.cookie = `${TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    deleteUserCookies();
     
     setToken(null);
     setUser(null);
@@ -367,7 +434,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) throw new Error('Non authentifie');
 
     try {
-      console.log('[Auth] Mise a jour du profil dans PostgreSQL...');
+      console.log('[Auth] Mise a jour du profil...');
 
       const response = await fetch(`${API_URL}/auth/profile`, {
         method: 'PUT',
@@ -405,12 +472,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         
         setUser(newUser);
-        console.log('[Auth] Profil mis a jour dans PostgreSQL');
+        setUserCookie(newUser);
+        console.log('[Auth] Profil mis a jour');
         toast.success('Profil mis a jour avec succes');
       }
 
     } catch (error) {
       console.error('[Auth] Erreur mise a jour profil:', error);
+      toast.error(error instanceof Error ? error.message : 'Erreur de mise a jour');
       throw error;
     }
   }, [token, user]);
@@ -423,7 +492,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) throw new Error('Non authentifie');
 
     try {
-      console.log('[Auth] Changement de mot de passe dans PostgreSQL...');
+      console.log('[Auth] Changement de mot de passe...');
 
       const response = await fetch(`${API_URL}/auth/change-password`, {
         method: 'PUT',
@@ -450,6 +519,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     } catch (error) {
       console.error('[Auth] Erreur changement mot de passe:', error);
+      toast.error(error instanceof Error ? error.message : 'Erreur de changement');
       throw error;
     }
   }, [token]);
@@ -509,11 +579,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           avatar_url: avatarUrl,
         };
         setUser(newUser);
+        setUserCookie(newUser);
         toast.success('Avatar mis a jour avec succes');
       }
 
     } catch (error) {
       console.error('[Auth] Erreur upload avatar:', error);
+      toast.error(error instanceof Error ? error.message : 'Erreur d\'upload');
       throw error;
     }
   }, [token, user]);

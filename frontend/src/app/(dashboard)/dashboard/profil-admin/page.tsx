@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   User, Mail, Phone, Save, Loader2,
   Shield, Calendar, Clock, Users, Briefcase,
@@ -118,7 +119,7 @@ const useProfileManagement = (user: any, updateProfile: any) => {
     const errors: ValidationError[] = [];
 
     if (!formData.first_name.trim()) {
-      errors.push({ field: 'first_name', message: 'Le prenom est requis' });
+      errors.push({ field: 'first_name', message: 'Le prénom est requis' });
     }
 
     if (!formData.last_name.trim()) {
@@ -126,7 +127,7 @@ const useProfileManagement = (user: any, updateProfile: any) => {
     }
 
     if (formData.phone && !PHONE_REGEX.test(formData.phone.replace(/\s/g, ''))) {
-      errors.push({ field: 'phone', message: 'Numero de telephone invalide. Format: +261 XX XXX XX' });
+      errors.push({ field: 'phone', message: 'Numéro de téléphone invalide. Format: +261 XX XXX XX' });
     }
 
     if (formData.linkedin && !URL_REGEX.test(formData.linkedin)) {
@@ -138,7 +139,7 @@ const useProfileManagement = (user: any, updateProfile: any) => {
     }
 
     if (formData.bio && formData.bio.length > MAX_BIO_LENGTH) {
-      errors.push({ field: 'bio', message: `La bio ne peut pas depasser ${MAX_BIO_LENGTH} caracteres` });
+      errors.push({ field: 'bio', message: `La bio ne peut pas dépasser ${MAX_BIO_LENGTH} caractères` });
     }
 
     setValidationErrors(errors);
@@ -169,11 +170,11 @@ const useProfileManagement = (user: any, updateProfile: any) => {
         phone: formData.phone ? formData.phone.replace(/\s/g, '') : '',
       });
 
-      toast.success('Profil mis a jour avec succes');
+      toast.success('Profil mis à jour avec succès');
       setIsEditing(false);
     } catch (error: any) {
       console.error('Error updating profile:', error);
-      toast.error(error.message || 'Erreur lors de la mise a jour du profil');
+      toast.error(error.message || 'Erreur lors de la mise à jour du profil');
     } finally {
       setLoading(false);
     }
@@ -200,16 +201,12 @@ const useProfileManagement = (user: any, updateProfile: any) => {
     setValidationErrors(prev => prev.filter(err => err.field !== name));
   }, []);
 
-  // ============================================================
-  // UPLOAD AVATAR - CORRIGE
-  // ============================================================
-
   const handleAvatarUpload = useCallback(async (file: File) => {
     if (!file) return;
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      toast.error('Format non supporte. Utilisez JPG, PNG, WEBP ou GIF');
+      toast.error('Format non supporté. Utilisez JPG, PNG, WEBP ou GIF');
       return;
     }
 
@@ -228,9 +225,8 @@ const useProfileManagement = (user: any, updateProfile: any) => {
           ? result.avatar_url 
           : `${baseUrl}${result.avatar_url}`;
         
-        // ✅ CORRECTION: setAvatarPreview est defini dans le hook
         setAvatarPreview(avatarUrl);
-        toast.success('Avatar mis a jour avec succes');
+        toast.success('Avatar mis à jour avec succès');
         
         if (user) {
           user.avatar_url = result.avatar_url;
@@ -244,6 +240,11 @@ const useProfileManagement = (user: any, updateProfile: any) => {
     }
   }, [user]);
 
+  // ✅ Exposer setAvatarPreview pour utilisation dans le rendu
+  const updateAvatarPreview = useCallback((url: string | null) => {
+    setAvatarPreview(url);
+  }, []);
+
   return {
     formData,
     isEditing,
@@ -256,9 +257,7 @@ const useProfileManagement = (user: any, updateProfile: any) => {
     handleCancel,
     handleInputChange,
     handleAvatarUpload,
-    setFormData,
-    // ✅ AJOUT: Exporter setAvatarPreview pour l'utiliser ailleurs si besoin
-    setAvatarPreview,
+    updateAvatarPreview,
   };
 };
 
@@ -269,6 +268,7 @@ const useProfileManagement = (user: any, updateProfile: any) => {
 export default function AdminProfilePage() {
   const router = useRouter();
   const { user, isAuthenticated, logout, updateProfile } = useAuth();
+  const { language, t } = useLanguage();
 
   const {
     formData,
@@ -282,22 +282,11 @@ export default function AdminProfilePage() {
     handleCancel,
     handleInputChange,
     handleAvatarUpload,
-    setFormData,
+    updateAvatarPreview,
   } = useProfileManagement(user, updateProfile);
 
   const isMounted = useRef(true);
   const hasCheckedAuth = useRef(false);
-
-  // ============================================================
-  // GESTION DE LA LANGUE
-  // ============================================================
-
-  const getText = useCallback((fr: string, mg: string): string => {
-    const language = typeof window !== 'undefined'
-      ? localStorage.getItem('y-mad-language') || 'fr'
-      : 'fr';
-    return language === 'fr' ? fr : mg;
-  }, []);
 
   // ============================================================
   // REDIRECTIONS
@@ -327,7 +316,7 @@ export default function AdminProfilePage() {
   }, [isAuthenticated, user, router]);
 
   // ============================================================
-  // FORMATAGE DES DONNEES
+  // FORMATAGE DES DONNÉES
   // ============================================================
 
   const formatDate = useCallback((dateString?: string): string => {
@@ -363,52 +352,52 @@ export default function AdminProfilePage() {
 
   const statsCards = useMemo(() => [
     {
-      label: getText('Projets suivis', 'Tetikasa arahina'),
+      label: t('dashboard.total_projects') || 'Projets suivis',
       value: adminStats.totalProjects.toString(),
-      subValue: `${adminStats.activeProjects} ${getText('actifs', 'miasa')}`,
+      subValue: `${adminStats.activeProjects} ${t('dashboard.active_projects') || 'actifs'}`,
       icon: BookOpen,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50'
     },
     {
-      label: getText('Beneficiaires', 'Tompondaka'),
+      label: t('stats.beneficiaries') || 'Bénéficiaires',
       value: adminStats.totalBeneficiaries.toString(),
-      subValue: getText('impact direct', 'fiantraikany mivantana'),
+      subValue: t('dashboard.impact_description') || 'impact direct',
       icon: Users,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50'
     },
     {
-      label: getText('Heures de benefolat', 'Ora fanaovana asa soa'),
+      label: t('stats.volunteers') || 'Heures de bénévolat',
       value: adminStats.totalVolunteerHours.toString(),
-      subValue: getText('ce mois', 'ity volana ity'),
+      subValue: t('dashboard.this_month') || 'ce mois',
       icon: Clock,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50'
     },
     {
-      label: getText('Certifications', 'Fanamarinana'),
+      label: t('dashboard.projects_completed') || 'Certifications',
       value: adminStats.certifications.toString(),
-      subValue: getText('obtenues', 'azo'),
+      subValue: t('dashboard.completed') || 'obtenues',
       icon: Award,
       color: 'text-amber-600',
       bgColor: 'bg-amber-50'
     },
-  ], [adminStats, getText]);
+  ], [adminStats, t]);
 
   // ============================================================
-  // GESTION DE LA DECONNEXION
+  // GESTION DE LA DÉCONNEXION
   // ============================================================
 
   const handleLogout = useCallback(async () => {
     try {
       await logout();
-      toast.success(getText('Deconnecte avec succes', 'Nivoaka soa aman-tsara'));
+      toast.success(t('auth.logout') || 'Déconnecté avec succès');
       router.push('/login');
     } catch (error) {
-      toast.error(getText('Erreur lors de la deconnexion', 'Nisy olana tamin\'ny fivoahana'));
+      toast.error(t('common.error') || 'Erreur lors de la déconnexion');
     }
-  }, [logout, router, getText]);
+  }, [logout, router, t]);
 
   // ============================================================
   // RENDU CONDITIONNEL - CHARGEMENT
@@ -429,18 +418,18 @@ export default function AdminProfilePage() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6">
 
+      {/* ============================================================
+      EN-TÊTE
+      ============================================================ */}
       <header className="mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               <User className="w-6 h-6 text-blue-600" />
-              {getText('Mon profil', 'Ny momba ahy')}
+              {t('dashboard.view_profile') || 'Mon profil'}
             </h1>
             <p className="text-gray-500 text-sm mt-1">
-              {getText(
-                'Gerez vos informations personnelles et votre compte administrateur',
-                'Ahitsio ny fampahalalanao manokana sy ny kaontinao mpanara-maso'
-              )}
+              {t('dashboard.view_profile') || 'Gérez vos informations personnelles'}
             </p>
           </div>
           <button
@@ -448,13 +437,16 @@ export default function AdminProfilePage() {
             className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            {getText('Deconnexion', 'Fivoahana')}
+            {t('auth.logout') || 'Déconnexion'}
           </button>
         </div>
       </header>
 
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
 
+        {/* ============================================================
+        SECTION PROFIL - EN-TÊTE
+        ============================================================ */}
         <section className="bg-gradient-to-r from-blue-800 to-blue-900 p-6 sm:p-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
             <div className="relative flex-shrink-0">
@@ -466,11 +458,7 @@ export default function AdminProfilePage() {
                     width={112}
                     height={112}
                     className="w-full h-full object-cover"
-                    onError={() => {
-                      // ✅ CORRECTION: Utiliser setAvatarPreview via la variable
-                      const { setAvatarPreview: setPreview } = useProfileManagement(user, updateProfile);
-                      if (setPreview) setPreview(null);
-                    }}
+                    onError={() => updateAvatarPreview(null)} // ✅ Correction ici
                   />
                 ) : (
                   <User className="w-12 h-12 text-white" />
@@ -515,13 +503,13 @@ export default function AdminProfilePage() {
                 <span className="flex items-center gap-1.5 px-3 py-1 bg-white/10 text-white text-xs font-medium rounded-full">
                   <Shield className="w-3 h-3" />
                   {user.role === 'super_admin'
-                    ? getText('Super Administrateur', 'Super Administrateur')
-                    : getText('Administrateur', 'Administrateur')}
+                    ? 'Super Administrateur'
+                    : t('dashboard.admin') || 'Administrateur'}
                 </span>
                 {user.role === 'super_admin' && (
                   <span className="flex items-center gap-1.5 px-3 py-1 bg-yellow-400/20 text-yellow-200 text-xs font-medium rounded-full">
                     <Star className="w-3 h-3" />
-                    {getText('Acces total', 'Fidirana tanteraka')}
+                    {t('auth.terms_accept') || 'Accès total'}
                   </span>
                 )}
               </div>
@@ -529,30 +517,34 @@ export default function AdminProfilePage() {
 
             <button
               onClick={() => setIsEditing(!isEditing)}
-              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${isEditing
+              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                isEditing
                   ? 'bg-red-500/20 text-red-200 hover:bg-red-500/30'
                   : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
+              }`}
             >
               <Edit2 className="w-4 h-4" />
-              {isEditing ? getText('Annuler', 'Aoka') : getText('Modifier', 'Hanova')}
+              {isEditing ? t('common.cancel') || 'Annuler' : t('common.edit') || 'Modifier'}
             </button>
           </div>
         </section>
 
+        {/* ============================================================
+        SECTION STATUT
+        ============================================================ */}
         <section className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div className="flex flex-wrap items-center justify-between gap-4 text-sm">
             <div className="flex items-center gap-4 flex-wrap">
               <span className="flex items-center gap-1.5 text-gray-500">
                 <Calendar className="w-4 h-4" />
-                {getText('Membre depuis', 'Nisoratra tamin\'ny')}{' '}
+                Membre depuis{' '}
                 <span className="font-medium text-gray-700">
                   {formatDate(user.created_at)}
                 </span>
               </span>
               <span className="flex items-center gap-1.5 text-gray-500">
                 <Clock className="w-4 h-4" />
-                {getText('Derniere connexion', 'Niditra farany')}:{' '}
+                Dernière connexion:{' '}
                 <span className="font-medium text-gray-700">
                   {formatDate(user.last_login)}
                 </span>
@@ -560,15 +552,18 @@ export default function AdminProfilePage() {
             </div>
             <span className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full text-xs font-medium">
               <CheckCircle className="w-3 h-3" />
-              {getText('Compte actif', 'Kaonty miasa')}
+              Compte actif
             </span>
           </div>
         </section>
 
+        {/* ============================================================
+        SECTION STATISTIQUES ET IMPACT
+        ============================================================ */}
         <section className="px-6 py-6 border-b border-gray-200">
           <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-600" />
-            {getText('Statistiques et impact', 'Statistika sy fiantraikany')}
+            {t('dashboard.performance') || 'Statistiques et impact'}
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {statsCards.map((stat, index) => {
@@ -592,7 +587,7 @@ export default function AdminProfilePage() {
           <div className="mt-4 bg-gray-50 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-600">
-                {getText('Taux de reussite des projets', 'Tahan\'ny fahombiazan\'ny tetikasa')}
+                {t('dashboard.completion_rate') || 'Taux de réussite des projets'}
               </span>
               <span className="text-sm font-bold text-blue-600">
                 {adminStats.successRate}%
@@ -607,18 +602,22 @@ export default function AdminProfilePage() {
           </div>
         </section>
 
+        {/* ============================================================
+        SECTION FORMULAIRE / AFFICHAGE DU PROFIL
+        ============================================================ */}
         <section className="p-6">
           {isEditing ? (
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Informations personnelles */}
               <div className="border-b border-gray-200 pb-6">
                 <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
                   <User className="w-4 h-4 text-blue-600" />
-                  {getText('Informations personnelles', 'Fampahalalana manokana')}
+                  Informations personnelles
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {getText('Prenom', 'Anarana')} <span className="text-red-500">*</span>
+                      Prénom <span className="text-red-500">*</span>
                     </label>
                     <input
                       id="first_name"
@@ -626,11 +625,12 @@ export default function AdminProfilePage() {
                       type="text"
                       value={formData.first_name}
                       onChange={handleInputChange}
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${validationErrors.some(e => e.field === 'first_name')
+                      className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${
+                        validationErrors.some(e => e.field === 'first_name')
                           ? 'border-red-500 focus:ring-red-500'
                           : 'border-gray-300 focus:border-blue-500'
-                        }`}
-                      placeholder={getText('Jean', 'Jean')}
+                      }`}
+                      placeholder="Jean"
                       required
                     />
                     {validationErrors.filter(e => e.field === 'first_name').map(err => (
@@ -642,7 +642,7 @@ export default function AdminProfilePage() {
                   </div>
                   <div>
                     <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {getText('Nom', 'Fanampiny')} <span className="text-red-500">*</span>
+                      Nom <span className="text-red-500">*</span>
                     </label>
                     <input
                       id="last_name"
@@ -650,11 +650,12 @@ export default function AdminProfilePage() {
                       type="text"
                       value={formData.last_name}
                       onChange={handleInputChange}
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${validationErrors.some(e => e.field === 'last_name')
+                      className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${
+                        validationErrors.some(e => e.field === 'last_name')
                           ? 'border-red-500 focus:ring-red-500'
                           : 'border-gray-300 focus:border-blue-500'
-                        }`}
-                      placeholder={getText('Dupont', 'Dupont')}
+                      }`}
+                      placeholder="Dupont"
                       required
                     />
                     {validationErrors.filter(e => e.field === 'last_name').map(err => (
@@ -666,7 +667,7 @@ export default function AdminProfilePage() {
                   </div>
                   <div>
                     <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {getText('Telephone', 'Telefaonina')}
+                      Téléphone
                     </label>
                     <input
                       id="phone"
@@ -674,10 +675,11 @@ export default function AdminProfilePage() {
                       type="tel"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${validationErrors.some(e => e.field === 'phone')
+                      className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${
+                        validationErrors.some(e => e.field === 'phone')
                           ? 'border-red-500 focus:ring-red-500'
                           : 'border-gray-300 focus:border-blue-500'
-                        }`}
+                      }`}
                       placeholder="+261 32 123 45 67"
                     />
                     {validationErrors.filter(e => e.field === 'phone').map(err => (
@@ -687,12 +689,12 @@ export default function AdminProfilePage() {
                       </p>
                     ))}
                     <p className="text-xs text-gray-400 mt-1.5">
-                      {getText('Format: +261 XX XXX XX ou 0XX XXXXXX', 'Format: +261 XX XXX XX na 0XX XXXXXX')}
+                      Format: +261 XX XXX XX ou 0XX XXXXXX
                     </p>
                   </div>
                   <div>
                     <label htmlFor="region" className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {getText('Region', 'Faritra')}
+                      Région
                     </label>
                     <select
                       id="region"
@@ -711,14 +713,15 @@ export default function AdminProfilePage() {
                 </div>
               </div>
 
+              {/* Biographie */}
               <div className="border-b border-gray-200 pb-6">
                 <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-blue-600" />
-                  {getText('Biographie', 'Tantara momba anao')}
+                  Biographie
                 </h3>
                 <div>
                   <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1.5">
-                    {getText('Bio', 'Bio')}
+                    Bio
                   </label>
                   <textarea
                     id="bio"
@@ -727,14 +730,12 @@ export default function AdminProfilePage() {
                     onChange={handleInputChange}
                     rows={4}
                     maxLength={MAX_BIO_LENGTH}
-                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors resize-y ${validationErrors.some(e => e.field === 'bio')
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors resize-y ${
+                      validationErrors.some(e => e.field === 'bio')
                         ? 'border-red-500 focus:ring-red-500'
                         : 'border-gray-300 focus:border-blue-500'
-                      }`}
-                    placeholder={getText(
-                      'Parlez de vous, votre experience et votre passion pour l\'humanitaire...',
-                      'Lazao ny momba anao, ny trazao ary ny fitiavanao ny asa soa...'
-                    )}
+                    }`}
+                    placeholder="Parlez de vous, votre expérience et votre passion pour l'humanitaire..."
                   />
                   <div className="flex justify-between items-center mt-1.5">
                     {validationErrors.filter(e => e.field === 'bio').map(err => (
@@ -750,15 +751,16 @@ export default function AdminProfilePage() {
                 </div>
               </div>
 
+              {/* Informations professionnelles */}
               <div className="border-b border-gray-200 pb-6">
                 <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
                   <Briefcase className="w-4 h-4 text-blue-600" />
-                  {getText('Informations professionnelles', 'Fampahalalana momba ny asa')}
+                  Informations professionnelles
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {getText('Poste / Fonction', 'Toerana / Asa')}
+                      Poste / Fonction
                     </label>
                     <input
                       id="position"
@@ -767,12 +769,12 @@ export default function AdminProfilePage() {
                       value={formData.position}
                       onChange={handleInputChange}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-blue-500 transition-colors"
-                      placeholder={getText('Administrateur', 'Administrateur')}
+                      placeholder="Administrateur"
                     />
                   </div>
                   <div>
                     <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {getText('Departement', 'Departemanta')}
+                      Département
                     </label>
                     <input
                       id="department"
@@ -781,16 +783,17 @@ export default function AdminProfilePage() {
                       value={formData.department}
                       onChange={handleInputChange}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-blue-500 transition-colors"
-                      placeholder={getText('General', 'General')}
+                      placeholder="Général"
                     />
                   </div>
                 </div>
               </div>
 
+              {/* Liens professionnels */}
               <div className="border-b border-gray-200 pb-6">
                 <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
                   <Globe className="w-4 h-4 text-blue-600" />
-                  {getText('Liens professionnels', 'Rohy momba ny asa')}
+                  Liens professionnels
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -805,10 +808,11 @@ export default function AdminProfilePage() {
                         type="url"
                         value={formData.linkedin}
                         onChange={handleInputChange}
-                        className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${validationErrors.some(e => e.field === 'linkedin')
+                        className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${
+                          validationErrors.some(e => e.field === 'linkedin')
                             ? 'border-red-500 focus:ring-red-500'
                             : 'border-gray-300 focus:border-blue-500'
-                          }`}
+                        }`}
                         placeholder="https://linkedin.com/in/..."
                       />
                     </div>
@@ -831,10 +835,11 @@ export default function AdminProfilePage() {
                         type="url"
                         value={formData.github}
                         onChange={handleInputChange}
-                        className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${validationErrors.some(e => e.field === 'github')
+                        className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${
+                          validationErrors.some(e => e.field === 'github')
                             ? 'border-red-500 focus:ring-red-500'
                             : 'border-gray-300 focus:border-blue-500'
-                          }`}
+                        }`}
                         placeholder="https://github.com/..."
                       />
                     </div>
@@ -848,6 +853,7 @@ export default function AdminProfilePage() {
                 </div>
               </div>
 
+              {/* Boutons d'action */}
               <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <button
                   type="submit"
@@ -859,9 +865,7 @@ export default function AdminProfilePage() {
                   ) : (
                     <Save className="w-4 h-4" />
                   )}
-                  {loading
-                    ? getText('Enregistrement...', 'Fitehirizana...')
-                    : getText('Enregistrer les modifications', 'Tehirizo ny fanovana')}
+                  {loading ? 'Enregistrement...' : 'Enregistrer les modifications'}
                 </button>
                 <button
                   type="button"
@@ -869,57 +873,51 @@ export default function AdminProfilePage() {
                   className="flex items-center justify-center gap-2 px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                 >
                   <X className="w-4 h-4" />
-                  {getText('Annuler', 'Aoka')}
+                  Annuler
                 </button>
               </div>
             </form>
           ) : (
+            // ============================================================
+            // VUE PROFIL - MODE LECTURE
+            // ============================================================
             <div className="space-y-8">
 
+              {/* Informations personnelles */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
                   <User className="w-4 h-4 text-blue-600" />
-                  {getText('Informations personnelles', 'Fampahalalana manokana')}
+                  Informations personnelles
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">
-                      {getText('Prenom', 'Anarana')}
-                    </p>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Prénom</p>
                     <p className="text-base font-medium text-gray-800 mt-1">
-                      {user.first_name || getText('Non renseigne', 'Tsy voalaza')}
+                      {user.first_name || 'Non renseigné'}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">
-                      {getText('Nom', 'Fanampiny')}
-                    </p>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Nom</p>
                     <p className="text-base font-medium text-gray-800 mt-1">
-                      {user.last_name || getText('Non renseigne', 'Tsy voalaza')}
+                      {user.last_name || 'Non renseigné'}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">
-                      {getText('Adresse email', 'Adiresy email')}
-                    </p>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Adresse email</p>
                     <p className="text-base font-medium text-gray-800 mt-1">{user.email}</p>
                     <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
                       <span className="inline-block w-1 h-1 rounded-full bg-gray-400"></span>
-                      {getText("L'adresse email ne peut pas etre modifiee", "Tsy azo ovaina ny adiresy email")}
+                      L'adresse email ne peut pas être modifiée
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">
-                      {getText('Telephone', 'Telefaonina')}
-                    </p>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Téléphone</p>
                     <p className="text-base font-medium text-gray-800 mt-1">
-                      {user.phone || getText('Non renseigne', 'Tsy voalaza')}
+                      {user.phone || 'Non renseigné'}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">
-                      {getText('Region', 'Faritra')}
-                    </p>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Région</p>
                     <p className="text-base font-medium text-gray-800 mt-1 flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-gray-400" />
                       {formData.region}
@@ -927,9 +925,7 @@ export default function AdminProfilePage() {
                   </div>
                   {formData.bio && (
                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 md:col-span-2">
-                      <p className="text-xs text-gray-400 uppercase tracking-wider">
-                        {getText('Biographie', 'Tantara momba anao')}
-                      </p>
+                      <p className="text-xs text-gray-400 uppercase tracking-wider">Biographie</p>
                       <p className="text-base text-gray-700 mt-1 leading-relaxed">
                         {formData.bio}
                       </p>
@@ -938,25 +934,22 @@ export default function AdminProfilePage() {
                 </div>
               </div>
 
+              {/* Informations professionnelles */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
                   <Briefcase className="w-4 h-4 text-blue-600" />
-                  {getText('Informations professionnelles', 'Fampahalalana momba ny asa')}
+                  Informations professionnelles
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">
-                      {getText('Poste / Fonction', 'Toerana / Asa')}
-                    </p>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Poste / Fonction</p>
                     <p className="text-base font-medium text-gray-800 mt-1 flex items-center gap-2">
                       <Building className="w-4 h-4 text-gray-400" />
                       {formData.position}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">
-                      {getText('Departement', 'Departemanta')}
-                    </p>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Département</p>
                     <p className="text-base font-medium text-gray-800 mt-1 flex items-center gap-2">
                       <Users className="w-4 h-4 text-gray-400" />
                       {formData.department}
@@ -965,11 +958,12 @@ export default function AdminProfilePage() {
                 </div>
               </div>
 
+              {/* Liens professionnels */}
               {(formData.linkedin || formData.github) && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
                     <Globe className="w-4 h-4 text-blue-600" />
-                    {getText('Liens professionnels', 'Rohy momba ny asa')}
+                    Liens professionnels
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {formData.linkedin && (
@@ -982,11 +976,7 @@ export default function AdminProfilePage() {
                           className="text-blue-600 hover:text-blue-700 hover:underline font-medium text-sm mt-1 flex items-center gap-1"
                         >
                           <Linkedin className="w-4 h-4 flex-shrink-0" />
-                          <span>
-                            {formData.linkedin.length > 40
-                              ? `${formData.linkedin.substring(0, 40)}...`
-                              : formData.linkedin}
-                          </span>
+                          <span className="truncate">{formData.linkedin}</span>
                         </a>
                       </div>
                     )}
@@ -1000,11 +990,7 @@ export default function AdminProfilePage() {
                           className="text-blue-600 hover:text-blue-700 hover:underline font-medium text-sm mt-1 flex items-center gap-1"
                         >
                           <Github className="w-4 h-4 flex-shrink-0" />
-                          <span>
-                            {formData.github.length > 40
-                              ? `${formData.github.substring(0, 40)}...`
-                              : formData.github}
-                          </span>
+                          <span className="truncate">{formData.github}</span>
                         </a>
                       </div>
                     )}
@@ -1012,11 +998,12 @@ export default function AdminProfilePage() {
                 </div>
               )}
 
+              {/* Compétences */}
               {formData.skills && formData.skills.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
                     <Award className="w-4 h-4 text-blue-600" />
-                    {getText('Competences', 'Fahaizana')}
+                    Compétences
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {formData.skills.map((skill, index) => (

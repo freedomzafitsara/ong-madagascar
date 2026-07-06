@@ -10,17 +10,14 @@ import type { NextRequest } from 'next/server';
 // Routes publiques (sans authentification)
 const PUBLIC_ROUTES = [
   '/',
-  '/jobs',
-  '/jobs/:path*',
-  '/projects',
-  '/projects/:path*',
-  '/blog',
-  '/blog/:path*',
-  '/contact',
   '/login',
   '/register',
   '/forgot-password',
   '/reset-password',
+  '/jobs',
+  '/projects',
+  '/blog',
+  '/contact',
 ];
 
 // Routes API publiques
@@ -29,9 +26,9 @@ const PUBLIC_API_ROUTES = [
   '/api/auth/register',
   '/api/auth/forgot-password',
   '/api/auth/reset-password',
+  '/api/auth/profile',
   '/api/jobs/offers/public',
   '/api/jobs/offers/featured',
-  '/api/jobs/offers/public/:path*',
   '/api/projects/public',
   '/api/blog/public',
   '/api/pages/backgrounds',
@@ -41,15 +38,20 @@ const PUBLIC_API_ROUTES = [
 // Routes candidats (accessibles aux candidats uniquement)
 const CANDIDATE_ROUTES = [
   '/candidate',
-  '/candidate/:path*',
+  '/candidate/profil-candidat',
+  '/candidate/applications',
+  '/candidate/saved-jobs',
 ];
 
 // Routes admin (accessibles aux admins uniquement)
 const ADMIN_ROUTES = [
   '/dashboard',
-  '/dashboard/:path*',
-  '/admin',
-  '/admin/:path*',
+  '/dashboard/profil-admin',
+  '/dashboard/users',
+  '/dashboard/jobs',
+  '/dashboard/projects',
+  '/dashboard/blog',
+  '/dashboard/settings',
 ];
 
 // ============================================================
@@ -57,9 +59,10 @@ const ADMIN_ROUTES = [
 // ============================================================
 
 function matchRoute(pathname: string, route: string): boolean {
-  if (route.includes(':path*')) {
-    const base = route.replace('/:path*', '');
-    return pathname === base || pathname.startsWith(base + '/');
+  if (route.includes('/:')) {
+    const pattern = route.replace(/\/:[^/]+/g, '/[^/]+');
+    const regex = new RegExp(`^${pattern}$`);
+    return regex.test(pathname);
   }
   return pathname === route || pathname.startsWith(route + '/');
 }
@@ -68,12 +71,34 @@ function isRouteProtected(pathname: string, routes: string[]): boolean {
   return routes.some(route => matchRoute(pathname, route));
 }
 
-function getUserFromCookie(request: NextRequest): any | null {
+function getToken(request: NextRequest): string | null {
+  const tokenFromCookie = request.cookies.get('access_token')?.value || 
+                          request.cookies.get('token')?.value;
+  if (tokenFromCookie) {
+    return tokenFromCookie;
+  }
+
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+
+  return null;
+}
+
+function getUserRole(request: NextRequest): string | null {
   try {
     const userCookie = request.cookies.get('user')?.value;
     if (userCookie) {
-      return JSON.parse(decodeURIComponent(userCookie));
+      const user = JSON.parse(decodeURIComponent(userCookie));
+      return user.role || null;
     }
+
+    const roleCookie = request.cookies.get('user_role')?.value;
+    if (roleCookie) {
+      return roleCookie;
+    }
+
     return null;
   } catch {
     return null;
@@ -108,15 +133,10 @@ export function middleware(request: NextRequest) {
   // 2. RECUPERER LES DONNEES DE SESSION
   // ============================================================
 
-  const token = request.cookies.get('access_token')?.value || 
-                request.cookies.get('token')?.value;
-  
-  let userRole: string | null = null;
-  let userData = getUserFromCookie(request);
-  
-  if (userData) {
-    userRole = userData.role;
-  }
+  const token = getToken(request);
+  const userRole = getUserRole(request);
+
+  console.log(`[Middleware] Token: ${token ? 'present' : 'absent'}, Role: ${userRole || 'aucun'}`);
 
   // ============================================================
   // 3. VERIFIER LES ROUTES PUBLIQUES
@@ -191,7 +211,6 @@ export function middleware(request: NextRequest) {
 
   if (pathname.startsWith('/api/')) {
     console.log('[Middleware] API protegee - Verification token');
-    // Le token est deja verifie a l'etape 5
     return NextResponse.next();
   }
 
@@ -209,15 +228,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     * - images folder
-     * - uploads folder
-     */
     '/((?!_next/static|_next/image|favicon.ico|public|images|uploads|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)$).*)',
   ],
 };

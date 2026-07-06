@@ -6,16 +6,17 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { 
   Briefcase, MapPin, Calendar, Building, ArrowLeft, 
   Mail, Phone, Send, AlertCircle, Loader2,
   FileText, User, X, Upload, Trash2, Linkedin, 
   Globe, Camera, Check, FileCheck,
-  Lock, Info, UserCheck, Shield
+  Lock, Info, UserCheck, Shield, Clock,
+  CheckCircle, AlertTriangle, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
-import api from '@/lib/api';
 import { jobService, JobOffer, CreateJobApplicationDto, JobStatus } from '@/services/job.service';
 import { uploadService, UploadedFile } from '@/services/upload.service';
 import toast from 'react-hot-toast';
@@ -83,14 +84,14 @@ interface ValidationError {
 // CONSTANTES
 // ============================================================
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 Mo
-const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5 Mo
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const PHONE_REGEX = /^(?:\+261|0)(?:32|33|34|37|38)\d{7}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ============================================================
-// HOOKS PERSONNALISES
+// HOOK PERSONNALISE POUR LES DONNEES DE L'OFFRE
 // ============================================================
 
 const useJobData = (jobId: string, language: string) => {
@@ -108,29 +109,14 @@ const useJobData = (jobId: string, language: string) => {
     setError(null);
 
     try {
-      let jobData: JobOffer | null = null;
-
-      try {
-        jobData = await jobService.getOfferById(jobId);
-      } catch (err) {
-        console.debug('Route publique echouee, tentative liste...');
-      }
-
-      if (!jobData) {
-        try {
-          const response = await jobService.getPublishedOffers({ limit: 100 });
-          const found = response.data.find((item: JobOffer) => item.id === jobId);
-          if (found) jobData = found;
-        } catch (err) {
-          console.debug('Liste publique echouee');
-        }
-      }
-
+      const jobData = await jobService.getPublicOfferById(jobId);
+      
       if (!jobData) {
         setError(getText(
-          'Cette offre n\'est pas disponible ou a ete supprimee.',
-          'Tsy misy na nesorina ity asa ity.'
+          'Cette offre n\'est pas disponible.',
+          'Tsy misy ity asa ity.'
         ));
+        setLoading(false);
         return;
       }
 
@@ -139,16 +125,30 @@ const useJobData = (jobId: string, language: string) => {
           'Cette offre n\'est pas encore disponible.',
           'Tsy mbola misy ity asa ity.'
         ));
+        setLoading(false);
         return;
       }
 
       setJob(jobData);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erreur chargement offre:', err);
-      setError(getText(
-        'Une erreur est survenue lors du chargement de l\'offre.',
-        'Nisy olana tamin\'ny fampidinana ny asa.'
-      ));
+      
+      if (err.response?.status === 403 || err.response?.status === 401) {
+        setError(getText(
+          'Vous devez etre connecte pour voir cette offre.',
+          'Mila miditra ianao vao hahita ity asa ity.'
+        ));
+      } else if (err.response?.status === 404) {
+        setError(getText(
+          'Cette offre n\'existe pas ou a ete supprimee.',
+          'Tsy misy na nesorina ity asa ity.'
+        ));
+      } else {
+        setError(getText(
+          'Une erreur est survenue lors du chargement.',
+          'Nisy olana tamin\'ny fampidinana.'
+        ));
+      }
     } finally {
       setLoading(false);
     }
@@ -162,8 +162,8 @@ const useJobData = (jobId: string, language: string) => {
         return;
       }
       
-      const response = await api.get(`/jobs/applications/check/${jobId}`);
-      setHasApplied(response.data?.applied || false);
+      const response = await jobService.checkApplication(jobId);
+      setHasApplied(response?.applied || false);
     } catch (error) {
       console.error('Erreur verification candidature:', error);
       setHasApplied(false);
@@ -173,9 +173,15 @@ const useJobData = (jobId: string, language: string) => {
   useEffect(() => {
     if (jobId) {
       fetchJob();
+    }
+  }, [jobId, fetchJob]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    if (token && job) {
       checkApplication();
     }
-  }, [jobId, fetchJob, checkApplication]);
+  }, [job, checkApplication]);
 
   return { job, loading, error, hasApplied, setHasApplied };
 };
@@ -187,19 +193,17 @@ const useJobData = (jobId: string, language: string) => {
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const { user, isAuthenticated } = useAuth();
   const jobId = params?.id as string;
 
-  // Hooks personnalises
   const { job, loading, error, hasApplied, setHasApplied } = useJobData(jobId, language);
   
-  // Etat du formulaire
   const [applying, setApplying] = useState(false);
   const [showApplicationForm, setShowApplicationForm] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
   
-  // Etat des fichiers
   const [cvState, setCvState] = useState<FileUploadState>({
     file: null,
     uploading: false,
@@ -217,7 +221,6 @@ export default function JobDetailPage() {
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   
-  // Donnees du formulaire
   const [formData, setFormData] = useState<ApplicationFormData>({
     full_name: '',
     email: '',
@@ -231,7 +234,6 @@ export default function JobDetailPage() {
     portfolio_url: ''
   });
 
-  // References
   const cvInputRef = useRef<HTMLInputElement>(null);
   const coverLetterInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -282,8 +284,6 @@ export default function JobDetailPage() {
   ): void => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Effacer les erreurs de validation pour ce champ
     setValidationErrors(prev => prev.filter(err => err.field !== name));
   };
 
@@ -313,15 +313,19 @@ export default function JobDetailPage() {
         return null;
       }
 
-      const result = await uploadService.uploadImage(file, type as any);
-      setState(prev => ({ ...prev, file: result, uploading: false, error: '' }));
+      const result = await uploadService.uploadFile(file, { 
+        entityType: type as any,
+        entityId: jobId 
+      });
+      
+      setState(prev => ({ ...prev, file: result as any, uploading: false, error: '' }));
       
       toast.success(getText(
         'Fichier uploade avec succes.',
         'Vita soa aman-tsara ny fampidirana rakitra.'
       ));
       
-      return result.url || uploadService.getImageUrl(result.id);
+      return result.url;
     } catch (err: any) {
       const errorMessage = err.message || 'Erreur lors de l\'upload';
       setState(prev => ({ ...prev, file: null, uploading: false, error: errorMessage }));
@@ -346,8 +350,9 @@ export default function JobDetailPage() {
     if (file.type !== 'application/pdf') {
       setCvState(prev => ({ 
         ...prev, 
-        error: getText('Seuls les fichiers PDF sont acceptes', 'Ny rakitra PDF ihany no ekena') 
+        error: getText('Seuls les fichiers PDF sont acceptes pour le CV', 'Ny rakitra PDF ihany no ekena ho an\'ny CV') 
       }));
+      if (cvInputRef.current) cvInputRef.current.value = '';
       return;
     }
     
@@ -356,6 +361,7 @@ export default function JobDetailPage() {
         ...prev, 
         error: getText('Fichier trop grand (max 100 Mo)', 'Lehibe loatra ny rakitra (farany 100 Mo)') 
       }));
+      if (cvInputRef.current) cvInputRef.current.value = '';
       return;
     }
     
@@ -372,6 +378,7 @@ export default function JobDetailPage() {
         ...prev, 
         error: getText('Seuls les fichiers PDF sont acceptes', 'Ny rakitra PDF ihany no ekena') 
       }));
+      if (coverLetterInputRef.current) coverLetterInputRef.current.value = '';
       return;
     }
     
@@ -380,6 +387,7 @@ export default function JobDetailPage() {
         ...prev, 
         error: getText('Fichier trop grand (max 100 Mo)', 'Lehibe loatra ny rakitra (farany 100 Mo)') 
       }));
+      if (coverLetterInputRef.current) coverLetterInputRef.current.value = '';
       return;
     }
     
@@ -396,6 +404,7 @@ export default function JobDetailPage() {
         ...prev, 
         error: getText('Formats acceptes: JPG, PNG, WEBP', 'Endrika azo: JPG, PNG, WEBP') 
       }));
+      if (photoInputRef.current) photoInputRef.current.value = '';
       return;
     }
     
@@ -404,10 +413,10 @@ export default function JobDetailPage() {
         ...prev, 
         error: getText('Photo trop grande (max 5 Mo)', 'Lehibe loatra ny sary (farany 5 Mo)') 
       }));
+      if (photoInputRef.current) photoInputRef.current.value = '';
       return;
     }
     
-    // Nettoyer l'ancienne preview
     if (photoPreview) {
       URL.revokeObjectURL(photoPreview);
     }
@@ -501,8 +510,6 @@ export default function JobDetailPage() {
     
     if (!validateForm()) {
       toast.error(getText('Veuillez corriger les erreurs', 'Ahitsio ny hadisoana'));
-      
-      // Focus sur le premier champ en erreur
       const firstError = validationErrors[0];
       if (firstError) {
         const element = document.querySelector(`[name="${firstError.field}"]`) as HTMLElement;
@@ -525,10 +532,10 @@ export default function JobDetailPage() {
         experience_years: formData.experience_years || 0,
         current_position: formData.current_position?.trim() || undefined,
         current_company: formData.current_company?.trim() || undefined,
-        cv_url: cvState.file?.url || uploadService.getImageUrl(cvState.file?.id || ''),
+        cv_url: cvState.file?.url || uploadService.getFileUrl(cvState.file?.id || ''),
         cover_letter: formData.cover_letter?.trim() || undefined,
-        cover_letter_url: coverLetterState.file?.url || uploadService.getImageUrl(coverLetterState.file?.id || ''),
-        photo_url: photoState.file?.url || uploadService.getImageUrl(photoState.file?.id || ''),
+        cover_letter_url: coverLetterState.file?.url || uploadService.getFileUrl(coverLetterState.file?.id || ''),
+        photo_url: photoState.file?.url || uploadService.getFileUrl(photoState.file?.id || ''),
         linkedin_url: formData.linkedin_url?.trim() || undefined,
         portfolio_url: formData.portfolio_url?.trim() || undefined,
       };
@@ -595,7 +602,6 @@ export default function JobDetailPage() {
       return;
     }
     
-    // Pré-remplir le formulaire avec les données de l'utilisateur
     if (user) {
       setFormData(prev => ({
         ...prev,
@@ -606,6 +612,10 @@ export default function JobDetailPage() {
     }
     
     setShowApplicationForm(true);
+  };
+
+  const toggleSection = (section: string): void => {
+    setActiveSection(activeSection === section ? null : section);
   };
 
   // ============================================================
@@ -658,7 +668,9 @@ export default function JobDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       
-      {/* Header de navigation */}
+      {/* ============================================================
+      EN-TÊTE
+      ============================================================ */}
       <header className="bg-white border-b sticky top-0 z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-4">
           <Link 
@@ -673,16 +685,20 @@ export default function JobDetailPage() {
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         
-        {/* Carte de l'offre */}
+        {/* ============================================================
+        EN-TÊTE DE L'OFFRE
+        ============================================================ */}
         <section className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
           {imageUrl && (
             <div className="relative h-72 w-full bg-gradient-to-r from-blue-800 to-blue-900">
-              <img 
+              <Image 
                 src={imageUrl} 
                 alt={title} 
-                className="w-full h-full object-cover"
+                fill 
+                className="object-cover"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
                 }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
@@ -723,7 +739,7 @@ export default function JobDetailPage() {
               )}
             </div>
 
-            {/* Message pour les visiteurs non authentifies */}
+            {/* Message pour utilisateur non connecté */}
             {isAvailable && !isAuthenticated && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-start gap-3">
                 <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -747,7 +763,7 @@ export default function JobDetailPage() {
               </div>
             )}
 
-            {/* Message si deja postule */}
+            {/* Message pour utilisateur déjà postulé */}
             {isAvailable && isAuthenticated && hasApplied && (
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6 flex items-start gap-3">
                 <UserCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
@@ -768,7 +784,7 @@ export default function JobDetailPage() {
               </div>
             )}
 
-            {/* Bouton d'action principal */}
+            {/* Bouton Postuler */}
             {isAvailable ? (
               isAuthenticated && hasApplied ? (
                 <button
@@ -809,7 +825,9 @@ export default function JobDetailPage() {
           </div>
         </section>
 
-        {/* Description du poste */}
+        {/* ============================================================
+        DESCRIPTION DU POSTE
+        ============================================================ */}
         <section className="bg-white rounded-2xl shadow-lg p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <FileText className="w-6 h-6 text-blue-800" />
@@ -820,7 +838,9 @@ export default function JobDetailPage() {
           </div>
         </section>
 
-        {/* Formulaire de candidature */}
+        {/* ============================================================
+        FORMULAIRE DE CANDIDATURE (MODAL)
+        ============================================================ */}
         {showApplicationForm && isAvailable && isAuthenticated && !hasApplied && (
           <div 
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" 
@@ -831,8 +851,8 @@ export default function JobDetailPage() {
               onClick={(e) => e.stopPropagation()}
             >
               
-              {/* En-tete du formulaire */}
-              <div className="sticky top-0 bg-white border-b p-5 flex justify-between items-center">
+              {/* En-tête du modal */}
+              <div className="sticky top-0 bg-white border-b p-5 flex justify-between items-center z-10">
                 <div>
                   <h2 className="text-xl font-bold text-gray-800">
                     {getText('Candidature', 'Fangatahana')}
@@ -850,407 +870,476 @@ export default function JobDetailPage() {
               
               <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6" noValidate>
                 
-                {/* Section: Photo de profil */}
-                <section className="border-b border-gray-200 pb-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <Camera className="w-5 h-5 text-blue-800" />
-                    <span>{getText('Photo de profil', 'Sary momba anao')}</span>
-                  </h3>
-                  <div className="flex items-center gap-6">
-                    <div className="relative">
-                      <div className="w-24 h-24 rounded-full bg-gray-100 border-2 border-gray-200 overflow-hidden flex items-center justify-center">
-                        {photoPreview ? (
-                          <img src={photoPreview} alt="Profile" className="w-full h-full object-cover" />
-                        ) : (
-                          <User className="w-10 h-10 text-gray-400" />
+                {/* Photo de profil */}
+                <div className="border-b border-gray-200 pb-6">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('photo')}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <Camera className="w-5 h-5 text-blue-800" />
+                      <span>{getText('Photo de profil', 'Sary momba anao')}</span>
+                      <span className="text-xs text-gray-400 font-normal">
+                        ({getText('Optionnel', 'Tsy voatery')})
+                      </span>
+                    </h3>
+                    {activeSection === 'photo' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                  </button>
+                  
+                  {activeSection === 'photo' && (
+                    <div className="mt-4 flex items-center gap-6">
+                      <div className="relative">
+                        <div className="w-24 h-24 rounded-full bg-gray-100 border-2 border-gray-200 overflow-hidden flex items-center justify-center">
+                          {photoPreview ? (
+                            <Image src={photoPreview} alt="Profile" width={96} height={96} className="w-full h-full object-cover" />
+                          ) : (
+                            <User className="w-10 h-10 text-gray-400" />
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => photoInputRef.current?.click()}
+                          className="absolute bottom-0 right-0 p-1.5 bg-blue-800 text-white rounded-full hover:bg-blue-900 transition-colors shadow-md"
+                          aria-label="Uploader une photo"
+                        >
+                          <Camera className="w-3 h-3" />
+                        </button>
+                        <input
+                          ref={photoInputRef}
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={handlePhotoChange}
+                          className="hidden"
+                          aria-label="Photo de profil"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-500">
+                          {getText('Photo de profil (optionnelle)', 'Sary momba anao (tsy voatery)')}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {getText('Formats: JPG, PNG, WEBP. Max 5 Mo', 'Endrika: JPG, PNG, WEBP. Farany 5 Mo')}
+                        </p>
+                        {photoState.file && (
+                          <div className="mt-2 flex items-center gap-2 text-emerald-600 text-sm">
+                            <Check className="w-4 h-4" />
+                            <span>{getText('Photo uploadee', 'Nahomana ny fampidirana sary')}</span>
+                          </div>
+                        )}
+                        {photoState.error && (
+                          <p className="text-xs text-red-500 mt-2">{photoState.error}</p>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => photoInputRef.current?.click()}
-                        className="absolute bottom-0 right-0 p-1.5 bg-blue-800 text-white rounded-full hover:bg-blue-900 transition-colors shadow-md"
-                        aria-label="Uploader une photo"
-                      >
-                        <Camera className="w-3 h-3" />
-                      </button>
-                      <input
-                        ref={photoInputRef}
-                        type="file"
-                        accept="image/jpeg,image/jpg,image/png,image/webp"
-                        onChange={handlePhotoChange}
-                        className="hidden"
-                        aria-label="Photo de profil"
-                      />
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-500">
-                        {getText('Photo de profil (optionnelle)', 'Sary momba anao (tsy voatery)')}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {getText('Formats: JPG, PNG, WEBP. Max 5 Mo', 'Endrika: JPG, PNG, WEBP. Farany 5 Mo')}
-                      </p>
-                      {photoState.file && (
-                        <div className="mt-2 flex items-center gap-2 text-emerald-600 text-sm">
-                          <Check className="w-4 h-4" />
-                          <span>{getText('Photo uploadee', 'Nahomana ny fampidirana sary')}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {photoState.error && (
-                    <p className="text-xs text-red-500 mt-2">{photoState.error}</p>
                   )}
-                </section>
+                </div>
 
-                {/* Section: Informations personnelles */}
-                <section className="border-b border-gray-200 pb-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <User className="w-5 h-5 text-blue-800" />
-                    <span>{getText('Informations personnelles', 'Fampahalalana manokana')}</span>
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
-                        {getText('Nom complet', 'Anarana feno')} <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        id="full_name"
-                        type="text"
-                        name="full_name"
-                        required
-                        value={formData.full_name}
-                        onChange={handleInputChange}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors ${
-                          validationErrors.some(e => e.field === 'full_name') 
-                            ? 'border-red-500' 
-                            : 'border-gray-300'
-                        }`}
-                        placeholder={getText('Votre nom complet', 'Anaranao feno')}
-                      />
-                      {validationErrors.map(err => 
-                        err.field === 'full_name' && (
-                          <p key={err.field} className="text-xs text-red-500 mt-1">{err.message}</p>
-                        )
-                      )}
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                        Email <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        id="email"
-                        type="email"
-                        name="email"
-                        required
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors ${
-                          validationErrors.some(e => e.field === 'email') 
-                            ? 'border-red-500' 
-                            : 'border-gray-300'
-                        }`}
-                        placeholder="votre@email.com"
-                      />
-                      {validationErrors.map(err => 
-                        err.field === 'email' && (
-                          <p key={err.field} className="text-xs text-red-500 mt-1">{err.message}</p>
-                        )
-                      )}
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                        {getText('Telephone', 'Telefaonina')}
-                      </label>
-                      <input
-                        id="phone"
-                        type="tel"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handlePhoneChange}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors ${
-                          validationErrors.some(e => e.field === 'phone') 
-                            ? 'border-red-500' 
-                            : 'border-gray-300'
-                        }`}
-                        placeholder="+261 XX XXX XX"
-                      />
-                      {validationErrors.map(err => 
-                        err.field === 'phone' && (
-                          <p key={err.field} className="text-xs text-red-500 mt-1">{err.message}</p>
-                        )
-                      )}
-                      <p className="text-xs text-gray-400 mt-1">
-                        {getText('Format: +261 XX XXX XX', 'Format: +261 XX XXX XX')}
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-                        {getText('Adresse', 'Adiresy')}
-                      </label>
-                      <input
-                        id="address"
-                        type="text"
-                        name="address"
-                        value={formData.address}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
-                        placeholder={getText('Antananarivo, Madagascar', 'Antananarivo, Madagasikara')}
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                {/* Section: Experience professionnelle */}
-                <section className="border-b border-gray-200 pb-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <Briefcase className="w-5 h-5 text-blue-800" />
-                    <span>{getText('Experience professionnelle', 'Traza')}</span>
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label htmlFor="experience_years" className="block text-sm font-medium text-gray-700 mb-1">
-                        {getText('Annees d\'experience', 'Taona fahaizana')}
-                      </label>
-                      <select
-                        id="experience_years"
-                        name="experience_years"
-                        value={formData.experience_years}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none bg-white"
-                      >
-                        <option value="0">0 - {getText('Debutant', 'Vao manomboka')}</option>
-                        <option value="1">1 {getText('an', 'taona')}</option>
-                        <option value="2">2 {getText('ans', 'taona')}</option>
-                        <option value="3">3 {getText('ans', 'taona')}</option>
-                        <option value="5">5 {getText('ans', 'taona')}</option>
-                        <option value="10">10+ {getText('ans', 'taona')}</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="current_position" className="block text-sm font-medium text-gray-700 mb-1">
-                        {getText('Poste actuel', 'Toerana misy anao')}
-                      </label>
-                      <input
-                        id="current_position"
-                        type="text"
-                        name="current_position"
-                        value={formData.current_position}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
-                        placeholder={getText('Developpeur Web', 'Mpamorona tranokala')}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="current_company" className="block text-sm font-medium text-gray-700 mb-1">
-                        {getText('Entreprise actuelle', 'Orinasa misy anao')}
-                      </label>
-                      <input
-                        id="current_company"
-                        type="text"
-                        name="current_company"
-                        value={formData.current_company}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
-                        placeholder={getText('Tech Company', 'Orinasa teknolojia')}
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                {/* Section: CV */}
-                <section className="border-b border-gray-200 pb-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-blue-800" />
-                    <span>{getText('Curriculum Vitae (CV)', 'Curriculum Vitae (CV)')}</span>
-                    <span className="text-red-500">*</span>
-                    <span className="text-xs text-gray-400 ml-2">(PDF max 100 Mo)</span>
-                  </h3>
+                {/* Informations personnelles */}
+                <div className="border-b border-gray-200 pb-6">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('personal')}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <User className="w-5 h-5 text-blue-800" />
+                      <span>{getText('Informations personnelles', 'Fampahalalana manokana')}</span>
+                      <span className="text-xs text-red-500 font-normal">*</span>
+                    </h3>
+                    {activeSection === 'personal' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                  </button>
                   
-                  {cvState.file ? (
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <FileCheck className="w-8 h-8 text-emerald-600" />
-                        <div>
-                          <p className="font-medium text-gray-800">{cvState.file.fileName}</p>
-                          <p className="text-xs text-gray-500">
-                            PDF - {(cvState.file.fileSize / 1024 / 1024).toFixed(2)} Mo
-                          </p>
-                        </div>
-                      </div>
-                      <button 
-                        type="button" 
-                        onClick={removeCv} 
-                        className="text-red-500 hover:text-red-700 p-2"
-                        aria-label="Supprimer le CV"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div
-                      onClick={() => cvInputRef.current?.click()}
-                      className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
-                        validationErrors.some(e => e.field === 'cv') 
-                          ? 'border-red-400 bg-red-50' 
-                          : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
-                      }`}
-                    >
-                      <input
-                        ref={cvInputRef}
-                        type="file"
-                        accept=".pdf"
-                        onChange={handleCvChange}
-                        className="hidden"
-                      />
-                      {cvState.uploading ? (
-                        <Loader2 className="w-10 h-10 text-blue-800 animate-spin mx-auto mb-2" />
-                      ) : (
-                        <>
-                          <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                          <p className="text-sm text-gray-600">
-                            {getText('Cliquez pour uploader votre CV', 'Tsindrio raha handefa ny CV anao')}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {getText('Format PDF uniquement, max 100 Mo', 'Endrika PDF ihany, farany 100 Mo')}
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  )}
-                  {validationErrors.map(err => 
-                    err.field === 'cv' && (
-                      <p key={err.field} className="text-xs text-red-500 mt-2">{err.message}</p>
-                    )
-                  )}
-                  {cvState.error && (
-                    <p className="text-xs text-red-500 mt-2">{cvState.error}</p>
-                  )}
-                </section>
-
-                {/* Section: Lettre de motivation */}
-                <section className="border-b border-gray-200 pb-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <Mail className="w-5 h-5 text-blue-800" />
-                    <span>{getText('Lettre de motivation', 'Taraty fanekena')}</span>
-                  </h3>
-                  
-                  <div className="mb-4">
-                    <label htmlFor="cover_letter" className="block text-sm font-medium text-gray-700 mb-2">
-                      {getText('Redigez votre lettre', 'Soraty ny taratasy')}
-                    </label>
-                    <div className="quill-editor">
-                      <ReactQuill
-                        theme="snow"
-                        value={formData.cover_letter}
-                        onChange={handleCoverLetterChange}
-                        modules={QUILL_MODULES}
-                        formats={QUILL_FORMATS}
-                        placeholder={getText(
-                          'Pourquoi postulez-vous ? Qu\'est-ce qui vous motive ?',
-                          'Fa maninona no mangataka? Inona no manosika anao?'
+                  {activeSection === 'personal' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
+                          {getText('Nom complet', 'Anarana feno')} <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          id="full_name"
+                          type="text"
+                          name="full_name"
+                          required
+                          value={formData.full_name}
+                          onChange={handleInputChange}
+                          className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors ${
+                            validationErrors.some(e => e.field === 'full_name') 
+                              ? 'border-red-500' 
+                              : 'border-gray-300'
+                          }`}
+                          placeholder={getText('Votre nom complet', 'Anaranao feno')}
+                        />
+                        {validationErrors.map(err => 
+                          err.field === 'full_name' && (
+                            <p key={err.field} className="text-xs text-red-500 mt-1">{err.message}</p>
+                          )
                         )}
-                        className="bg-white"
-                      />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                          Email <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          id="email"
+                          type="email"
+                          name="email"
+                          required
+                          value={formData.email}
+                          onChange={handleInputChange}
+                          className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors ${
+                            validationErrors.some(e => e.field === 'email') 
+                              ? 'border-red-500' 
+                              : 'border-gray-300'
+                          }`}
+                          placeholder="votre@email.com"
+                        />
+                        {validationErrors.map(err => 
+                          err.field === 'email' && (
+                            <p key={err.field} className="text-xs text-red-500 mt-1">{err.message}</p>
+                          )
+                        )}
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                          {getText('Telephone', 'Telefaonina')}
+                        </label>
+                        <input
+                          id="phone"
+                          type="tel"
+                          name="phone"
+                          value={formData.phone}
+                          onChange={handlePhoneChange}
+                          className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors ${
+                            validationErrors.some(e => e.field === 'phone') 
+                              ? 'border-red-500' 
+                              : 'border-gray-300'
+                          }`}
+                          placeholder="+261 XX XXX XX"
+                        />
+                        {validationErrors.map(err => 
+                          err.field === 'phone' && (
+                            <p key={err.field} className="text-xs text-red-500 mt-1">{err.message}</p>
+                          )
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">
+                          {getText('Format: +261 XX XXX XX', 'Format: +261 XX XXX XX')}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
+                          {getText('Adresse', 'Adiresy')}
+                        </label>
+                        <input
+                          id="address"
+                          type="text"
+                          name="address"
+                          value={formData.address}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
+                          placeholder={getText('Antananarivo, Madagascar', 'Antananarivo, Madagasikara')}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
+                </div>
+
+                {/* Expérience professionnelle */}
+                <div className="border-b border-gray-200 pb-6">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('experience')}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <Briefcase className="w-5 h-5 text-blue-800" />
+                      <span>{getText('Experience professionnelle', 'Traza')}</span>
+                    </h3>
+                    {activeSection === 'experience' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                  </button>
                   
-                  <div>
-                    <p className="text-sm text-gray-500 mb-2">
-                      {getText('Ou uploader un fichier PDF', 'Na alefaso ny rakitra PDF')}
-                    </p>
-                    <div
-                      onClick={() => coverLetterInputRef.current?.click()}
-                      className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
-                    >
-                      <input
-                        ref={coverLetterInputRef}
-                        type="file"
-                        accept=".pdf"
-                        onChange={handleCoverLetterFileChange}
-                        className="hidden"
-                      />
-                      {coverLetterState.uploading ? (
-                        <Loader2 className="w-8 h-8 text-blue-800 animate-spin mx-auto" />
-                      ) : coverLetterState.file ? (
-                        <div className="flex items-center justify-center gap-2 text-emerald-600">
-                          <FileCheck className="w-5 h-5" />
-                          <span className="text-sm">{coverLetterState.file.fileName}</span>
-                          <span className="text-xs text-gray-500 ml-1">
-                            ({(coverLetterState.file.fileSize / 1024 / 1024).toFixed(2)} Mo)
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); removeCoverLetterFile(); }}
-                            className="text-red-500 hover:text-red-700"
-                            aria-label="Supprimer la lettre de motivation"
+                  {activeSection === 'experience' && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                      <div>
+                        <label htmlFor="experience_years" className="block text-sm font-medium text-gray-700 mb-1">
+                          {getText('Annees d\'experience', 'Taona fahaizana')}
+                        </label>
+                        <select
+                          id="experience_years"
+                          name="experience_years"
+                          value={formData.experience_years}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none bg-white"
+                        >
+                          <option value="0">0 - {getText('Debutant', 'Vao manomboka')}</option>
+                          <option value="1">1 {getText('an', 'taona')}</option>
+                          <option value="2">2 {getText('ans', 'taona')}</option>
+                          <option value="3">3 {getText('ans', 'taona')}</option>
+                          <option value="5">5 {getText('ans', 'taona')}</option>
+                          <option value="10">10+ {getText('ans', 'taona')}</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="current_position" className="block text-sm font-medium text-gray-700 mb-1">
+                          {getText('Poste actuel', 'Toerana misy anao')}
+                        </label>
+                        <input
+                          id="current_position"
+                          type="text"
+                          name="current_position"
+                          value={formData.current_position}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
+                          placeholder={getText('Developpeur Web', 'Mpamorona tranokala')}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="current_company" className="block text-sm font-medium text-gray-700 mb-1">
+                          {getText('Entreprise actuelle', 'Orinasa misy anao')}
+                        </label>
+                        <input
+                          id="current_company"
+                          type="text"
+                          name="current_company"
+                          value={formData.current_company}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
+                          placeholder={getText('Tech Company', 'Orinasa teknolojia')}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* CV */}
+                <div className="border-b border-gray-200 pb-6">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('cv')}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-blue-800" />
+                      <span>{getText('Curriculum Vitae (CV)', 'Curriculum Vitae (CV)')}</span>
+                      <span className="text-xs text-red-500 font-normal">*</span>
+                      <span className="text-xs text-gray-400 font-normal">(PDF max 100 Mo)</span>
+                    </h3>
+                    {activeSection === 'cv' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                  </button>
+                  
+                  {activeSection === 'cv' && (
+                    <div className="mt-4">
+                      {cvState.file ? (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <FileCheck className="w-8 h-8 text-emerald-600" />
+                            <div>
+                              <p className="font-medium text-gray-800">{cvState.file.fileName}</p>
+                              <p className="text-xs text-gray-500">
+                                PDF - {(cvState.file.fileSize / 1024 / 1024).toFixed(2)} Mo
+                              </p>
+                            </div>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={removeCv} 
+                            className="text-red-500 hover:text-red-700 p-2"
+                            aria-label="Supprimer le CV"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       ) : (
-                        <>
-                          <Upload className="w-8 h-8 text-gray-400 mx-auto mb-1" />
-                          <p className="text-xs text-gray-500">
-                            {getText('PDF max 100 Mo', 'PDF farany 100 Mo')}
-                          </p>
-                        </>
+                        <div
+                          onClick={() => cvInputRef.current?.click()}
+                          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                            validationErrors.some(e => e.field === 'cv') 
+                              ? 'border-red-400 bg-red-50' 
+                              : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                          }`}
+                        >
+                          <input
+                            ref={cvInputRef}
+                            type="file"
+                            accept=".pdf"
+                            onChange={handleCvChange}
+                            className="hidden"
+                          />
+                          {cvState.uploading ? (
+                            <Loader2 className="w-10 h-10 text-blue-800 animate-spin mx-auto mb-2" />
+                          ) : (
+                            <>
+                              <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                              <p className="text-sm text-gray-600">
+                                {getText('Cliquez pour uploader votre CV', 'Tsindrio raha handefa ny CV anao')}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {getText('Format PDF uniquement, max 100 Mo', 'Endrika PDF ihany, farany 100 Mo')}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      {validationErrors.map(err => 
+                        err.field === 'cv' && (
+                          <p key={err.field} className="text-xs text-red-500 mt-2">{err.message}</p>
+                        )
+                      )}
+                      {cvState.error && (
+                        <p className="text-xs text-red-500 mt-2">{cvState.error}</p>
                       )}
                     </div>
-                  </div>
-                  {coverLetterState.error && (
-                    <p className="text-xs text-red-500 mt-2">{coverLetterState.error}</p>
                   )}
-                </section>
+                </div>
 
-                {/* Section: Liens professionnels */}
-                <section className="border-b border-gray-200 pb-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <Globe className="w-5 h-5 text-blue-800" />
-                    <span>{getText('Liens professionnels', 'Rohy momba ny asa')}</span>
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="linkedin_url" className="block text-sm font-medium text-gray-700 mb-1">
-                        LinkedIn
-                      </label>
-                      <div className="relative">
-                        <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                          id="linkedin_url"
-                          type="url"
-                          name="linkedin_url"
-                          value={formData.linkedin_url}
-                          onChange={handleInputChange}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
-                          placeholder="https://linkedin.com/in/..."
-                        />
+                {/* Lettre de motivation */}
+                <div className="border-b border-gray-200 pb-6">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('cover')}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <Mail className="w-5 h-5 text-blue-800" />
+                      <span>{getText('Lettre de motivation', 'Taraty fanekena')}</span>
+                    </h3>
+                    {activeSection === 'cover' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                  </button>
+                  
+                  {activeSection === 'cover' && (
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <label htmlFor="cover_letter" className="block text-sm font-medium text-gray-700 mb-2">
+                          {getText('Redigez votre lettre', 'Soraty ny taratasy')}
+                        </label>
+                        <div className="quill-editor">
+                          <ReactQuill
+                            theme="snow"
+                            value={formData.cover_letter}
+                            onChange={handleCoverLetterChange}
+                            modules={QUILL_MODULES}
+                            formats={QUILL_FORMATS}
+                            placeholder={getText(
+                              'Pourquoi postulez-vous ? Qu\'est-ce qui vous motive ?',
+                              'Fa maninona no mangataka? Inona no manosika anao?'
+                            )}
+                            className="bg-white"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <p className="text-sm text-gray-500 mb-2">
+                          {getText('Ou uploader un fichier PDF', 'Na alefaso ny rakitra PDF')}
+                        </p>
+                        <div
+                          onClick={() => coverLetterInputRef.current?.click()}
+                          className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                        >
+                          <input
+                            ref={coverLetterInputRef}
+                            type="file"
+                            accept=".pdf"
+                            onChange={handleCoverLetterFileChange}
+                            className="hidden"
+                          />
+                          {coverLetterState.uploading ? (
+                            <Loader2 className="w-8 h-8 text-blue-800 animate-spin mx-auto" />
+                          ) : coverLetterState.file ? (
+                            <div className="flex items-center justify-center gap-2 text-emerald-600">
+                              <FileCheck className="w-5 h-5" />
+                              <span className="text-sm">{coverLetterState.file.fileName}</span>
+                              <span className="text-xs text-gray-500 ml-1">
+                                ({(coverLetterState.file.fileSize / 1024 / 1024).toFixed(2)} Mo)
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); removeCoverLetterFile(); }}
+                                className="text-red-500 hover:text-red-700"
+                                aria-label="Supprimer la lettre de motivation"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <Upload className="w-8 h-8 text-gray-400 mx-auto mb-1" />
+                              <p className="text-xs text-gray-500">
+                                {getText('PDF max 100 Mo', 'PDF farany 100 Mo')}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {coverLetterState.error && (
+                        <p className="text-xs text-red-500 mt-2">{coverLetterState.error}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Liens professionnels */}
+                <div className="border-b border-gray-200 pb-6">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('links')}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <Globe className="w-5 h-5 text-blue-800" />
+                      <span>{getText('Liens professionnels', 'Rohy momba ny asa')}</span>
+                      <span className="text-xs text-gray-400 font-normal">
+                        ({getText('Optionnel', 'Tsy voatery')})
+                      </span>
+                    </h3>
+                    {activeSection === 'links' ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                  </button>
+                  
+                  {activeSection === 'links' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label htmlFor="linkedin_url" className="block text-sm font-medium text-gray-700 mb-1">
+                          LinkedIn
+                        </label>
+                        <div className="relative">
+                          <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <input
+                            id="linkedin_url"
+                            type="url"
+                            name="linkedin_url"
+                            value={formData.linkedin_url}
+                            onChange={handleInputChange}
+                            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
+                            placeholder="https://linkedin.com/in/..."
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="portfolio_url" className="block text-sm font-medium text-gray-700 mb-1">
+                          {getText('Portfolio / Site web', 'Portfolio / Tranokala')}
+                        </label>
+                        <div className="relative">
+                          <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <input
+                            id="portfolio_url"
+                            type="url"
+                            name="portfolio_url"
+                            value={formData.portfolio_url}
+                            onChange={handleInputChange}
+                            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
+                            placeholder="https://..."
+                          />
+                        </div>
                       </div>
                     </div>
-                    
-                    <div>
-                      <label htmlFor="portfolio_url" className="block text-sm font-medium text-gray-700 mb-1">
-                        {getText('Portfolio / Site web', 'Portfolio / Tranokala')}
-                      </label>
-                      <div className="relative">
-                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                          id="portfolio_url"
-                          type="url"
-                          name="portfolio_url"
-                          value={formData.portfolio_url}
-                          onChange={handleInputChange}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none transition-colors"
-                          placeholder="https://..."
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </section>
+                  )}
+                </div>
 
                 {/* Boutons d'action */}
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
@@ -1289,7 +1378,6 @@ export default function JobDetailPage() {
         )}
       </main>
 
-      {/* Styles globaux pour l'editeur Quill */}
       <style jsx global>{`
         .quill-editor .ql-container {
           min-height: 250px;

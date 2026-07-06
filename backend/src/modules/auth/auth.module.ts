@@ -13,7 +13,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { User } from '../../entities/user.entity';
 import { UploadedFile } from '../../entities/uploaded-file.entity';
 import { UploadService } from '../upload/upload.service';
-import { EmailService } from '../email/email.service';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -29,6 +29,7 @@ import { EmailService } from '../email/email.service';
       }),
       inject: [ConfigService],
     }),
+    EmailModule,
   ],
   controllers: [AuthController],
   providers: [
@@ -37,7 +38,6 @@ import { EmailService } from '../email/email.service';
     JwtAuthGuard,
     RolesGuard,
     UploadService,
-    EmailService,
   ],
   exports: [AuthService, JwtAuthGuard, RolesGuard],
 })

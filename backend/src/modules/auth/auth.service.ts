@@ -71,6 +71,13 @@ export class AuthService {
     await this.userRepository.save(user);
     this.logger.log(`Nouvel utilisateur cree: ${email}`);
 
+    try {
+      await this.emailService.sendWelcomeEmail(email, first_name);
+      this.logger.log(`Email de bienvenue envoye a ${email}`);
+    } catch (error) {
+      this.logger.error(`Erreur envoi email de bienvenue a ${email}:`, error.message);
+    }
+
     return {
       success: true,
       message: 'Inscription reussie',
@@ -234,7 +241,7 @@ export class AuthService {
   }
 
   // ============================================================
-  // GESTION DES PREFERENCES - APPARENCE
+  // GESTION DES PREFERENCES
   // ============================================================
 
   async getPreferences(userId: string): Promise<any> {
@@ -266,7 +273,6 @@ export class AuthService {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
-    // Champs de theme/apparence
     const appearanceFields = ['theme', 'font_size', 'density', 'sidebar_collapsed', 'animations_enabled'];
     for (const field of appearanceFields) {
       if (preferencesDto[field] !== undefined) {
@@ -274,7 +280,6 @@ export class AuthService {
       }
     }
 
-    // Champs de langue/fuseau horaire
     const localeFields = ['preferred_language', 'timezone'];
     for (const field of localeFields) {
       if (preferencesDto[field] !== undefined) {
@@ -282,7 +287,6 @@ export class AuthService {
       }
     }
 
-    // Champs de notifications
     const notificationFields = [
       'email_notifications', 'push_notifications', 'job_alerts',
       'project_updates', 'blog_updates', 'system_updates'
@@ -316,10 +320,6 @@ export class AuthService {
       }
     };
   }
-
-  // ============================================================
-  // MISE A JOUR UNIQUEMENT DES PREFERENCES APPARENCE
-  // ============================================================
 
   async updateAppearancePreferences(userId: string, appearanceDto: any): Promise<any> {
     const user = await this.userRepository.findOne({ where: { id: userId } });

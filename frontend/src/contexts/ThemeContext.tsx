@@ -4,6 +4,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { authApi } from '@/lib/api';
+import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
 
 // ============================================================
@@ -20,6 +21,7 @@ export interface ThemePreferences {
 
 export interface ThemeContextType extends ThemePreferences {
   loading: boolean;
+  isInitialized: boolean;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setFontSize: (size: 'small' | 'medium' | 'large') => void;
   setDensity: (density: 'compact' | 'comfortable' | 'spacious') => void;
@@ -40,50 +42,46 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 // ============================================================
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  
   const [loading, setLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
+  
   const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>('light');
   const [fontSize, setFontSizeState] = useState<'small' | 'medium' | 'large'>('medium');
   const [density, setDensityState] = useState<'compact' | 'comfortable' | 'spacious'>('comfortable');
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(false);
   const [animationsEnabled, setAnimationsEnabledState] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
 
   // ============================================================
-  // APPLICATION DU THEME - FONCTION CRITIQUE
+  // APPLICATION DU THEME
   // ============================================================
 
   const applyTheme = useCallback((newTheme: 'light' | 'dark' | 'system') => {
     const root = document.documentElement;
     
-    // Supprimer toutes les classes de theme
     root.classList.remove('light', 'dark');
     
     if (newTheme === 'dark') {
       root.classList.add('dark');
       document.documentElement.style.colorScheme = 'dark';
       localStorage.setItem('theme', 'dark');
-      console.log('[Theme] Mode sombre active');
     } else if (newTheme === 'light') {
       root.classList.remove('dark');
       document.documentElement.style.colorScheme = 'light';
       localStorage.setItem('theme', 'light');
-      console.log('[Theme] Mode clair active');
     } else {
-      // System
       localStorage.removeItem('theme');
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       if (prefersDark) {
         root.classList.add('dark');
         document.documentElement.style.colorScheme = 'dark';
-        console.log('[Theme] Mode systeme: sombre');
       } else {
         root.classList.remove('dark');
         document.documentElement.style.colorScheme = 'light';
-        console.log('[Theme] Mode systeme: clair');
       }
     }
     
-    // Mettre a jour la meta tag
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
       const isDark = root.classList.contains('dark');
@@ -92,56 +90,67 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ============================================================
-  // CHARGEMENT DES PREFERENCES
+  // CHARGEMENT DES PRÉFÉRENCES
   // ============================================================
 
-  const loadPreferences = useCallback(async () => {
+  const loadPreferences = useCallback(async (forceRefresh: boolean = false) => {
     try {
-      console.log('[Theme] Chargement des preferences...');
+      console.log('[Theme] Chargement des préférences...');
       
-      // Recuperer le theme depuis localStorage d'abord
+      // ✅ Récupérer les valeurs locales
       const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null;
+      const savedSidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
       
-      let themeValue: 'light' | 'dark' | 'system' = 'light';
+      let themeValue: 'light' | 'dark' | 'system' = savedTheme || 'light';
       let fontSizeValue: 'small' | 'medium' | 'large' = 'medium';
       let densityValue: 'compact' | 'comfortable' | 'spacious' = 'comfortable';
-      let sidebarCollapsedValue = false;
+      let sidebarCollapsedValue = savedSidebarCollapsed;
       let animationsEnabledValue = true;
 
-      // Essayer de charger depuis l'API
-      try {
-        const response = await authApi.getPreferences();
-        if (response) {
-          themeValue = (response.theme as any) || savedTheme || 'light';
-          fontSizeValue = (response.fontSize as any) || 'medium';
-          densityValue = (response.density as any) || 'comfortable';
-          sidebarCollapsedValue = response.sidebarCollapsed || false;
-          animationsEnabledValue = response.animationsEnabled !== false;
+      // ✅ Si l'utilisateur est authentifié, charger depuis l'API
+      if (isAuthenticated && !forceRefresh) {
+        try {
+          console.log('[Theme] Chargement des préférences depuis l\'API...');
+          const response = await authApi.getPreferences();
+          
+          if (response) {
+            themeValue = (response.theme as any) || savedTheme || 'light';
+            fontSizeValue = (response.fontSize as any) || 'medium';
+            densityValue = (response.density as any) || 'comfortable';
+            sidebarCollapsedValue = response.sidebarCollapsed ?? savedSidebarCollapsed;
+            animationsEnabledValue = response.animationsEnabled !== false;
+            
+            console.log('[Theme] Préférences chargées depuis l\'API');
+          }
+        } catch (apiError: any) {
+          // ✅ Ignorer les erreurs 401 (non authentifié)
+          if (apiError.response?.status === 401) {
+            console.log('[Theme] Utilisateur non authentifié, utilisation des valeurs locales');
+          } else {
+            console.warn('[Theme] Erreur API:', apiError.message);
+          }
         }
-      } catch (apiError) {
-        console.warn('[Theme] Erreur API, utilisation des valeurs localStorage:', apiError);
-        if (savedTheme) {
-          themeValue = savedTheme;
-        }
+      } else {
+        console.log('[Theme] Utilisation des valeurs locales');
       }
 
-      // Appliquer le theme
+      // ✅ Mettre à jour l'état
       setThemeState(themeValue);
       setFontSizeState(fontSizeValue);
       setDensityState(densityValue);
       setSidebarCollapsedState(sidebarCollapsedValue);
       setAnimationsEnabledState(animationsEnabledValue);
       
-      // Appliquer le theme au DOM
+      // ✅ Appliquer le thème
       applyTheme(themeValue);
       
-      // Appliquer la taille de police
+      // ✅ Appliquer la taille de police
       document.documentElement.style.fontSize = 
         fontSizeValue === 'small' ? '14px' : 
         fontSizeValue === 'large' ? '18px' : 
         '16px';
       
-      // Appliquer la densite
+      // ✅ Appliquer la densité
       const densityClass = {
         compact: 'density-compact',
         comfortable: 'density-comfortable',
@@ -150,7 +159,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       document.documentElement.classList.remove('density-compact', 'density-comfortable', 'density-spacious');
       document.documentElement.classList.add(densityClass);
       
-      // Appliquer les animations
+      // ✅ Appliquer les animations
       if (!animationsEnabledValue) {
         document.documentElement.classList.add('animations-disabled');
       } else {
@@ -158,24 +167,31 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       }
       
       setIsInitialized(true);
-      console.log('[Theme] Preferences chargees:', { theme: themeValue });
+      console.log('[Theme] Préférences chargées:', { theme: themeValue });
     } catch (error) {
-      console.error('[Theme] Erreur chargement preferences:', error);
+      console.error('[Theme] Erreur chargement préférences:', error);
       applyTheme('light');
       setIsInitialized(true);
     } finally {
       setLoading(false);
     }
-  }, [applyTheme]);
+  }, [isAuthenticated, applyTheme]);
 
   // ============================================================
-  // INITIALISATION
+  // INITIALISATION - Attendre que AuthContext soit prêt
   // ============================================================
 
   useEffect(() => {
+    // ✅ Attendre que AuthContext ait fini de charger
+    if (authLoading) {
+      console.log('[Theme] Attente de l\'authentification...');
+      return;
+    }
+
+    console.log('[Theme] Authentification terminée, chargement des préférences...');
     loadPreferences();
     
-    // Ecouter les changements de theme systeme
+    // ✅ Écouter les changements de thème système
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => {
       if (theme === 'system') {
@@ -185,14 +201,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     mediaQuery.addEventListener('change', handleChange);
     
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [loadPreferences, theme, applyTheme]);
+  }, [authLoading, loadPreferences, theme, applyTheme]);
 
   // ============================================================
-  // SETTERS AVEC LOG
+  // SETTERS
   // ============================================================
 
   const setTheme = useCallback((newTheme: 'light' | 'dark' | 'system') => {
-    console.log('[Theme] setTheme appele avec:', newTheme);
+    console.log('[Theme] setTheme appelé avec:', newTheme);
     setThemeState(newTheme);
     applyTheme(newTheme);
   }, [applyTheme]);
@@ -236,43 +252,54 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ============================================================
-  // SAUVEGARDE DES PREFERENCES
+  // SAUVEGARDE DES PRÉFÉRENCES
   // ============================================================
 
   const updatePreferences = useCallback(async (prefs: Partial<ThemePreferences>) => {
     try {
-      console.log('[Theme] Sauvegarde des preferences:', prefs);
+      console.log('[Theme] Sauvegarde des préférences:', prefs);
       
+      // ✅ Mettre à jour localement
       if (prefs.theme !== undefined) setTheme(prefs.theme);
       if (prefs.fontSize !== undefined) setFontSize(prefs.fontSize);
       if (prefs.density !== undefined) setDensity(prefs.density);
       if (prefs.sidebarCollapsed !== undefined) setSidebarCollapsed(prefs.sidebarCollapsed);
       if (prefs.animationsEnabled !== undefined) setAnimationsEnabled(prefs.animationsEnabled);
       
-      const apiData: any = {};
-      if (prefs.theme !== undefined) apiData.theme = prefs.theme;
-      if (prefs.fontSize !== undefined) apiData.font_size = prefs.fontSize;
-      if (prefs.density !== undefined) apiData.density = prefs.density;
-      if (prefs.sidebarCollapsed !== undefined) apiData.sidebar_collapsed = prefs.sidebarCollapsed;
-      if (prefs.animationsEnabled !== undefined) apiData.animations_enabled = prefs.animationsEnabled;
+      // ✅ Sauvegarder dans le localStorage
+      if (prefs.sidebarCollapsed !== undefined) {
+        localStorage.setItem('sidebarCollapsed', String(prefs.sidebarCollapsed));
+      }
       
-      await authApi.updatePreferences(apiData);
+      // ✅ Sauvegarder dans l'API si authentifié
+      if (isAuthenticated) {
+        const apiData: any = {};
+        if (prefs.theme !== undefined) apiData.theme = prefs.theme;
+        if (prefs.fontSize !== undefined) apiData.font_size = prefs.fontSize;
+        if (prefs.density !== undefined) apiData.density = prefs.density;
+        if (prefs.sidebarCollapsed !== undefined) apiData.sidebar_collapsed = prefs.sidebarCollapsed;
+        if (prefs.animationsEnabled !== undefined) apiData.animations_enabled = prefs.animationsEnabled;
+        
+        await authApi.updatePreferences(apiData);
+        console.log('[Theme] Préférences sauvegardées avec succès');
+      } else {
+        console.log('[Theme] Non authentifié, sauvegarde locale uniquement');
+      }
       
-      toast.success('Preferences mises a jour');
-      console.log('[Theme] Preferences sauvegardees avec succes');
+      toast.success('Préférences mises à jour');
     } catch (error) {
-      console.error('[Theme] Erreur sauvegarde preferences:', error);
+      console.error('[Theme] Erreur sauvegarde préférences:', error);
       toast.error('Erreur lors de la sauvegarde');
       throw error;
     }
-  }, [setTheme, setFontSize, setDensity, setSidebarCollapsed, setAnimationsEnabled]);
+  }, [isAuthenticated, setTheme, setFontSize, setDensity, setSidebarCollapsed, setAnimationsEnabled]);
 
   // ============================================================
-  // RAFRAICHIR
+  // RAFRAÎCHIR
   // ============================================================
 
   const refreshPreferences = useCallback(async () => {
-    await loadPreferences();
+    await loadPreferences(true);
   }, [loadPreferences]);
 
   // ============================================================
@@ -286,6 +313,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     sidebarCollapsed,
     animationsEnabled,
     loading,
+    isInitialized,
     setTheme,
     setFontSize,
     setDensity,
@@ -303,7 +331,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 }
 
 // ============================================================
-// HOOK PERSONNALISE
+// HOOK PERSONNALISÉ
 // ============================================================
 
 export const useTheme = (): ThemeContextType => {
