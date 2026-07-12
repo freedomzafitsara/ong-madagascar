@@ -1,9 +1,8 @@
 // backend/src/modules/contact/contact.service.ts
-
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, FindOptionsWhere, MoreThanOrEqual, Between, In } from 'typeorm';
-import { Contact } from './entities/contact.entity';
+import { Contact, ContactStatus } from './entities/contact.entity';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactStatusDto } from './dto/update-contact-status.dto';
 
@@ -17,36 +16,38 @@ export class ContactService {
   ) {}
 
   // ============================================================
-  // CREATION D'UN MESSAGE
+  // CRÉATION D'UN MESSAGE
   // ============================================================
 
   async createMessage(createDto: CreateContactDto, ipAddress?: string): Promise<Contact> {
-    const name = createDto.full_name || '';
-    
-    if (!name) {
-      throw new BadRequestException('Le nom est requis');
+    try {
+      // ✅ Utiliser full_name directement
+      const name = createDto.full_name || 'Client';
+      
+      this.logger.log(`📩 Nouveau message de ${name} (${createDto.email})`);
+
+      const message = this.contactRepository.create({
+        name: name,
+        email: createDto.email,
+        phone: createDto.phone || null,
+        subject: createDto.subject || 'Sans sujet',
+        message: createDto.message,
+        status: 'unread',
+        ip_address: ipAddress || null,
+      });
+
+      const saved = await this.contactRepository.save(message);
+      this.logger.log(`✅ Message enregistré avec l'ID: ${saved.id}`);
+      
+      return saved;
+    } catch (error) {
+      this.logger.error(`❌ Erreur création message: ${error.message}`);
+      throw new BadRequestException(`Erreur lors de la création du message: ${error.message}`);
     }
-
-    this.logger.log(`Nouveau message de ${name} (${createDto.email})`);
-
-    const message = this.contactRepository.create({
-      name: name,
-      email: createDto.email,
-      phone: createDto.phone || null,
-      subject: createDto.subject,
-      message: createDto.message,
-      status: 'unread',
-      ip_address: ipAddress || null,
-    });
-
-    const saved = await this.contactRepository.save(message);
-    this.logger.log(`Message enregistre avec l'ID: ${saved.id}`);
-    
-    return saved;
   }
 
   // ============================================================
-  // RECUPERATION DES MESSAGES
+  // RÉCUPÉRATION DES MESSAGES
   // ============================================================
 
   async findAll(
@@ -58,20 +59,36 @@ export class ContactService {
     const skip = (page - 1) * limit;
     const where: FindOptionsWhere<Contact> = {};
 
-    // ✅ CORRECTION: Utiliser un type guard pour s'assurer que status est valide
     if (status && status !== 'all') {
-      const validStatuses: ('unread' | 'read' | 'replied' | 'archived')[] = ['unread', 'read', 'replied', 'archived'];
-      if (validStatuses.includes(status as any)) {
-        where.status = status as 'unread' | 'read' | 'replied' | 'archived';
+      const validStatuses: ContactStatus[] = ['unread', 'read', 'replied', 'archived'];
+      if (validStatuses.includes(status as ContactStatus)) {
+        where.status = status as ContactStatus;
       }
     }
 
-    if (search) {
-      where.name = Like(`%${search}%`);
+    if (search && search.trim().length >= 2) {
+      const searchTerm = `%${search.trim()}%`;
+      return this.contactRepository
+        .createQueryBuilder('contact')
+        .where('contact.name ILIKE :search', { search: searchTerm })
+        .orWhere('contact.email ILIKE :search', { search: searchTerm })
+        .orWhere('contact.subject ILIKE :search', { search: searchTerm })
+        .orWhere('contact.message ILIKE :search', { search: searchTerm })
+        .andWhere(status && status !== 'all' ? 'contact.status = :status' : '1=1', { status })
+        .orderBy('contact.created_at', 'DESC')
+        .skip(skip)
+        .take(limit)
+        .getManyAndCount()
+        .then(([data, total]) => ({
+          data,
+          total,
+          page,
+          totalPages: Math.ceil(total / limit),
+        }));
     }
 
     const [data, total] = await this.contactRepository.findAndCount({
-      where,
+      where: Object.keys(where).length > 0 ? where : undefined,
       order: { created_at: 'DESC' },
       skip,
       take: limit,
@@ -86,7 +103,7 @@ export class ContactService {
   }
 
   // ============================================================
-  // STATISTIQUES AVANCÉES
+  // STATISTIQUES
   // ============================================================
 
   async getStats(): Promise<{
@@ -108,29 +125,18 @@ export class ContactService {
     const startOfWeek = new Date();
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
-    
     const thisWeek = await this.contactRepository.count({
-      where: {
-        created_at: MoreThanOrEqual(startOfWeek),
-      },
+      where: { created_at: MoreThanOrEqual(startOfWeek) },
     });
 
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
-    
     const thisMonth = await this.contactRepository.count({
-      where: {
-        created_at: MoreThanOrEqual(startOfMonth),
-      },
+      where: { created_at: MoreThanOrEqual(startOfMonth) },
     });
 
-    const pending = await this.contactRepository.count({
-      where: [
-        { status: 'unread' },
-        { status: 'read' },
-      ],
-    });
+    const pending = unread + read;
 
     return { 
       total, 
@@ -145,53 +151,12 @@ export class ContactService {
   }
 
   // ============================================================
-  // STATISTIQUES PAR PERIODE
-  // ============================================================
-
-  async getStatsByPeriod(startDate: Date, endDate: Date): Promise<{
-    total: number;
-    byStatus: Record<string, number>;
-    daily: { date: string; count: number }[];
-  }> {
-    const messages = await this.contactRepository.find({
-      where: {
-        created_at: Between(startDate, endDate),
-      },
-      order: { created_at: 'ASC' },
-    });
-
-    const total = messages.length;
-    
-    const byStatus: Record<string, number> = {};
-    messages.forEach(msg => {
-      byStatus[msg.status] = (byStatus[msg.status] || 0) + 1;
-    });
-
-    const dailyMap: Record<string, number> = {};
-    messages.forEach(msg => {
-      const date = msg.created_at.toISOString().split('T')[0];
-      dailyMap[date] = (dailyMap[date] || 0) + 1;
-    });
-
-    const daily = Object.entries(dailyMap).map(([date, count]) => ({
-      date,
-      count,
-    }));
-
-    return { total, byStatus, daily };
-  }
-
-  // ============================================================
-  // MISE A JOUR DU STATUT
+  // MISE À JOUR DU STATUT
   // ============================================================
 
   async updateStatus(id: string, updateDto: UpdateContactStatusDto): Promise<Contact> {
     const message = await this.findOne(id);
     
-    if (!message) {
-      throw new NotFoundException(`Message avec ID ${id} non trouve`);
-    }
-
     message.status = updateDto.status;
     
     if (updateDto.status === 'replied') {
@@ -207,39 +172,7 @@ export class ContactService {
     }
 
     await this.contactRepository.save(message);
-    this.logger.log(`Statut du message ${id} mis a jour: ${updateDto.status}`);
-    
-    return message;
-  }
-
-  // ============================================================
-  // MARQUER COMME LU
-  // ============================================================
-
-  async markAsRead(id: string): Promise<Contact> {
-    const message = await this.findOne(id);
-    
-    if (message.status === 'unread') {
-      message.status = 'read';
-      message.read_at = new Date();
-      await this.contactRepository.save(message);
-      this.logger.log(`Message ${id} marque comme lu`);
-    }
-    
-    return message;
-  }
-
-  // ============================================================
-  // MARQUER COMME REPONDU
-  // ============================================================
-
-  async markAsReplied(id: string): Promise<Contact> {
-    const message = await this.findOne(id);
-    
-    message.status = 'replied';
-    message.replied_at = new Date();
-    await this.contactRepository.save(message);
-    this.logger.log(`Message ${id} marque comme repondu`);
+    this.logger.log(`✅ Statut du message ${id} mis à jour: ${updateDto.status}`);
     
     return message;
   }
@@ -251,16 +184,15 @@ export class ContactService {
   async exportMessages(status?: string): Promise<any[]> {
     const where: FindOptionsWhere<Contact> = {};
     
-    // ✅ CORRECTION: Utiliser un type guard pour s'assurer que status est valide
     if (status && status !== 'all') {
-      const validStatuses: ('unread' | 'read' | 'replied' | 'archived')[] = ['unread', 'read', 'replied', 'archived'];
-      if (validStatuses.includes(status as any)) {
-        where.status = status as 'unread' | 'read' | 'replied' | 'archived';
+      const validStatuses: ContactStatus[] = ['unread', 'read', 'replied', 'archived'];
+      if (validStatuses.includes(status as ContactStatus)) {
+        where.status = status as ContactStatus;
       }
     }
 
     const messages = await this.contactRepository.find({
-      where,
+      where: Object.keys(where).length > 0 ? where : undefined,
       order: { created_at: 'DESC' },
     });
 
@@ -268,34 +200,15 @@ export class ContactService {
       'ID': msg.id,
       'Nom': msg.name,
       'Email': msg.email,
-      'Telephone': msg.phone || '',
+      'Téléphone': msg.phone || '',
       'Sujet': msg.subject,
       'Message': msg.message.replace(/<[^>]*>/g, '').substring(0, 1000),
-      'Statut': msg.status,
-      'Date': msg.created_at.toISOString(),
+      'Statut': msg.getStatusLabel('fr'),
+      'Date': new Date(msg.created_at).toLocaleDateString('fr-FR'),
+      'Heure': new Date(msg.created_at).toLocaleTimeString('fr-FR'),
       'IP': msg.ip_address || '',
+      'Notes': msg.admin_notes || '',
     }));
-  }
-
-  // ============================================================
-  // RECHERCHE
-  // ============================================================
-
-  async searchMessages(query: string): Promise<Contact[]> {
-    if (!query || query.length < 2) {
-      return [];
-    }
-
-    return this.contactRepository.find({
-      where: [
-        { name: Like(`%${query}%`) },
-        { email: Like(`%${query}%`) },
-        { subject: Like(`%${query}%`) },
-        { message: Like(`%${query}%`) },
-      ],
-      order: { created_at: 'DESC' },
-      take: 20,
-    });
   }
 
   // ============================================================
@@ -305,7 +218,7 @@ export class ContactService {
   async findOne(id: string): Promise<Contact> {
     const message = await this.contactRepository.findOne({ where: { id } });
     if (!message) {
-      throw new NotFoundException(`Message avec ID ${id} non trouve`);
+      throw new NotFoundException(`Message avec ID ${id} non trouvé`);
     }
     return message;
   }
@@ -313,7 +226,7 @@ export class ContactService {
   async deleteMessage(id: string): Promise<void> {
     const message = await this.findOne(id);
     await this.contactRepository.remove(message);
-    this.logger.log(`Message ${id} supprime`);
+    this.logger.log(`🗑️ Message ${id} supprimé`);
   }
 
   // ============================================================
@@ -326,8 +239,7 @@ export class ContactService {
     }
 
     const result = await this.contactRepository.delete({ id: In(ids) });
-    this.logger.log(`${result.affected} messages supprimes`);
-    
+    this.logger.log(`🗑️ ${result.affected} messages supprimés`);
     return { deleted: result.affected || 0 };
   }
 
@@ -345,8 +257,29 @@ export class ContactService {
       { status: 'archived' }
     );
     
-    this.logger.log(`${result.affected} messages archives`);
+    this.logger.log(`📦 ${result.affected} messages archivés`);
     return { archived: result.affected || 0 };
+  }
+
+  // ============================================================
+  // RECHERCHE
+  // ============================================================
+
+  async searchMessages(query: string): Promise<Contact[]> {
+    if (!query || query.length < 2) {
+      return [];
+    }
+
+    const searchTerm = `%${query.trim()}%`;
+    return this.contactRepository
+      .createQueryBuilder('contact')
+      .where('contact.name ILIKE :search', { search: searchTerm })
+      .orWhere('contact.email ILIKE :search', { search: searchTerm })
+      .orWhere('contact.subject ILIKE :search', { search: searchTerm })
+      .orWhere('contact.message ILIKE :search', { search: searchTerm })
+      .orderBy('contact.created_at', 'DESC')
+      .take(20)
+      .getMany();
   }
 
   // ============================================================
@@ -384,19 +317,14 @@ export class ContactService {
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
     const recentMessages = await this.contactRepository.count({
-      where: {
-        created_at: MoreThanOrEqual(thirtyDaysAgo),
-      },
+      where: { created_at: MoreThanOrEqual(thirtyDaysAgo) },
     });
-
-    const messagesPerDay = Math.round(recentMessages / 30);
 
     return {
       averageResponseTime,
       responseRate,
-      messagesPerDay,
+      messagesPerDay: Math.round(recentMessages / 30),
     };
   }
 }

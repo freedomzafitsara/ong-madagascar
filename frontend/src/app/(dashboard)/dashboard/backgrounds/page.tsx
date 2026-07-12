@@ -96,7 +96,7 @@ const SIZE_OPTIONS = [
 ];
 
 // ============================================================
-// FONCTIONS UTILITAIRES
+// FONCTIONS UTILITAIRES - CORRIGEES
 // ============================================================
 
 const toBoolean = (value: unknown): boolean => {
@@ -108,6 +108,28 @@ const toBoolean = (value: unknown): boolean => {
     return value !== 0;
   }
   return false;
+};
+
+/**
+ * ✅ Construit l'URL complète d'une image - CORRIGE
+ * Retourne une chaîne non-null
+ */
+const buildImageUrl = (url?: string | null): string => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
+  if (url.startsWith('/uploads')) {
+    return `${baseUrl}${url}`;
+  }
+  if (url.startsWith('/api/uploads')) {
+    return `${baseUrl}${url}`;
+  }
+  if (url.startsWith('/api/upload')) {
+    return `${baseUrl}${url}`;
+  }
+  return `${baseUrl}/${url}`;
 };
 
 // ============================================================
@@ -133,23 +155,33 @@ function StatusBadge({ isActive }: { isActive: boolean }) {
   );
 }
 
+/**
+ * ✅ ImagePreview corrigé - Gère les valeurs null
+ */
 function ImagePreview({ url, alt }: { url: string; alt: string }) {
   const [hasError, setHasError] = useState(false);
+  
+  // ✅ buildImageUrl retourne toujours une string (jamais null)
+  const fullUrl = buildImageUrl(url);
 
-  if (hasError || !url) {
+  if (hasError || !fullUrl) {
     return (
       <div className="w-full h-full bg-gray-100 flex items-center justify-center">
         <ImageIcon className="w-8 h-8 text-gray-400" />
+        <span className="absolute text-xs text-gray-400 bottom-2">
+          {alt || 'Aucune image'}
+        </span>
       </div>
     );
   }
 
   return (
     <img
-      src={url}
-      alt={alt}
+      src={fullUrl}
+      alt={alt || 'Fond d\'ecran'}
       className="w-full h-full object-cover"
       onError={() => setHasError(true)}
+      onLoad={() => console.log(`✅ Image chargée: ${fullUrl}`)}
     />
   );
 }
@@ -215,7 +247,7 @@ export default function BackgroundsPage() {
   }, [language, getText]);
 
   // ============================================================
-  // CHARGEMENT DES DONNEES
+  // CHARGEMENT DES DONNEES - CORRIGE
   // ============================================================
 
   const fetchBackgrounds = useCallback(async () => {
@@ -244,6 +276,7 @@ export default function BackgroundsPage() {
         }
       }
       
+      // ✅ S'assurer que les URLs sont complètes et valides
       backgroundsData = backgroundsData.map(bg => ({
         ...bg,
         is_active: toBoolean(bg.is_active),
@@ -253,6 +286,7 @@ export default function BackgroundsPage() {
         brightness: bg.brightness || 100,
         alt_fr: bg.alt_fr || null,
         alt_mg: bg.alt_mg || null,
+        image_url: buildImageUrl(bg.image_url), // ✅ buildImageUrl retourne string
       }));
       
       setBackgrounds(backgroundsData);
@@ -340,7 +374,8 @@ export default function BackgroundsPage() {
     setUploading(pageKey);
     try {
       const result = await uploadService.uploadImage(file, 'background');
-      const imageUrl = result.url || uploadService.getImageUrl(result.id);
+      // ✅ buildImageUrl retourne string
+      const imageUrl = buildImageUrl(result.url || result.id);
       
       await pagesApi.updateBackgroundImage(pageKey, imageUrl);
       
@@ -371,8 +406,6 @@ export default function BackgroundsPage() {
       toast.error(getText('Erreur lors de la mise a jour', 'Nisy hadisoana'));
     }
   };
-
-  // ✅ SUPPRESSION DU BOUTON SUPPRIMER - FONCTION RETIREE
 
   const updateBackground = async (id: string, data: PageBackgroundUpdate) => {
     setSaving(true);
@@ -542,7 +575,7 @@ export default function BackgroundsPage() {
                     )}
                   </div>
 
-                  {/* ✅ Boutons sans Supprimer */}
+                  {/* Boutons */}
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
                     <button
                       onClick={() => handleFileSelect(bg.page_key)}

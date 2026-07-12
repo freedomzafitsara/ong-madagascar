@@ -35,7 +35,7 @@ interface FailedQueueItem {
 }
 
 // ============================================================
-// VARIABLES DE CONTROLE POUR REFRESH TOKEN
+// VARIABLES DE CONTRÔLE POUR REFRESH TOKEN
 // ============================================================
 
 let isRefreshing: boolean = false;
@@ -57,18 +57,22 @@ const processQueue = (error: any = null): void => {
 };
 
 // ============================================================
-// FONCTIONS UTILITAIRES POUR LES TOKENS
+// FONCTIONS UTILITAIRES POUR LES TOKENS - CORRIGÉES ✅
 // ============================================================
 
 const getToken = (): string | null => {
   if (typeof window !== 'undefined') {
-    return localStorage.getItem('access_token') || localStorage.getItem('token');
+    // ✅ Essayer plusieurs clés de token
+    return localStorage.getItem('access_token') || 
+           localStorage.getItem('token') || 
+           null;
   }
   return null;
 };
 
 const setToken = (token: string): void => {
   if (typeof window !== 'undefined') {
+    // ✅ Stocker sous les deux clés pour compatibilité
     localStorage.setItem('access_token', token);
     localStorage.setItem('token', token);
   }
@@ -86,39 +90,79 @@ const clearTokens = (): void => {
     localStorage.removeItem('token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
+    localStorage.removeItem('user_data');
   }
 };
 
+// ✅ Fonction pour récupérer l'utilisateur
+const getUser = (): any | null => {
+  if (typeof window !== 'undefined') {
+    const user = localStorage.getItem('user') || localStorage.getItem('user_data');
+    return user ? JSON.parse(user) : null;
+  }
+  return null;
+};
+
+// ✅ Vérification des pages publiques
 const isPublicPage = (): boolean => {
   if (typeof window === 'undefined') return false;
   const path = window.location.pathname;
-  return (
-    path.includes('/login') ||
-    path === '/' ||
-    path.includes('/jobs') ||
-    path.includes('/offers') ||
-    path.includes('/public') ||
-    path.includes('/register') ||
-    path.includes('/forgot-password') ||
-    path.includes('/blog') ||
-    path.includes('/projects') ||
-    path.includes('/contact')
-  );
+  const publicPaths = [
+    '/login',
+    '/',
+    '/jobs',
+    '/offers',
+    '/public',
+    '/register',
+    '/forgot-password',
+    '/reset-password',
+    '/blog',
+    '/projects',
+    '/contact',
+    '/about',
+    '/team',
+    '/partners',
+  ];
+  return publicPaths.some(p => path.includes(p));
+};
+
+// ✅ Vérification des endpoints publics
+const isPublicEndpoint = (url: string = ''): boolean => {
+  const publicEndpoints = [
+    '/auth/login',
+    '/auth/register',
+    '/auth/forgot-password',
+    '/auth/reset-password',
+    '/contact',
+    '/jobs/offers/public',
+    '/blog/public',
+    '/projects/public',
+    '/pages/public',
+    '/upload/health',
+  ];
+  return publicEndpoints.some(endpoint => url.includes(endpoint));
 };
 
 // ============================================================
-// INTERCEPTEUR DE REQUETE
+// INTERCEPTEUR DE REQUETE - CORRIGÉ ✅
 // ============================================================
 
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
     const token = getToken();
+    
+    // ✅ Ajouter le token si présent
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     
+    // ✅ Log en développement
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+      console.log(`[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`, {
+        hasToken: !!token,
+        headers: config.headers,
+        params: config.params,
+      });
     }
     
     return config;
@@ -130,23 +174,24 @@ api.interceptors.request.use(
 );
 
 // ============================================================
-// INTERCEPTEUR DE REPONSE
+// INTERCEPTEUR DE REPONSE - CORRIGÉ ✅
 // ============================================================
 
 api.interceptors.response.use(
   (response: AxiosResponse) => {
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[API] ${response.status} ${response.config.url}`);
+      console.log(`[API] ✅ ${response.status} ${response.config.url}`);
     }
     return response;
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     
+    // ✅ Erreur réseau
     if (!error.response) {
-      console.error('[API] Erreur reseau:', error.message);
+      console.error('[API] ❌ Erreur reseau:', error.message);
       if (!isPublicPage()) {
-        toast.error('Impossible de contacter le serveur. Verifiez votre connexion.');
+        toast.error('Impossible de contacter le serveur. Vérifiez votre connexion.');
       }
       return Promise.reject(error);
     }
@@ -157,26 +202,36 @@ api.interceptors.response.use(
     const message = data?.message || data?.error || error.message;
 
     // ============================================================
-    // 401 - Non authentifie
+    // 401 - Non authentifié - CORRIGÉ ✅
     // ============================================================
     if (status === 401) {
-      console.warn(`[API] 401 Non autorise: ${url}`);
+      console.warn(`[API] 🔒 401 Non autorise: ${url}`, { message });
       
+      // ✅ Ne pas tenter de refresh sur les endpoints publics
+      if (isPublicEndpoint(url)) {
+        console.log('[API] Endpoint public, pas de refresh necessaire');
+        return Promise.reject(error);
+      }
+      
+      // ✅ Ne pas tenter de refresh si déjà en cours
       if (originalRequest?._retry) {
         console.warn('[API] Tentative de refresh deja en cours, abandon.');
         return Promise.reject(error);
       }
       
-      if (originalRequest?.url?.includes('/auth/refresh') || 
-          originalRequest?.url?.includes('/auth/login') ||
-          originalRequest?.url?.includes('/auth/register')) {
+      // ✅ Si le refresh token n'existe pas, rediriger vers login
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) {
+        console.warn('[API] Aucun refresh token disponible');
         clearTokens();
         if (!isPublicPage()) {
+          toast.error('Session expirée. Veuillez vous reconnecter.');
           window.location.href = '/login';
         }
         return Promise.reject(error);
       }
       
+      // ✅ Gestion du refresh token
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ 
@@ -193,12 +248,7 @@ api.interceptors.response.use(
       isRefreshing = true;
       
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (!refreshToken) {
-          throw new Error('Aucun refresh token disponible');
-        }
-        
-        console.log('[API] Tentative de refresh du token...');
+        console.log('[API] 🔄 Tentative de refresh du token...');
         
         const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
           refresh_token: refreshToken,
@@ -212,7 +262,7 @@ api.interceptors.response.use(
             setRefreshToken(refresh_token);
           }
           
-          console.log('[API] Token rafraichi avec succes');
+          console.log('[API] ✅ Token rafraichi avec succes');
           
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${access_token}`;
@@ -225,12 +275,12 @@ api.interceptors.response.use(
         }
         
       } catch (refreshError) {
-        console.error('[API] Echec du refresh token:', refreshError);
+        console.error('[API] ❌ Echec du refresh token:', refreshError);
         clearTokens();
         processQueue(refreshError);
         
         if (!isPublicPage()) {
-          toast.error('Votre session a expire. Veuillez vous reconnecter.');
+          toast.error('Votre session a expiré. Veuillez vous reconnecter.');
           window.location.href = '/login';
         }
         
@@ -245,40 +295,40 @@ api.interceptors.response.use(
     // 403 - Interdit
     // ============================================================
     if (status === 403) {
-      console.warn(`[API] 403 Acces interdit: ${url}`, message);
+      console.warn(`[API] 🔒 403 Acces interdit: ${url}`, message);
       
       if (url?.includes('/jobs/offers/') && !url?.includes('/public')) {
         return Promise.reject(error);
       }
       
       if (!isPublicPage()) {
-        toast.error(message || 'Vous n\'avez pas les droits necessaires.');
+        toast.error(message || 'Vous n\'avez pas les droits nécessaires.');
       }
     }
 
     // ============================================================
-    // 404 - Non trouve
+    // 404 - Non trouvé
     // ============================================================
     else if (status === 404) {
-      console.warn(`[API] 404 Non trouve: ${url}`);
+      console.warn(`[API] 🔍 404 Non trouve: ${url}`);
       if (!isPublicPage() && !url?.includes('/public')) {
-        toast.error('Ressource non trouvee.');
+        toast.error('Ressource non trouvée.');
       }
     }
 
     // ============================================================
-    // 429 - Trop de requetes
+    // 429 - Trop de requêtes
     // ============================================================
     else if (status === 429) {
-      console.warn(`[API] 429 Trop de requetes: ${url}`);
-      toast.error('Trop de requetes. Veuillez patienter quelques instants.');
+      console.warn(`[API] 🚦 429 Trop de requetes: ${url}`);
+      toast.error('Trop de requêtes. Veuillez patienter quelques instants.');
     }
 
     // ============================================================
     // 422 - Erreur de validation
     // ============================================================
     else if (status === 422) {
-      console.warn(`[API] 422 Erreur de validation: ${url}`, data);
+      console.warn(`[API] 📝 422 Erreur de validation: ${url}`, data);
       
       if (data?.errors) {
         const errors = data.errors;
@@ -292,7 +342,7 @@ api.interceptors.response.use(
           });
         }
       } else {
-        toast.error(message || 'Donnees invalides.');
+        toast.error(message || 'Données invalides.');
       }
     }
 
@@ -300,9 +350,9 @@ api.interceptors.response.use(
     // 500+ - Erreur serveur
     // ============================================================
     else if (status >= 500) {
-      console.error(`[API] ${status} Erreur serveur: ${url}`, data);
+      console.error(`[API] 💥 ${status} Erreur serveur: ${url}`, data);
       if (!isPublicPage()) {
-        toast.error('Erreur interne du serveur. Veuillez reessayer plus tard.');
+        toast.error('Erreur interne du serveur. Veuillez réessayer plus tard.');
       }
     }
 
@@ -310,7 +360,7 @@ api.interceptors.response.use(
     // Autres erreurs
     // ============================================================
     else if (status >= 400) {
-      console.error(`[API] ${status} Erreur client: ${url}`, data);
+      console.error(`[API] ⚠️ ${status} Erreur client: ${url}`, data);
       if (!isPublicPage() && !url?.includes('/public')) {
         toast.error(message || 'Une erreur est survenue.');
       }
@@ -321,12 +371,13 @@ api.interceptors.response.use(
 );
 
 // ============================================================
-// AUTH API
+// AUTH API - CORRIGÉ ✅
 // ============================================================
 
 export interface LoginResponse {
   access_token: string;
   refresh_token?: string;
+  token?: string;
   user: {
     id: string;
     email: string;
@@ -340,19 +391,36 @@ export interface LoginResponse {
 
 export const authApi = {
   login: async (email: string, password: string): Promise<LoginResponse> => {
-    const response = await api.post<LoginResponse>('/auth/login', { email, password });
-    const data = response.data;
-    
-    if (data.access_token) {
-      setToken(data.access_token);
-      if (data.refresh_token) {
-        setRefreshToken(data.refresh_token);
+    try {
+      const response = await api.post<LoginResponse>('/auth/login', { email, password });
+      const data = response.data;
+      
+      // ✅ Stocker le token
+      const token = data.access_token || data.token;
+      if (token) {
+        setToken(token);
+        if (data.refresh_token) {
+          setRefreshToken(data.refresh_token);
+        }
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+          localStorage.setItem('user_data', JSON.stringify(data.user));
+        }
+        
+        // ✅ Mettre à jour le header immédiatement
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+        console.log('[API] ✅ Login reussi');
+      } else {
+        console.error('[API] ❌ Aucun token recu');
+        throw new Error('Token non recu');
       }
-      if (data.user) {
-        localStorage.setItem('user', JSON.stringify(data.user));
-      }
+      
+      return data;
+    } catch (error: any) {
+      console.error('[API] ❌ Erreur login:', error.response?.data || error.message);
+      throw error;
     }
-    return data;
   },
 
   register: async (userData: any) => {
@@ -362,6 +430,8 @@ export const authApi = {
 
   logout: () => {
     clearTokens();
+    // ✅ Supprimer le header
+    delete api.defaults.headers.common['Authorization'];
     window.location.href = '/login';
   },
 
@@ -459,21 +529,21 @@ export const authApi = {
   },
 
   // ============================================================
-  // UPLOAD AVATAR - CORRIGE AVEC GESTION D'ERREUR
+  // UPLOAD AVATAR
   // ============================================================
 
   uploadAvatar: async (file: File): Promise<{ avatar_url: string; success: boolean }> => {
     if (!file) {
-      throw new Error('Aucun fichier selectionne');
+      throw new Error('Aucun fichier sélectionné');
     }
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      throw new Error('Format d\'image non supporte. Utilisez JPG, PNG, WEBP ou GIF.');
+      throw new Error('Format d\'image non supporté. Utilisez JPG, PNG, WEBP ou GIF.');
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      throw new Error('L\'image ne doit pas depasser 5 Mo.');
+      throw new Error('L\'image ne doit pas dépasser 5 Mo.');
     }
 
     const formData = new FormData();
@@ -489,7 +559,7 @@ export const authApi = {
       const data = response.data;
       
       if (!data.avatar_url) {
-        throw new Error('URL de l\'avatar non recue du serveur');
+        throw new Error('URL de l\'avatar non reçue du serveur');
       }
       
       return {
@@ -499,7 +569,6 @@ export const authApi = {
     } catch (error: any) {
       console.error('Erreur upload avatar:', error);
       
-      // Si l'erreur vient du serveur, afficher le message
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
@@ -512,19 +581,23 @@ export const authApi = {
   // UTILITAIRES
   // ============================================================
 
-  isAuthenticated: () => {
+  isAuthenticated: (): boolean => {
     if (typeof window !== 'undefined') {
-      return !!localStorage.getItem('access_token') || !!localStorage.getItem('token');
+      return !!getToken();
     }
     return false;
   },
 
-  getUser: () => {
+  getUser: (): any | null => {
     if (typeof window !== 'undefined') {
-      const user = localStorage.getItem('user');
+      const user = localStorage.getItem('user') || localStorage.getItem('user_data');
       return user ? JSON.parse(user) : null;
     }
     return null;
+  },
+
+  getToken: (): string | null => {
+    return getToken();
   },
 };
 
@@ -716,6 +789,11 @@ export const blogApi = {
 
   getOne: async (id: string) => {
     const response = await api.get(`/blog/${id}`);
+    return response.data;
+  },
+
+  getBySlug: async (slug: string) => {
+    const response = await api.get(`/blog/public/slug/${slug}`);
     return response.data;
   },
 

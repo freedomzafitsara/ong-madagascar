@@ -1,5 +1,4 @@
 // backend/src/modules/contact/dto/update-contact-status.dto.ts
-
 import { IsString, IsNotEmpty, IsOptional, MaxLength, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -12,7 +11,7 @@ export class UpdateContactStatusDto {
   })
   @IsString()
   @IsNotEmpty({ message: 'Le statut est requis' })
-  @IsIn(['unread', 'read', 'replied', 'archived'], { message: 'Statut invalide' })
+  @IsIn(['unread', 'read', 'replied', 'archived'], { message: 'Statut invalide. Valeurs possibles: unread, read, replied, archived' })
   status: 'unread' | 'read' | 'replied' | 'archived';
 
   @ApiProperty({

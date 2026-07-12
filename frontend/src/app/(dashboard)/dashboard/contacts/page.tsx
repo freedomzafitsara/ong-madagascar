@@ -1,5 +1,4 @@
 ﻿// frontend/src/app/(dashboard)/dashboard/contacts/page.tsx
-
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -11,24 +10,24 @@ import {
   CheckCircle, AlertCircle, Calendar, User,
   Phone, MessageSquare, Archive, Trash2,
   ChevronLeft, ChevronRight, Download,
-  X, Send, AtSign, FileText
+  X, Send, AtSign, FileText, Filter
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 
 // ============================================================
-// INTERFACES
+// TYPES
 // ============================================================
 
 interface ContactMessage {
   id: string;
   name: string;
   email: string;
-  phone?: string;
+  phone?: string | null;
   subject: string;
   message: string;
-  status: string;
-  admin_notes?: string;
+  status: 'unread' | 'read' | 'replied' | 'archived';
+  admin_notes?: string | null;
   created_at: string;
 }
 
@@ -47,48 +46,50 @@ interface ContactStats {
 const ITEMS_PER_PAGE = 10;
 
 const STATUS_OPTIONS = [
-  { value: 'unread', label: 'Non lu', color: 'text-red-800', bg: 'bg-red-100', icon: AlertCircle },
+  { value: 'all', label: 'Tous', color: 'text-gray-800', bg: 'bg-gray-100', icon: Filter },
+  { value: 'unread', label: 'Non lu', color: 'text-yellow-800', bg: 'bg-yellow-100', icon: AlertCircle },
   { value: 'read', label: 'Lu', color: 'text-blue-800', bg: 'bg-blue-100', icon: CheckCircle },
-  { value: 'replied', label: 'Repondu', color: 'text-green-800', bg: 'bg-green-100', icon: Reply },
-  { value: 'archived', label: 'Archive', color: 'text-gray-600', bg: 'bg-gray-100', icon: Archive }
+  { value: 'replied', label: 'Répondu', color: 'text-green-800', bg: 'bg-green-100', icon: Reply },
+  { value: 'archived', label: 'Archivé', color: 'text-gray-600', bg: 'bg-gray-100', icon: Archive }
 ];
-
-// ============================================================
-// FONCTIONS UTILITAIRES
-// ============================================================
-
-const stripHtml = (html: string): string => {
-  if (!html) return '';
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return div.textContent || div.innerText || '';
-};
-
-const getExcerpt = (html: string, maxLength: number = 80): string => {
-  const text = stripHtml(html);
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength) + '...';
-};
 
 // ============================================================
 // COMPOSANTS
 // ============================================================
 
-function StatCard({ label, value, icon: Icon, isBlue = false, onClick }: { 
-  label: string; value: number; icon: any; isBlue?: boolean; onClick?: () => void;
+function StatCard({ 
+  label, 
+  value, 
+  icon: Icon, 
+  isBlue = false, 
+  onClick 
+}: { 
+  label: string; 
+  value: number; 
+  icon: any; 
+  isBlue?: boolean; 
+  onClick?: () => void;
 }) {
   return (
     <div 
       onClick={onClick}
-      className={`rounded-xl p-4 transition-all duration-200 hover:shadow-md cursor-pointer ${isBlue ? 'bg-blue-800 text-white' : 'bg-white border border-gray-200'}`}
+      className={`rounded-xl p-4 transition-all duration-200 hover:shadow-md cursor-pointer ${
+        isBlue ? 'bg-blue-800 text-white' : 'bg-white border border-gray-200'
+      }`}
     >
       <div className="flex items-center justify-between mb-2">
-        <p className={`text-sm font-medium ${isBlue ? 'text-white/70' : 'text-gray-500'}`}>{label}</p>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isBlue ? 'bg-white/20' : 'bg-gray-100'}`}>
+        <p className={`text-sm font-medium ${isBlue ? 'text-white/70' : 'text-gray-500'}`}>
+          {label}
+        </p>
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+          isBlue ? 'bg-white/20' : 'bg-gray-100'
+        }`}>
           <Icon className={`w-4 h-4 ${isBlue ? 'text-white' : 'text-gray-600'}`} />
         </div>
       </div>
-      <p className={`text-2xl font-bold ${isBlue ? 'text-white' : 'text-gray-800'}`}>{value}</p>
+      <p className={`text-2xl font-bold ${isBlue ? 'text-white' : 'text-gray-800'}`}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -97,14 +98,16 @@ function StatusBadge({ status }: { status: string }) {
   const option = STATUS_OPTIONS.find(opt => opt.value === status);
   const Icon = option?.icon || AlertCircle;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${option?.bg} ${option?.color}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+      option?.bg || 'bg-gray-100'
+    } ${option?.color || 'text-gray-600'}`}>
       <Icon className="w-3 h-3" /> {option?.label || status}
     </span>
   );
 }
 
 // ============================================================
-// MODAL DE DETAIL
+// MODAL DE DÉTAIL
 // ============================================================
 
 function MessageDetailModal({ 
@@ -132,10 +135,18 @@ function MessageDetailModal({
   const [sending, setSending] = useState(false);
 
   const handleStatusChange = async (newStatus: string) => {
+    if (newStatus === status) return;
     setUpdating(true);
-    await onUpdateStatus(message.id, newStatus);
-    setStatus(newStatus);
-    setUpdating(false);
+    try {
+      await onUpdateStatus(message.id, newStatus);
+      setStatus(newStatus as any);
+      toast.success(getText('Statut mis à jour', 'Vita ny fanovana sata'));
+    } catch (error) {
+      console.error('Erreur mise à jour statut:', error);
+      toast.error(getText('Erreur lors de la mise à jour', 'Nisy hadisoana'));
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -143,7 +154,7 @@ function MessageDetailModal({
       `Supprimer le message de ${message.name} ?`,
       `Hofafana ny hafatra avy amin'i ${message.name} ?`
     );
-    if (confirm(confirmMsg)) {
+    if (window.confirm(confirmMsg)) {
       await onDelete(message.id);
       onClose();
     }
@@ -151,22 +162,21 @@ function MessageDetailModal({
 
   const handleSendReply = async () => {
     if (!replyText.trim()) {
-      toast.error(getText('Veuillez saisir votre reponse', 'Ampidiro ny valinteninao'));
+      toast.error(getText('Veuillez saisir votre réponse', 'Ampidiro ny valinteninao'));
       return;
     }
 
     setSending(true);
     try {
       await onSendReply(message.id, replyText, adminNotes);
-      toast.success(getText('Reponse envoyee avec succes au client', 'Vita ny fandefasana valiny ho an\'ny mpangataka'));
+      toast.success(getText('Réponse envoyée avec succès', 'Vita ny fandefasana valiny'));
       setShowReply(false);
       setReplyText('');
       await onUpdateStatus(message.id, 'replied');
-      onClose();
+      setTimeout(() => onClose(), 500);
     } catch (error: any) {
       console.error('Erreur:', error);
-      const errorMsg = error.response?.data?.message || error.message || getText('Erreur lors de l\'envoi de la reponse', 'Nisy hadisoana tamin\'ny fandefasana valiny');
-      toast.error(errorMsg);
+      toast.error(error.response?.data?.message || getText('Erreur lors de l\'envoi', 'Nisy hadisoana'));
     } finally {
       setSending(false);
     }
@@ -182,7 +192,7 @@ function MessageDetailModal({
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-800">{getText('Detail du message', 'Antsipirihan\'ny hafatra')}</h2>
+              <h2 className="text-xl font-bold text-gray-800">{getText('Détail du message', 'Antsipirihan\'ny hafatra')}</h2>
               <p className="text-sm text-gray-500">{getText('Message de', 'Hafatra avy amin\'i')} {message.name}</p>
             </div>
           </div>
@@ -210,7 +220,7 @@ function MessageDetailModal({
                 disabled={updating}
                 className="px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none bg-white text-sm"
               >
-                {STATUS_OPTIONS.map((opt) => (
+                {STATUS_OPTIONS.filter(opt => opt.value !== 'all').map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
@@ -249,7 +259,7 @@ function MessageDetailModal({
                     <Phone className="w-4 h-4 text-gray-600" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">{getText('Telephone', 'Telefaonina')}</p>
+                    <p className="text-xs text-gray-500">{getText('Téléphone', 'Telefaonina')}</p>
                     <p className="text-sm font-medium text-gray-800">{message.phone}</p>
                   </div>
                 </div>
@@ -261,7 +271,7 @@ function MessageDetailModal({
                   <Calendar className="w-4 h-4 text-gray-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">{getText('Date de reception', 'Daty nahazoana')}</p>
+                  <p className="text-xs text-gray-500">{getText('Date de réception', 'Daty nahazoana')}</p>
                   <p className="text-sm font-medium text-gray-800">{formatDate(message.created_at)}</p>
                 </div>
               </div>
@@ -274,7 +284,7 @@ function MessageDetailModal({
               {getText('Sujet', 'Lohahevitra')}
             </h3>
             <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-gray-800 font-medium">{message.subject}</p>
+              <p className="text-gray-800 font-medium">{message.subject || getText('Sans sujet', 'Tsy misy lohahevitra')}</p>
             </div>
           </div>
 
@@ -299,8 +309,11 @@ function MessageDetailModal({
               onBlur={async () => {
                 if (adminNotes !== message.admin_notes) {
                   try {
-                    await api.patch(`/contact/${message.id}/status`, { admin_notes: adminNotes });
-                    toast.success(getText('Notes sauvegardees', 'Vita ny fitehirizana'));
+                    await api.patch(`/contact/${message.id}/status`, { 
+                      status: status, 
+                      admin_notes: adminNotes 
+                    });
+                    toast.success(getText('Notes sauvegardées', 'Vita ny fitehirizana'));
                   } catch (error) {
                     console.error('Erreur:', error);
                   }
@@ -317,17 +330,17 @@ function MessageDetailModal({
               onClick={() => setShowReply(true)} 
               className="flex items-center gap-2 px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition"
             >
-              <Reply className="w-4 h-4" /> {getText('Repondre', 'Valio')}
+              <Reply className="w-4 h-4" /> {getText('Répondre', 'Valio')}
             </button>
           ) : (
             <div className="space-y-3 border rounded-xl p-4 bg-gray-50">
               <div className="flex items-center justify-between">
                 <label className="block text-sm font-medium text-gray-700">
-                  {getText('Votre reponse', 'Valinteninao')}
+                  {getText('Votre réponse', 'Valinteninao')}
                   <span className="text-red-500 ml-1">*</span>
                 </label>
                 <span className="text-xs text-gray-400">
-                  {getText('Le client recevra cette reponse par email', 'Hahazo valiny amin\'ny mail ny mpangataka')}
+                  {getText('Le client recevra cette réponse par email', 'Hahazo valiny amin\'ny mail ny mpangataka')}
                 </span>
               </div>
               <textarea
@@ -335,12 +348,12 @@ function MessageDetailModal({
                 onChange={(e) => setReplyText(e.target.value)}
                 rows={5}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none resize-none"
-                placeholder={getText('Saisissez votre reponse ici...', 'Ampidiro ny valinteninao eto...')}
+                placeholder={getText('Saisissez votre réponse ici...', 'Ampidiro ny valinteninao eto...')}
               />
               <div className="flex gap-3">
                 <button 
                   onClick={handleSendReply}
-                  disabled={sending}
+                  disabled={sending || !replyText.trim()}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition disabled:opacity-50"
                 >
                   {sending ? (
@@ -348,7 +361,7 @@ function MessageDetailModal({
                   ) : (
                     <Send className="w-4 h-4" />
                   )}
-                  {getText('Envoyer la reponse', 'Alefaso ny valiny')}
+                  {getText('Envoyer la réponse', 'Alefaso ny valiny')}
                 </button>
                 <button 
                   onClick={() => setShowReply(false)} 
@@ -372,7 +385,7 @@ function MessageDetailModal({
 }
 
 // ============================================================
-// PAGE PRINCIPALE - CORRIGEE
+// PAGE PRINCIPALE - CORRIGÉE
 // ============================================================
 
 export default function ContactsPage() {
@@ -381,22 +394,27 @@ export default function ContactsPage() {
   const router = useRouter();
   
   const [messages, setMessages] = useState<ContactMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalItems, setTotalItems] = useState<number>(0);
   const [stats, setStats] = useState<ContactStats>({
-    total: 0, unread: 0, read: 0, replied: 0, archived: 0
+    total: 0,
+    unread: 0,
+    read: 0,
+    replied: 0,
+    archived: 0,
   });
   const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
+  const [exporting, setExporting] = useState<boolean>(false);
 
-  const initialLoaded = useRef(false);
-  const isMounted = useRef(true);
+  const initialLoaded = useRef<boolean>(false);
+  const isMounted = useRef<boolean>(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'admin';
 
@@ -405,45 +423,53 @@ export default function ContactsPage() {
   const formatDate = (date: string) => {
     try {
       return new Date(date).toLocaleDateString('fr-FR', {
-        day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit'
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
       });
     } catch {
       return date;
     }
   };
 
-  // ✅ loadMessages avec AbortController
-  const loadMessages = useCallback(async () => {
-    if (!token || !isMounted.current) return;
+  // ============================================================
+  // CHARGEMENT DES DONNÉES
+  // ============================================================
 
-    // Annuler la requete precedente
+  const loadMessages = useCallback(async () => {
+    if (!token || !isMounted.current || !isAuthenticated) return;
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    
+
     setLoading(true);
+
     try {
-      const params: any = { page: currentPage, limit: ITEMS_PER_PAGE };
+      const params: any = {
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+      };
       if (filterStatus !== 'all') params.status = filterStatus;
       if (searchTerm) params.search = searchTerm;
 
-      const response = await api.get('/contact', { 
+      const response = await api.get('/contact', {
         params,
-        signal: controller.signal 
+        signal: controller.signal,
       });
-      
-      if (response.data && isMounted.current) {
+
+      if (response.data && isMounted.current && !controller.signal.aborted) {
         setMessages(response.data.data || []);
         setTotalPages(response.data.totalPages || 1);
         setTotalItems(response.data.total || 0);
       }
     } catch (error: any) {
       if (error.name === 'CanceledError' || error.name === 'AbortError') {
-        // Requete annulee volontairement
         return;
       }
       console.error('Erreur chargement messages:', error);
@@ -455,11 +481,10 @@ export default function ContactsPage() {
         setLoading(false);
       }
     }
-  }, [currentPage, filterStatus, searchTerm, token, getText]);
+  }, [currentPage, filterStatus, searchTerm, token, isAuthenticated, getText]);
 
-  // ✅ loadStats
   const loadStats = useCallback(async () => {
-    if (!token || !isMounted.current) return;
+    if (!token || !isMounted.current || !isAuthenticated) return;
     try {
       const response = await api.get('/contact/stats');
       if (response.data && isMounted.current) {
@@ -468,25 +493,28 @@ export default function ContactsPage() {
           unread: response.data.unread || 0,
           read: response.data.read || 0,
           replied: response.data.replied || 0,
-          archived: response.data.archived || 0
+          archived: response.data.archived || 0,
         });
       }
     } catch (error) {
       console.error('Erreur stats:', error);
     }
-  }, [token]);
+  }, [token, isAuthenticated]);
 
-  // ✅ loadAllData - avec verification du montage
   const loadAllData = useCallback(async () => {
-    if (!token || !isMounted.current) return;
+    if (!token || !isMounted.current || !isAuthenticated) return;
     try {
       await Promise.all([loadMessages(), loadStats()]);
     } catch (error) {
-      console.error('Erreur chargement donnees:', error);
+      console.error('Erreur chargement données:', error);
     }
-  }, [loadMessages, loadStats, token]);
+  }, [loadMessages, loadStats, token, isAuthenticated]);
 
-  // ✅ Montage / Demontage
+  // ============================================================
+  // EFFETS - CORRIGÉS
+  // ============================================================
+
+  // Nettoyage
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -494,10 +522,13 @@ export default function ContactsPage() {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
     };
   }, []);
 
-  // ✅ Redirection
+  // Redirection
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login');
@@ -508,57 +539,69 @@ export default function ContactsPage() {
 
   // ✅ Chargement initial UNIQUE
   useEffect(() => {
-    if (token && !initialLoaded.current && isMounted.current) {
+    if (token && !initialLoaded.current && isMounted.current && isAuthenticated && hasAccess) {
       initialLoaded.current = true;
-      // Charger avec un delai pour eviter les conflits
       const timer = setTimeout(() => {
         loadAllData();
-      }, 100);
+      }, 200);
       return () => clearTimeout(timer);
     }
-  }, [token, loadAllData]);
+    return () => {};
+  }, [token, isAuthenticated, hasAccess]);
 
-  // ✅ Rechargement quand les filtres changent
+  // ✅ Rechargement avec debounce - CORRIGÉ
   useEffect(() => {
-    if (initialLoaded.current && token && isMounted.current) {
-      const timer = setTimeout(() => {
-        loadMessages();
-      }, 300);
-      return () => clearTimeout(timer);
+    if (!initialLoaded.current || !token || !isMounted.current || !isAuthenticated) {
+      return () => {};
     }
-  }, [currentPage, filterStatus, searchTerm, loadMessages, token]);
 
-  // ✅ updateStatus
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      loadMessages();
+    }, 500);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [currentPage, filterStatus, searchTerm]);
+
+  // ============================================================
+  // HANDLERS
+  // ============================================================
+
   const updateStatus = async (id: string, status: string) => {
     try {
       await api.patch(`/contact/${id}/status`, { status });
-      toast.success(getText('Statut mis a jour', 'Vita ny fanovana sata'));
+      toast.success(getText('Statut mis à jour', 'Vita ny fanovana sata'));
       setTimeout(() => {
         loadMessages();
         loadStats();
-      }, 200);
+      }, 300);
     } catch (error) {
       console.error('Erreur:', error);
-      toast.error(getText('Erreur lors de la mise a jour', 'Nisy hadisoana'));
+      toast.error(getText('Erreur lors de la mise à jour', 'Nisy hadisoana'));
     }
   };
 
-  // ✅ deleteMessage
   const deleteMessage = async (id: string) => {
     try {
       await api.delete(`/contact/${id}`);
-      toast.success(getText('Message supprime', 'Vita ny fanafoanana'));
+      toast.success(getText('Message supprimé', 'Vita ny fanafoanana'));
       setTimeout(() => {
         loadMessages();
         loadStats();
-      }, 200);
+      }, 300);
     } catch (error) {
       console.error('Erreur:', error);
       toast.error(getText('Erreur lors de la suppression', 'Nisy hadisoana'));
     }
   };
 
-  // ✅ sendReply
   const sendReply = async (id: string, reply: string, notes?: string) => {
     try {
       const response = await api.post(`/contact/${id}/reply`, {
@@ -568,9 +611,6 @@ export default function ContactsPage() {
       return response.data;
     } catch (error: any) {
       console.error('Erreur sendReply:', error);
-      if (error.response?.status === 404) {
-        throw new Error('La route de reponse n\'existe pas.');
-      }
       throw error;
     }
   };
@@ -578,24 +618,24 @@ export default function ContactsPage() {
   const handleRefresh = () => {
     loadMessages();
     loadStats();
-    toast.success(getText('Donnees actualisees', 'Havaozina ny angona'));
+    toast.success(getText('Données actualisées', 'Havaozina ny angona'));
   };
 
   const handleClearFilters = () => {
     setSearchTerm('');
     setFilterStatus('all');
     setCurrentPage(1);
-    toast.success(getText('Filtres effaces', 'Vonoina ny sivana'));
+    toast.success(getText('Filtres effacés', 'Vonoina ny sivana'));
   };
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const response = await api.get('/contact/export', { 
+      const response = await api.get('/contact/export', {
         params: { status: filterStatus !== 'all' ? filterStatus : undefined },
-        responseType: 'blob' 
+        responseType: 'blob',
       });
-      
+
       const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -605,7 +645,7 @@ export default function ContactsPage() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      toast.success(getText('Export reussi', 'Vita ny fanondrana'));
+      toast.success(getText('Export réussi', 'Vita ny fanondrana'));
     } catch (error) {
       console.error('Erreur export:', error);
       toast.error(getText('Erreur lors de l\'export', 'Nisy hadisoana tamin\'ny fanondrana'));
@@ -618,6 +658,10 @@ export default function ContactsPage() {
     setFilterStatus(status);
     setCurrentPage(1);
   };
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   if (!isAuthenticated || !hasAccess) {
     return null;
@@ -634,7 +678,6 @@ export default function ContactsPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -643,20 +686,20 @@ export default function ContactsPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-800">{getText('Messages de contact', 'Hafatra')}</h1>
-            <p className="text-gray-500 text-sm">{getText('Gerez les messages recus', 'Fitantanana ny hafatra')}</p>
+            <p className="text-gray-500 text-sm">{getText('Gérez les messages reçus', 'Fitantanana ny hafatra')}</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button 
-            onClick={handleExport} 
+          <button
+            onClick={handleExport}
             disabled={exporting}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
           >
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 text-gray-600" />}
             <span className="text-sm text-gray-600">{getText('Exporter CSV', 'Hanondrana CSV')}</span>
           </button>
-          <button 
-            onClick={handleRefresh} 
+          <button
+            onClick={handleRefresh}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition"
           >
             <RefreshCw className="w-4 h-4 text-gray-600" />
@@ -667,34 +710,34 @@ export default function ContactsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <StatCard 
-          label={getText('Total', 'Rehetra')} 
-          value={stats.total} 
-          icon={Mail} 
+        <StatCard
+          label={getText('Total', 'Rehetra')}
+          value={stats.total}
+          icon={Mail}
           isBlue={true}
           onClick={() => handleStatusFilterClick('all')}
         />
-        <StatCard 
-          label={getText('Non lus', 'Tsy novakiana')} 
-          value={stats.unread} 
+        <StatCard
+          label={getText('Non lus', 'Tsy novakiana')}
+          value={stats.unread}
           icon={AlertCircle}
           onClick={() => handleStatusFilterClick('unread')}
         />
-        <StatCard 
-          label={getText('Lus', 'Vakiana')} 
-          value={stats.read} 
+        <StatCard
+          label={getText('Lus', 'Vakiana')}
+          value={stats.read}
           icon={CheckCircle}
           onClick={() => handleStatusFilterClick('read')}
         />
-        <StatCard 
-          label={getText('Repondus', 'Valiana')} 
-          value={stats.replied} 
+        <StatCard
+          label={getText('Répondus', 'Valiana')}
+          value={stats.replied}
           icon={Reply}
           onClick={() => handleStatusFilterClick('replied')}
         />
-        <StatCard 
-          label={getText('Archives', 'Tehirizina')} 
-          value={stats.archived} 
+        <StatCard
+          label={getText('Archivés', 'Tehirizina')}
+          value={stats.archived}
           icon={Archive}
           onClick={() => handleStatusFilterClick('archived')}
         />
@@ -707,19 +750,25 @@ export default function ContactsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder={getText('Rechercher par nom, email...', 'Karohy...')}
+              placeholder={getText('Rechercher par nom, email, sujet...', 'Karohy...')}
               value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none text-sm"
             />
           </div>
           <select
             value={filterStatus}
-            onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+            onChange={(e) => {
+              setFilterStatus(e.target.value);
+              setCurrentPage(1);
+            }}
             className="px-3 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-800 focus:border-blue-800 outline-none text-sm min-w-[150px]"
           >
             <option value="all">{getText('Tous les statuts', 'Sata rehetra')}</option>
-            {STATUS_OPTIONS.map(opt => (
+            {STATUS_OPTIONS.filter(opt => opt.value !== 'all').map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
@@ -730,19 +779,23 @@ export default function ContactsPage() {
             <X className="w-4 h-4" /> {getText('Effacer les filtres', 'Fafao ny sivana')}
           </button>
         </div>
-        
+
         {(searchTerm || filterStatus !== 'all') && (
           <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
             {searchTerm && (
               <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-100 rounded-full text-xs">
                 Recherche: {searchTerm}
-                <button onClick={() => setSearchTerm('')} className="hover:text-red-500">✕</button>
+                <button onClick={() => setSearchTerm('')} className="hover:text-red-500">
+                  ✕
+                </button>
               </span>
             )}
             {filterStatus !== 'all' && (
               <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-100 rounded-full text-xs">
-                Statut: {STATUS_OPTIONS.find(o => o.value === filterStatus)?.label}
-                <button onClick={() => setFilterStatus('all')} className="hover:text-red-500">✕</button>
+                Statut: {STATUS_OPTIONS.find((o) => o.value === filterStatus)?.label}
+                <button onClick={() => setFilterStatus('all')} className="hover:text-red-500">
+                  ✕
+                </button>
               </span>
             )}
           </div>
@@ -759,7 +812,7 @@ export default function ContactsPage() {
                   {getText('Date', 'Daty')}
                 </th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  {getText('Expediteur', 'Mpandefa')}
+                  {getText('Expéditeur', 'Mpandefa')}
                 </th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   {getText('Sujet / Message', 'Lohahevitra / Hafatra')}
@@ -778,8 +831,12 @@ export default function ContactsPage() {
                   <td colSpan={5} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Mail className="w-12 h-12 text-gray-300" />
-                      <p className="text-gray-500 font-medium">{getText('Aucun message trouve', 'Tsy misy hafatra hita')}</p>
-                      <p className="text-sm text-gray-400">{getText('Modifiez vos filtres', 'Hanova ny sivanao')}</p>
+                      <p className="text-gray-500 font-medium">
+                        {getText('Aucun message trouvé', 'Tsy misy hafatra hita')}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        {getText('Modifiez vos filtres', 'Hanova ny sivanao')}
+                      </p>
                     </div>
                   </td>
                 </tr>
@@ -797,11 +854,13 @@ export default function ContactsPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="max-w-xs">
-                        <p className="text-sm text-gray-700 font-medium truncate">{message.subject}</p>
-                        <div 
+                        <p className="text-sm text-gray-700 font-medium truncate">
+                          {message.subject || getText('Sans sujet', 'Tsy misy lohahevitra')}
+                        </p>
+                        <div
                           className="text-xs text-gray-500 truncate"
-                          dangerouslySetInnerHTML={{ 
-                            __html: getExcerpt(message.message, 60)
+                          dangerouslySetInnerHTML={{
+                            __html: getExcerpt(message.message, 60),
                           }}
                         />
                       </div>
@@ -810,10 +869,13 @@ export default function ContactsPage() {
                       <StatusBadge status={message.status} />
                     </td>
                     <td className="px-5 py-4 text-center">
-                      <button 
-                        onClick={() => { setSelectedMessage(message); setShowDetailModal(true); }} 
+                      <button
+                        onClick={() => {
+                          setSelectedMessage(message);
+                          setShowDetailModal(true);
+                        }}
                         className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition"
-                        title={getText('Voir le detail', 'Jereo ny antsipirihany')}
+                        title={getText('Voir le détail', 'Jereo ny antsipirihany')}
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -830,11 +892,12 @@ export default function ContactsPage() {
       {totalPages > 1 && (
         <div className="flex justify-between items-center pt-2">
           <div className="text-sm text-gray-500">
-            {getText('Page', 'Pejy')} {currentPage} / {totalPages} ({totalItems} {getText('messages', 'hafatra')})
+            {getText('Page', 'Pejy')} {currentPage} / {totalPages} ({totalItems}{' '}
+            {getText('messages', 'hafatra')})
           </div>
           <div className="flex gap-2">
-            <button 
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
               className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 transition"
             >
@@ -850,14 +913,18 @@ export default function ContactsPage() {
                 <button
                   key={pageNum}
                   onClick={() => setCurrentPage(pageNum)}
-                  className={`px-3 py-2 rounded-lg transition ${currentPage === pageNum ? 'bg-blue-800 text-white' : 'border border-gray-300 hover:bg-gray-50'}`}
+                  className={`px-3 py-2 rounded-lg transition ${
+                    currentPage === pageNum
+                      ? 'bg-blue-800 text-white'
+                      : 'border border-gray-300 hover:bg-gray-50'
+                  }`}
                 >
                   {pageNum}
                 </button>
               );
             })}
-            <button 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
               className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 transition"
             >
@@ -882,3 +949,21 @@ export default function ContactsPage() {
     </div>
   );
 }
+
+// ============================================================
+// FONCTIONS UTILITAIRES
+// ============================================================
+
+const stripHtml = (html: string): string => {
+  if (!html) return '';
+  if (typeof window === 'undefined') return html.replace(/<[^>]*>/g, '');
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return div.textContent || div.innerText || '';
+};
+
+const getExcerpt = (html: string, maxLength: number = 80): string => {
+  const text = stripHtml(html);
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+};

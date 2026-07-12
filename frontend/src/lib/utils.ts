@@ -148,66 +148,70 @@ export const calculatePercentage = (value: number, total: number): number => {
 
 export const getContractTypeColor = (type: string): string => {
   const colors: Record<string, string> = {
-    CDI: 'bg-blue-100 text-blue-700',
-    CDD: 'bg-purple-100 text-purple-700',
-    STAGE: 'bg-orange-100 text-orange-700',
-    FREELANCE: 'bg-indigo-100 text-indigo-700',
-    BENEVOLE: 'bg-green-100 text-green-700',
+    'CDI': 'bg-blue-100 text-blue-700',
+    'CDD': 'bg-purple-100 text-purple-700',
+    'STAGE': 'bg-orange-100 text-orange-700',
+    'FREELANCE': 'bg-indigo-100 text-indigo-700',
+    'BENEVOLE': 'bg-green-100 text-green-700',
+    'ALTERNANCE': 'bg-cyan-100 text-cyan-700',
+    'TEMPORARY': 'bg-gray-100 text-gray-700',
   };
   return colors[type] || 'bg-gray-100 text-gray-700';
 };
 
 export const getContractTypeLabel = (type: string): string => {
   const labels: Record<string, string> = {
-    CDI: 'CDI',
-    CDD: 'CDD',
-    STAGE: 'Stage',
-    FREELANCE: 'Freelance',
-    BENEVOLE: 'Bénévolat',
+    'CDI': 'CDI',
+    'CDD': 'CDD',
+    'STAGE': 'Stage',
+    'FREELANCE': 'Freelance',
+    'BENEVOLE': 'Bénévolat',
+    'ALTERNANCE': 'Alternance',
+    'TEMPORARY': 'Temporaire',
   };
   return labels[type] || type;
 };
 
 export const getJobStatusColor = (status: string): string => {
   const colors: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-700',
-    published: 'bg-green-100 text-green-700',
-    closed: 'bg-red-100 text-red-700',
-    expired: 'bg-yellow-100 text-yellow-700',
-    archived: 'bg-gray-100 text-gray-500',
+    'draft': 'bg-gray-100 text-gray-700',
+    'published': 'bg-green-100 text-green-700',
+    'closed': 'bg-red-100 text-red-700',
+    'expired': 'bg-yellow-100 text-yellow-700',
+    'archived': 'bg-gray-100 text-gray-500',
   };
   return colors[status] || 'bg-gray-100 text-gray-700';
 };
 
 export const getJobStatusLabel = (status: string): string => {
   const labels: Record<string, string> = {
-    draft: 'Brouillon',
-    published: 'Publiee',
-    closed: 'Fermee',
-    expired: 'Expiree',
-    archived: 'Archivée',
+    'draft': 'Brouillon',
+    'published': 'Publiee',
+    'closed': 'Fermee',
+    'expired': 'Expiree',
+    'archived': 'Archivee',
   };
   return labels[status] || status;
 };
 
 export const getApplicationStatusColor = (status: string): string => {
   const colors: Record<string, string> = {
-    submitted: 'bg-yellow-100 text-yellow-700',
-    reviewing: 'bg-blue-100 text-blue-700',
-    shortlisted: 'bg-purple-100 text-purple-700',
-    accepted: 'bg-green-100 text-green-700',
-    rejected: 'bg-red-100 text-red-700',
+    'submitted': 'bg-yellow-100 text-yellow-700',
+    'reviewing': 'bg-blue-100 text-blue-700',
+    'shortlisted': 'bg-purple-100 text-purple-700',
+    'accepted': 'bg-green-100 text-green-700',
+    'rejected': 'bg-red-100 text-red-700',
   };
   return colors[status] || 'bg-gray-100 text-gray-700';
 };
 
 export const getApplicationStatusLabel = (status: string): string => {
   const labels: Record<string, string> = {
-    submitted: 'Soumise',
-    reviewing: 'En examen',
-    shortlisted: 'Préselectionnee',
-    accepted: 'Acceptee',
-    rejected: 'Refusee',
+    'submitted': 'Soumise',
+    'reviewing': 'En revision',
+    'shortlisted': 'Preselectionnee',
+    'accepted': 'Acceptee',
+    'rejected': 'Refusee',
   };
   return labels[status] || status;
 };
@@ -218,20 +222,20 @@ export const getApplicationStatusLabel = (status: string): string => {
 
 export const getProjectStatusColor = (status: string): string => {
   const colors: Record<string, string> = {
-    active: 'bg-green-100 text-green-700',
-    completed: 'bg-blue-100 text-blue-700',
-    planning: 'bg-yellow-100 text-yellow-700',
-    draft: 'bg-gray-100 text-gray-700',
+    'active': 'bg-green-100 text-green-700',
+    'completed': 'bg-blue-100 text-blue-700',
+    'planning': 'bg-yellow-100 text-yellow-700',
+    'draft': 'bg-gray-100 text-gray-700',
   };
   return colors[status] || 'bg-gray-100 text-gray-700';
 };
 
 export const getProjectStatusLabel = (status: string): string => {
   const labels: Record<string, string> = {
-    active: 'Actif',
-    completed: 'Termine',
-    planning: 'En planification',
-    draft: 'Brouillon',
+    'active': 'Actif',
+    'completed': 'Termine',
+    'planning': 'En planification',
+    'draft': 'Brouillon',
   };
   return labels[status] || status;
 };
@@ -242,24 +246,24 @@ export const getProjectStatusLabel = (status: string): string => {
 
 export const getPostStatusColor = (status: string): string => {
   const colors: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-700',
-    published: 'bg-green-100 text-green-700',
-    archived: 'bg-gray-100 text-gray-500',
+    'draft': 'bg-gray-100 text-gray-700',
+    'published': 'bg-green-100 text-green-700',
+    'archived': 'bg-gray-100 text-gray-500',
   };
   return colors[status] || 'bg-gray-100 text-gray-700';
 };
 
 export const getPostStatusLabel = (status: string): string => {
   const labels: Record<string, string> = {
-    draft: 'Brouillon',
-    published: 'Publie',
-    archived: 'Archive',
+    'draft': 'Brouillon',
+    'published': 'Publie',
+    'archived': 'Archive',
   };
   return labels[status] || status;
 };
 
 // ============================================================
-// 9. GESTION DES FICHIERS
+// 9. GESTION DES FICHIERS - CORRIGE
 // ============================================================
 
 export const formatFileSize = (bytes: number | null | undefined): string => {
@@ -272,16 +276,76 @@ export const formatFileSize = (bytes: number | null | undefined): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
-export const getFileUrl = (
-  url: string | null | undefined,
-  defaultUrl: string = '/images/placeholder.jpg'
-): string => {
+/**
+ * Construit l'URL complète d'une image
+ * Supporte tous les formats d'URL
+ * Retourne la chaîne complète ou l'URL par défaut
+ */
+export const getFileUrl = (url: string | null | undefined, defaultUrl: string = '/images/placeholder.jpg'): string => {
   if (!url) return defaultUrl;
-  if (url.startsWith('http')) return url;
   
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
-  return `${apiUrl}${url}`;
+  // Si l'URL est déjà complète
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
+  
+  // ✅ Nettoyer les doubles slashes
+  const cleanUrl = url.replace(/^\/+/, '');
+  
+  // ✅ Si l'URL commence par api/uploads
+  if (cleanUrl.startsWith('api/uploads/')) {
+    return `${baseUrl}/${cleanUrl}`;
+  }
+  
+  // ✅ Si l'URL commence par uploads
+  if (cleanUrl.startsWith('uploads/')) {
+    return `${baseUrl}/${cleanUrl}`;
+  }
+  
+  // ✅ Si l'URL commence par api/upload/file
+  if (cleanUrl.startsWith('api/upload/file/')) {
+    return `${baseUrl}/${cleanUrl}`;
+  }
+  
+  // ✅ Si l'URL commence par api/upload
+  if (cleanUrl.startsWith('api/upload/')) {
+    return `${baseUrl}/${cleanUrl}`;
+  }
+  
+  // ✅ Si l'URL est un chemin simple (sans slash)
+  if (!cleanUrl.includes('/')) {
+    return `${baseUrl}/${cleanUrl}`;
+  }
+  
+  // Autre cas
+  return `${baseUrl}/${cleanUrl}`;
 };
+
+/**
+ * Extrait le nom de fichier d'une URL
+ */
+export const getFileNameFromUrl = (url: string | null | undefined): string => {
+  if (!url) return '';
+  const parts = url.split('/');
+  return parts[parts.length - 1] || '';
+};
+
+/**
+ * Vérifie si une URL est une image
+ */
+export const isImageUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false;
+  const extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico'];
+  const urlLower = url.toLowerCase();
+  return extensions.some(ext => urlLower.includes(ext));
+};
+
+/**
+ * Alias pour getFileUrl (compatibilité)
+ */
+export const buildImageUrl = getFileUrl;
 
 // ============================================================
 // 10. FONCTIONS UTILITAIRES
@@ -313,7 +377,51 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
 };
 
 // ============================================================
-// 11. EXPORT PAR DEFAUT
+// 11. GESTION DES FONDS D'ECRAN
+// ============================================================
+
+/**
+ * Construit l'URL complète pour un fond d'écran
+ */
+export const getBackgroundImageUrl = (background: { image_url?: string | null } | null | undefined): string | null => {
+  if (!background || !background.image_url) return null;
+  return getFileUrl(background.image_url);
+};
+
+/**
+ * Styles CSS pour le fond d'écran
+ */
+export const getBackgroundStyles = (
+  background: { image_url?: string | null; position?: string; is_active?: boolean } | null | undefined,
+  overlayOpacity: number = 45
+): React.CSSProperties => {
+  const imageUrl = getBackgroundImageUrl(background);
+  
+  if (!imageUrl || !background?.is_active) {
+    return {
+      background: 'linear-gradient(135deg, #1e3a8a, #1e40af, #1d4ed8)',
+    };
+  }
+  
+  return {
+    backgroundImage: `url(${imageUrl})`,
+    backgroundPosition: background?.position || 'center',
+    backgroundSize: 'cover',
+    backgroundAttachment: 'fixed',
+  };
+};
+
+/**
+ * Styles CSS pour l'overlay du fond d'écran
+ */
+export const getBackgroundOverlayStyles = (opacity: number = 45): React.CSSProperties => {
+  return {
+    backgroundColor: `rgba(0, 0, 0, ${Math.min(Math.max(opacity, 0), 100) / 100})`,
+  };
+};
+
+// ============================================================
+// 12. EXPORT PAR DEFAUT
 // ============================================================
 
 export default {
@@ -340,7 +448,13 @@ export default {
   getPostStatusLabel,
   formatFileSize,
   getFileUrl,
+  getFileNameFromUrl,
+  isImageUrl,
+  buildImageUrl,
   debounce,
   delay,
   copyToClipboard,
+  getBackgroundImageUrl,
+  getBackgroundStyles,
+  getBackgroundOverlayStyles,
 };

@@ -1,5 +1,4 @@
 // backend/src/modules/contact/dto/reply-contact.dto.ts
-
 import { IsString, IsNotEmpty, IsOptional, IsEmail, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 

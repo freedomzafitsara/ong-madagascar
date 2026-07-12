@@ -1,37 +1,36 @@
 // backend/src/modules/contact/dto/create-contact.dto.ts
-
-import { IsString, IsEmail, IsOptional, MaxLength, MinLength, IsPhoneNumber, IsNotEmpty } from 'class-validator';
+import { IsString, IsEmail, IsOptional, MaxLength, MinLength, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateContactDto {
   @ApiProperty({
     description: 'Nom complet du client',
-    example: 'Jean Dupont',
+    example: 'Client',
     required: true,
   })
   @IsString()
   @IsNotEmpty({ message: 'Le nom est requis' })
   @MinLength(2, { message: 'Le nom doit contenir au moins 2 caracteres' })
-  @MaxLength(100, { message: 'Le nom ne doit pas depasser 100 caracteres' })
+  @MaxLength(255, { message: 'Le nom ne doit pas depasser 255 caracteres' })
   full_name: string;
 
   @ApiProperty({
     description: 'Email du client',
-    example: 'jean.dupont@email.com',
+    example: 'client@email.com',
     required: true,
   })
   @IsEmail({}, { message: 'Email invalide' })
-  @MaxLength(100, { message: 'L\'email ne doit pas depasser 100 caracteres' })
+  @MaxLength(255, { message: 'L\'email ne doit pas depasser 255 caracteres' })
   email: string;
 
   @ApiProperty({
     description: 'Telephone du client (optionnel)',
-    example: '+261 32 12 345 67',
+    example: '0321234567',
     required: false,
   })
   @IsOptional()
-  @IsPhoneNumber('MG', { message: 'Numero de telephone malgache invalide' })
-  @MaxLength(20, { message: 'Le telephone ne doit pas depasser 20 caracteres' })
+  @IsString()
+  @MaxLength(50, { message: 'Le telephone ne doit pas depasser 50 caracteres' })
   phone?: string;
 
   @ApiProperty({
@@ -42,17 +41,17 @@ export class CreateContactDto {
   @IsString()
   @IsNotEmpty({ message: 'Le sujet est requis' })
   @MinLength(3, { message: 'Le sujet doit contenir au moins 3 caracteres' })
-  @MaxLength(200, { message: 'Le sujet ne doit pas depasser 200 caracteres' })
+  @MaxLength(255, { message: 'Le sujet ne doit pas depasser 255 caracteres' })
   subject: string;
 
   @ApiProperty({
     description: 'Message du client',
-    example: 'Je souhaite obtenir plus d\'informations sur vos offres d\'emploi pour les jeunes...',
+    example: 'Je souhaite obtenir plus d\'informations sur vos offres d\'emploi...',
     required: true,
   })
   @IsString()
   @IsNotEmpty({ message: 'Le message est requis' })
   @MinLength(10, { message: 'Le message doit contenir au moins 10 caracteres' })
-  @MaxLength(5000, { message: 'Le message ne doit pas depasser 5000 caracteres' })
+  @MaxLength(10000, { message: 'Le message ne doit pas depasser 10000 caracteres' })
   message: string;
 }

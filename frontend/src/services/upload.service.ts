@@ -33,15 +33,15 @@ export const uploadService = {
   /**
    * Upload d'image avec authentification
    */
-  async uploadImage(file: File, type: string = 'job', entityId?: string): Promise<UploadedFile> {
+  async uploadImage(file: File, type: string = 'background', entityId?: string): Promise<UploadedFile> {
     const token = localStorage.getItem('access_token') || localStorage.getItem('token');
     if (!token) {
-      throw new Error('Vous devez être connecté pour uploader des fichiers.');
+      throw new Error('Vous devez etre connecte pour uploader des fichiers.');
     }
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      throw new Error('Format de fichier non supporté. Utilisez JPG, PNG, WEBP ou GIF.');
+      throw new Error('Format de fichier non supporte. Utilisez JPG, PNG, WEBP ou GIF.');
     }
 
     const maxSize = 5 * 1024 * 1024;
@@ -51,9 +51,14 @@ export const uploadService = {
 
     const formData = new FormData();
     formData.append('file', file);
+    
+    // ✅ AJOUT: Envoyer les deux champs pour compatibilité
     formData.append('type', type);
+    formData.append('entityType', type);
+    
     if (entityId) {
       formData.append('entityId', entityId);
+      formData.append('entity_id', entityId); // ✅ Compatibilité
     }
 
     try {
@@ -65,10 +70,21 @@ export const uploadService = {
 
       const data = response.data;
       const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
-      const fileUrl = data.url || data.fileUrl || data.data?.url || `${baseUrl}/uploads/${data.id || data.fileId}`;
+      
+      // ✅ Construction correcte de l'URL
+      let fileUrl = data.url || data.fileUrl || data.data?.url;
+      if (!fileUrl || !fileUrl.startsWith('http')) {
+        if (fileUrl && fileUrl.startsWith('/uploads')) {
+          fileUrl = `${baseUrl}${fileUrl}`;
+        } else if (data.id) {
+          fileUrl = `${baseUrl}/uploads/${type}/${data.fileName || data.id}`;
+        } else {
+          fileUrl = `${baseUrl}/uploads/${type}/${file.name}`;
+        }
+      }
 
       return {
-        id: data.id || data.fileId || data.data?.id,
+        id: data.id || data.fileId || data.data?.id || '',
         url: fileUrl,
         fileName: data.filename || data.fileName || data.data?.filename || file.name,
         originalName: file.name,
@@ -84,7 +100,7 @@ export const uploadService = {
       console.error('Erreur upload:', error);
       
       if (error.response?.status === 401 || error.response?.status === 403) {
-        throw new Error('Session expirée. Veuillez vous reconnecter pour uploader des fichiers.');
+        throw new Error('Session expiree. Veuillez vous reconnecter pour uploader des fichiers.');
       }
       
       throw new Error(error.response?.data?.message || 'Erreur lors de l\'upload');
@@ -95,12 +111,12 @@ export const uploadService = {
    * Upload de fichier (alias pour uploadImage)
    */
   async uploadFile(file: File, options: UploadOptions = {}): Promise<UploadedFile> {
-    const { entityType = 'job', entityId } = options;
+    const { entityType = 'background', entityId } = options;
     return this.uploadImage(file, entityType, entityId);
   },
 
   /**
-   * Récupère l'URL complète d'une image à partir de son ID
+   * Recupere l'URL complete d'une image a partir de son ID
    */
   getImageUrl(id: string): string {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
@@ -108,14 +124,14 @@ export const uploadService = {
   },
 
   /**
-   * Récupère l'URL relative d'une image (pour les appels API)
+   * Recupere l'URL relative d'une image (pour les appels API)
    */
   getImageUrlRelative(id: string): string {
     return `/api/upload/file/${id}`;
   },
 
   /**
-   * Récupère l'URL complète d'un fichier (alias pour getImageUrl)
+   * Recupere l'URL complete d'un fichier (alias pour getImageUrl)
    */
   getFileUrl(id: string): string {
     return this.getImageUrl(id);
@@ -135,7 +151,7 @@ export const uploadService = {
       console.error('Erreur suppression:', error);
       
       if (error.response?.status === 401 || error.response?.status === 403) {
-        throw new Error('Session expirée. Veuillez vous reconnecter.');
+        throw new Error('Session expiree. Veuillez vous reconnecter.');
       }
       
       throw new Error(error.response?.data?.message || 'Erreur lors de la suppression');
@@ -145,16 +161,16 @@ export const uploadService = {
   /**
    * Upload de plusieurs images
    */
-  async uploadMultiple(files: File[], type: string = 'job', entityId?: string): Promise<UploadedFile[]> {
+  async uploadMultiple(files: File[], type: string = 'background', entityId?: string): Promise<UploadedFile[]> {
     const token = localStorage.getItem('access_token') || localStorage.getItem('token');
     if (!token) {
-      throw new Error('Vous devez être connecté pour uploader des fichiers.');
+      throw new Error('Vous devez etre connecte pour uploader des fichiers.');
     }
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     const invalidFiles = files.filter(f => !validTypes.includes(f.type));
     if (invalidFiles.length > 0) {
-      throw new Error('Certains fichiers ont un format non supporté.');
+      throw new Error('Certains fichiers ont un format non supporte.');
     }
 
     const formData = new FormData();
@@ -162,8 +178,10 @@ export const uploadService = {
       formData.append('files', file);
     });
     formData.append('type', type);
+    formData.append('entityType', type);
     if (entityId) {
       formData.append('entityId', entityId);
+      formData.append('entity_id', entityId);
     }
 
     try {
@@ -177,8 +195,8 @@ export const uploadService = {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
 
       return data.map((item: any) => ({
-        id: item.id || item.fileId || item.data?.id,
-        url: item.url || item.fileUrl || item.data?.url || `${baseUrl}/uploads/${item.id || item.fileId}`,
+        id: item.id || item.fileId || item.data?.id || '',
+        url: item.url || item.fileUrl || item.data?.url || `${baseUrl}/uploads/${type}/${item.filename || item.id}`,
         fileName: item.filename || item.fileName || item.data?.filename || '',
         originalName: item.originalName || item.data?.originalName || '',
         fileSize: item.size || item.data?.size || 0,
@@ -193,7 +211,7 @@ export const uploadService = {
       console.error('Erreur upload multiple:', error);
       
       if (error.response?.status === 401 || error.response?.status === 403) {
-        throw new Error('Session expirée. Veuillez vous reconnecter.');
+        throw new Error('Session expiree. Veuillez vous reconnecter.');
       }
       
       throw new Error(error.response?.data?.message || 'Erreur lors de l\'upload');
@@ -201,11 +219,11 @@ export const uploadService = {
   },
 
   /**
-   * Récupération des fichiers par entité
+   * Recuperation des fichiers par entite
    */
   async getFilesByEntity(entityId: string, type: string): Promise<UploadedFile[]> {
     if (!entityId || !type) {
-      throw new Error('ID de l\'entité et type requis.');
+      throw new Error('ID de l\'entite et type requis.');
     }
 
     try {
@@ -215,8 +233,8 @@ export const uploadService = {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
 
       return (data.data || data || []).map((item: any) => ({
-        id: item.id || item.fileId,
-        url: item.url || item.fileUrl || `${baseUrl}/uploads/${item.id || item.fileId}`,
+        id: item.id || item.fileId || '',
+        url: item.url || item.fileUrl || `${baseUrl}/uploads/${type}/${item.filename || item.id}`,
         fileName: item.filename || item.fileName || '',
         originalName: item.originalName || '',
         fileSize: item.size || item.fileSize || 0,
@@ -228,13 +246,13 @@ export const uploadService = {
         updatedAt: item.updatedAt || new Date().toISOString(),
       }));
     } catch (error: any) {
-      console.error('Erreur récupération fichiers:', error);
-      throw new Error(error.response?.data?.message || 'Erreur lors de la récupération des fichiers');
+      console.error('Erreur recuperation fichiers:', error);
+      throw new Error(error.response?.data?.message || 'Erreur lors de la recuperation des fichiers');
     }
   },
 
   /**
-   * Génère une URL d'image à partir de l'objet UploadedFile
+   * Genere une URL d'image a partir de l'objet UploadedFile
    */
   getFullUrl(file: UploadedFile | null | undefined): string | null {
     if (!file) return null;
@@ -244,7 +262,7 @@ export const uploadService = {
   },
 
   /**
-   * Vérifie si un fichier est une image
+   * Verifie si un fichier est une image
    */
   isImage(file: File | UploadedFile): boolean {
     if (file instanceof File) {
@@ -255,7 +273,7 @@ export const uploadService = {
   },
 
   /**
-   * Formate la taille du fichier en unités lisibles
+   * Formate la taille du fichier en unites lisibles
    */
   formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 B';
@@ -266,12 +284,12 @@ export const uploadService = {
   },
 
   /**
-   * Vérifie si le fichier est valide
+   * Verifie si le fichier est valide
    */
   isValidImage(file: File): { valid: boolean; error?: string } {
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      return { valid: false, error: 'Format non supporté' };
+      return { valid: false, error: 'Format non supporte' };
     }
     if (file.size > 5 * 1024 * 1024) {
       return { valid: false, error: 'Taille maximale 5 Mo' };

@@ -16,15 +16,19 @@ export class UploadService {
     @InjectRepository(UploadedFile)
     private fileRepository: Repository<UploadedFile>,
   ) {
-    // Creer le dossier uploads s'il n'existe pas
+    // Creer les dossiers
     if (!fs.existsSync(this.uploadsPath)) {
       fs.mkdirSync(this.uploadsPath, { recursive: true });
+      this.logger.log('Dossier uploads cree');
     }
 
-    // Creer le dossier profile s'il n'existe pas
-    const profilePath = path.join(this.uploadsPath, 'profile');
-    if (!fs.existsSync(profilePath)) {
-      fs.mkdirSync(profilePath, { recursive: true });
+    const subDirs = ['job', 'project', 'blog', 'profile', 'banner', 'logo', 'background', 'cv', 'diploma', 'attestation'];
+    for (const dir of subDirs) {
+      const subPath = path.join(this.uploadsPath, dir);
+      if (!fs.existsSync(subPath)) {
+        fs.mkdirSync(subPath, { recursive: true });
+        this.logger.log(`Dossier cree: uploads/${dir}`);
+      }
     }
   }
 
@@ -54,20 +58,17 @@ export class UploadService {
       const ext = this.getExtensionFromMimeType(mimeType);
       const finalFileName = `${timestamp}-${uniqueId}.${ext}`;
       
-      // Chemin relatif pour la base de donnees
       const relativePath = `uploads/${entityType}/${finalFileName}`;
       const fullPath = path.join(this.uploadsPath, entityType, finalFileName);
 
-      // Creer le dossier si necessaire
       const entityDir = path.join(this.uploadsPath, entityType);
       if (!fs.existsSync(entityDir)) {
         fs.mkdirSync(entityDir, { recursive: true });
       }
 
-      // Ecrire le fichier
       fs.writeFileSync(fullPath, file.buffer);
 
-      // ✅ CORRECTION: URL pour le serveur statique
+      // ✅ URL pour le serveur statique
       const fileUrl = `/uploads/${entityType}/${finalFileName}`;
 
       this.logger.log(`Fichier sauvegarde: ${fullPath}`);
@@ -127,16 +128,6 @@ export class UploadService {
     });
   }
 
-  async getMainFile(entityType: string, entityId: string): Promise<UploadedFile | null> {
-    const files = await this.getFilesByEntity(entityType, entityId);
-    return files.length > 0 ? files[0] : null;
-  }
-
-  async getFileUrl(id: string): Promise<string> {
-    const file = await this.getFileById(id);
-    return file.url;
-  }
-
   async deleteFile(id: string): Promise<void> {
     const file = await this.getFileById(id);
     
@@ -163,6 +154,7 @@ export class UploadService {
   }
 
   getImageUrl(id: string): string {
-    return `/uploads/${id}`;
+    const baseUrl = process.env.API_URL || 'http://localhost:4001';
+    return `${baseUrl}/uploads/${id}`;
   }
 }

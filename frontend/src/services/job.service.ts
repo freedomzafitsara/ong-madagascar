@@ -16,12 +16,12 @@ export enum JobStatus {
 }
 
 export enum ContractType {
-  CDI = 'cdi',
-  CDD = 'cdd',
-  STAGE = 'stage',
-  FREELANCE = 'freelance',
-  ALTERNANCE = 'alternance',
-  TEMPORARY = 'temporary'
+  CDI = 'CDI',
+  CDD = 'CDD',
+  STAGE = 'STAGE',
+  FREELANCE = 'FREELANCE',
+  ALTERNANCE = 'ALTERNANCE',
+  TEMPORARY = 'TEMPORARY'
 }
 
 export interface JobOffer {
@@ -32,11 +32,11 @@ export interface JobOffer {
   description_mg?: string;
   company: string;
   location?: string;
-  contract_type: ContractType;
+  contract_type: ContractType | string;
   deadline?: string;
-  status: JobStatus;
+  status: JobStatus | string;
   is_published: boolean;
-  image_url?: string;
+  image_url?: string | null;
   main_image_id?: string;
   views_count: number;
   applications_count: number;
@@ -71,6 +71,8 @@ export interface CreateJobApplicationDto {
   photo_url?: string;
   linkedin_url?: string;
   portfolio_url?: string;
+  diploma_url?: string;
+  attestation_url?: string;
 }
 
 export interface JobApplication {
@@ -89,9 +91,13 @@ export interface JobApplication {
   photo_url?: string;
   linkedin_url?: string;
   portfolio_url?: string;
-  status: 'pending' | 'reviewing' | 'interview' | 'accepted' | 'rejected';
+  diploma_url?: string;
+  attestation_url?: string;
+  status: 'submitted' | 'reviewing' | 'shortlisted' | 'accepted' | 'rejected';
+  notes?: string;
   created_at: string;
   updated_at: string;
+  applied_at?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -103,6 +109,51 @@ export interface PaginatedResponse<T> {
 }
 
 // ============================================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE
+// ============================================================
+
+const getBaseUrl = (): string => {
+  return process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
+};
+
+const buildImageUrl = (imageUrl?: string | null): string | undefined => {
+  if (!imageUrl) return undefined;
+  
+  // Si l'URL est déjà complète
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl;
+  }
+  
+  const baseUrl = getBaseUrl();
+  
+  // Nettoyer l'URL
+  const cleanUrl = imageUrl.replace(/^\/+/, '');
+  
+  // Si l'URL commence par api/uploads
+  if (cleanUrl.startsWith('api/uploads/')) {
+    return `${baseUrl}/${cleanUrl}`;
+  }
+  
+  // Si l'URL commence par uploads
+  if (cleanUrl.startsWith('uploads/')) {
+    return `${baseUrl}/${cleanUrl}`;
+  }
+  
+  // Si l'URL commence par api/upload/file
+  if (cleanUrl.startsWith('api/upload/file/')) {
+    return `${baseUrl}/${cleanUrl}`;
+  }
+  
+  // Si l'URL commence par api/upload
+  if (cleanUrl.startsWith('api/upload/')) {
+    return `${baseUrl}/${cleanUrl}`;
+  }
+  
+  // Autre cas
+  return `${baseUrl}/${cleanUrl}`;
+};
+
+// ============================================================
 // SERVICE
 // ============================================================
 
@@ -112,7 +163,7 @@ export const jobService = {
   // ============================================================
 
   /**
-   * Récupère les offres publiées
+   * Recupere les offres publiees
    */
   async getPublishedOffers(params?: {
     page?: number;
@@ -127,23 +178,39 @@ export const jobService = {
     if (params?.search) queryParams.append('search', params.search);
 
     const response = await api.get(`/jobs/offers/public?${queryParams.toString()}`);
-    return response.data;
+    
+    // ✅ Enrichir les images avec l'URL complète
+    const enrichedData = response.data.data.map((job: JobOffer) => ({
+      ...job,
+      image_url: buildImageUrl(job.image_url),
+    }));
+    
+    return {
+      ...response.data,
+      data: enrichedData,
+    };
   },
 
   /**
-   * Récupère une offre publique par son ID
+   * Recupere une offre publique par son ID
    */
   async getPublicOfferById(id: string): Promise<JobOffer> {
     const response = await api.get(`/jobs/offers/public/${id}`);
-    return response.data;
+    return {
+      ...response.data,
+      image_url: buildImageUrl(response.data.image_url),
+    };
   },
 
   /**
-   * Récupère les offres en vedette
+   * Recupere les offres en vedette
    */
   async getFeaturedOffers(limit: number = 3): Promise<JobOffer[]> {
     const response = await api.get(`/jobs/offers/featured?limit=${limit}`);
-    return response.data;
+    return response.data.map((job: JobOffer) => ({
+      ...job,
+      image_url: buildImageUrl(job.image_url),
+    }));
   },
 
   // ============================================================
@@ -151,7 +218,7 @@ export const jobService = {
   // ============================================================
 
   /**
-   * Récupère toutes les offres (admin)
+   * Recupere toutes les offres (admin)
    */
   async getAllOffers(params?: {
     page?: number;
@@ -168,39 +235,61 @@ export const jobService = {
     if (params?.search) queryParams.append('search', params.search);
 
     const response = await api.get(`/jobs/offers?${queryParams.toString()}`);
-    return response.data;
+    
+    // ✅ Enrichir les images avec l'URL complète
+    const enrichedData = response.data.data.map((job: JobOffer) => ({
+      ...job,
+      image_url: buildImageUrl(job.image_url),
+    }));
+    
+    return {
+      ...response.data,
+      data: enrichedData,
+    };
   },
 
   /**
-   * Récupère une offre par son ID (admin)
+   * Recupere une offre par son ID (admin)
    */
   async getOfferById(id: string): Promise<JobOffer> {
     const response = await api.get(`/jobs/offers/${id}`);
-    return response.data;
+    return {
+      ...response.data,
+      image_url: buildImageUrl(response.data.image_url),
+    };
   },
 
   /**
-   * Crée une nouvelle offre
+   * Cree une nouvelle offre
    */
   async createOffer(data: Partial<JobOffer>): Promise<JobOffer> {
     const response = await api.post('/jobs/offers', data);
-    return response.data;
+    return {
+      ...response.data,
+      image_url: buildImageUrl(response.data.image_url),
+    };
   },
 
   /**
-   * Met à jour une offre
+   * Met a jour une offre
    */
   async updateOffer(id: string, data: Partial<JobOffer>): Promise<JobOffer> {
     const response = await api.put(`/jobs/offers/${id}`, data);
-    return response.data;
+    return {
+      ...response.data,
+      image_url: buildImageUrl(response.data.image_url),
+    };
   },
 
   /**
-   * Met à jour le statut d'une offre
+   * Met a jour le statut d'une offre
    */
-  async updateOfferStatus(id: string, status: JobStatus): Promise<JobOffer> {
+  async updateOfferStatus(id: string, status: JobStatus | string): Promise<JobOffer> {
     const response = await api.patch(`/jobs/offers/${id}/status`, { status });
-    return response.data;
+    return {
+      ...response.data,
+      image_url: buildImageUrl(response.data.image_url),
+    };
   },
 
   /**
@@ -211,7 +300,7 @@ export const jobService = {
   },
 
   /**
-   * Récupère les statistiques des offres
+   * Recupere les statistiques des offres
    */
   async getJobStats(): Promise<JobOfferStats> {
     const response = await api.get('/jobs/offers/stats');
@@ -223,7 +312,7 @@ export const jobService = {
   // ============================================================
 
   /**
-   * Postule à une offre
+   * Postule a une offre
    */
   async apply(data: CreateJobApplicationDto): Promise<JobApplication> {
     const response = await api.post('/jobs/applications', data);
@@ -231,7 +320,7 @@ export const jobService = {
   },
 
   /**
-   * ✅ Vérifie si l'utilisateur a déjà postulé à une offre
+   * Verifie si l'utilisateur a deja postule a une offre
    */
   async checkApplication(jobId: string): Promise<{ applied: boolean; application?: JobApplication }> {
     try {
@@ -246,7 +335,7 @@ export const jobService = {
   },
 
   /**
-   * Récupère les candidatures de l'utilisateur
+   * Recupere les candidatures de l'utilisateur
    */
   async getMyApplications(): Promise<JobApplication[]> {
     const response = await api.get('/jobs/applications/my');
@@ -254,7 +343,28 @@ export const jobService = {
   },
 
   /**
-   * Récupère les candidatures pour une offre (admin)
+   * Recupere toutes les candidatures (admin)
+   */
+  async getAllApplications(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    job_offer_id?: string;
+    search?: string;
+  }): Promise<PaginatedResponse<JobApplication>> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.job_offer_id) queryParams.append('job_offer_id', params.job_offer_id);
+    if (params?.search) queryParams.append('search', params.search);
+
+    const response = await api.get(`/jobs/applications?${queryParams.toString()}`);
+    return response.data;
+  },
+
+  /**
+   * Recupere les candidatures pour une offre specifique (admin)
    */
   async getApplicationsForJob(jobId: string, params?: {
     page?: number;
@@ -266,15 +376,30 @@ export const jobService = {
     if (params?.limit) queryParams.append('limit', String(params.limit));
     if (params?.status) queryParams.append('status', params.status);
 
-    const response = await api.get(`/jobs/applications/job/${jobId}?${queryParams.toString()}`);
+    const response = await api.get(`/jobs/offers/${jobId}/applications?${queryParams.toString()}`);
     return response.data;
   },
 
   /**
-   * Met à jour le statut d'une candidature (admin)
+   * Met a jour le statut d'une candidature (admin)
    */
-  async updateApplicationStatus(id: string, status: string): Promise<JobApplication> {
-    const response = await api.patch(`/jobs/applications/${id}/status`, { status });
+  async updateApplicationStatus(id: string, status: string, notes?: string): Promise<JobApplication> {
+    const response = await api.patch(`/jobs/applications/${id}/status`, { status, notes });
+    return response.data;
+  },
+
+  /**
+   * Supprime une candidature (admin)
+   */
+  async deleteApplication(id: string): Promise<void> {
+    await api.delete(`/jobs/applications/${id}`);
+  },
+
+  /**
+   * Recupere une candidature par son ID
+   */
+  async getApplicationById(id: string): Promise<JobApplication> {
+    const response = await api.get(`/jobs/applications/${id}`);
     return response.data;
   },
 
@@ -286,14 +411,6 @@ export const jobService = {
     const response = await api.get(url, {
       responseType: 'text',
     });
-    return response.data;
-  },
-
-  /**
-   * Récupère une candidature par son ID
-   */
-  async getApplicationById(id: string): Promise<JobApplication> {
-    const response = await api.get(`/jobs/applications/${id}`);
     return response.data;
   },
 };

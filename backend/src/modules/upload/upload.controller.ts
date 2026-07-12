@@ -70,34 +70,43 @@ export class UploadController {
     @Body() uploadDto: UploadImageDto,
     @CurrentUser() currentUser: any,
   ) {
-    // ✅ Vérifier que l'utilisateur est authentifié
+    // Verifier l'authentification
     if (!currentUser) {
-      throw new UnauthorizedException('Vous devez être connecté pour uploader un fichier.');
+      throw new UnauthorizedException('Vous devez etre connecte pour uploader un fichier.');
     }
 
-    this.logger.log(`Upload demandé par ${currentUser.email} (${currentUser.role})`);
+    this.logger.log(`Upload demande par ${currentUser.email} (${currentUser.role})`);
 
     if (!file) {
       throw new BadRequestException('Aucun fichier recu');
     }
 
-    if (!uploadDto.entityType) {
-      throw new BadRequestException('entityType est requis');
+    // ✅ Utiliser entityType ou type (compatibilite frontend)
+    const entityType = uploadDto.entityType || uploadDto.type;
+    if (!entityType) {
+      throw new BadRequestException('entityType ou type est requis');
     }
+
+    // ✅ Utiliser entityId ou entity_id (compatibilite frontend)
+    const entityId = uploadDto.entityId || uploadDto.entity_id;
 
     try {
       const result = await this.uploadService.uploadFile(
         file,
-        uploadDto.entityType,
-        uploadDto.entityId,
+        entityType,
+        entityId,
       );
       
-      this.logger.log(`Upload réussi: ${result.id} - ${result.filename} par ${currentUser.email}`);
+      this.logger.log(`Upload reussi: ${result.id} - ${result.filename} par ${currentUser.email}`);
+      
+      // ✅ Construction de l'URL complete
+      const baseUrl = process.env.API_URL || 'http://localhost:4001';
+      const imageUrl = `${baseUrl}${result.url}`;
       
       return {
         success: true,
         id: result.id,
-        url: this.uploadService.getImageUrl(result.id),
+        url: imageUrl,
         fileName: result.filename,
         originalName: result.originalName,
         fileSize: result.size,
@@ -137,6 +146,9 @@ export class UploadController {
       
       res.setHeader('Content-Type', mimeType);
       res.setHeader('Cache-Control', 'public, max-age=31536000');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
       res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.originalName)}"`);
       
       return res.sendFile(fullPath);
@@ -163,11 +175,13 @@ export class UploadController {
     try {
       const files = await this.uploadService.getFilesByEntity(type, entityId);
       
+      const baseUrl = process.env.API_URL || 'http://localhost:4001';
+      
       return {
         success: true,
         files: files.map(f => ({
           id: f.id,
-          url: this.uploadService.getImageUrl(f.id),
+          url: `${baseUrl}${f.url}`,
           fileName: f.filename,
           originalName: f.originalName,
           fileSize: f.size,
@@ -179,7 +193,7 @@ export class UploadController {
       };
     } catch (error) {
       this.logger.error(`Erreur liste fichiers: ${error.message}`);
-      throw new BadRequestException('Erreur lors de la récupération des fichiers');
+      throw new BadRequestException('Erreur lors de la recuperation des fichiers');
     }
   }
 
@@ -193,7 +207,7 @@ export class UploadController {
   async deleteFile(@Param('id', ParseUUIDPipe) id: string) {
     try {
       await this.uploadService.deleteFile(id);
-      this.logger.log(`Fichier supprimé: ${id}`);
+      this.logger.log(`Fichier supprime: ${id}`);
       return { 
         success: true, 
         message: 'Fichier supprime avec succes' 
