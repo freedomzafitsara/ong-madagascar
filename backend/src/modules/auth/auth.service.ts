@@ -16,6 +16,8 @@ import { User, UserRole } from '../../entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { EmailService } from '../email/email.service';
+// ✅ AJOUT : Importer le DTO pour le typage
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -215,29 +217,67 @@ export class AuthService {
     return this.getProfile(userId);
   }
 
-  async changePassword(userId: string, changePasswordDto: any): Promise<any> {
+  // ✅ AJOUT : VERSION AMÉLIORÉE DE changePassword AVEC TYPAGE
+  async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<any> {
     const { currentPassword, newPassword } = changePasswordDto;
 
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    // 1. Trouver l'utilisateur avec le mot de passe
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'email', 'first_name', 'last_name', 'password', 'role', 'is_active'],
+    });
+
     if (!user) {
       throw new NotFoundException('Utilisateur non trouve');
     }
 
+    // 2. Vérifier si le compte est actif
+    if (!user.is_active) {
+      throw new ForbiddenException('Votre compte est desactive. Veuillez contacter l\'administrateur.');
+    }
+
+    // 3. Vérifier l'ancien mot de passe
     const isPasswordValid = await user.validatePassword(currentPassword);
     if (!isPasswordValid) {
       throw new BadRequestException('Mot de passe actuel incorrect');
     }
 
+    // 4. Vérifier que le nouveau mot de passe est différent de l'ancien
+    const isSamePassword = await user.validatePassword(newPassword);
+    if (isSamePassword) {
+      throw new BadRequestException('Le nouveau mot de passe doit être différent de l\'ancien');
+    }
+
+    // 5. Vérifier la longueur du nouveau mot de passe
     if (newPassword.length < 6) {
       throw new BadRequestException('Le mot de passe doit contenir au moins 6 caracteres');
     }
 
+    // 6. Mettre à jour le mot de passe
     user.password = newPassword;
     await this.userRepository.save(user);
 
+    // 7. Logger l'action
     this.logger.log(`Mot de passe modifie pour ${user.email}`);
 
-    return { success: true, message: 'Mot de passe modifie avec succes' };
+    // 8. Envoyer une notification par email (optionnel)
+    try {
+      await this.emailService.sendPasswordChangedEmail(user.email, user.first_name);
+      this.logger.log(`Email de confirmation envoye a ${user.email}`);
+    } catch (error) {
+      this.logger.error(`Erreur envoi email de confirmation a ${user.email}:`, error.message);
+    }
+
+    return {
+      success: true,
+      message: 'Mot de passe modifie avec succes',
+      user: {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+      }
+    };
   }
 
   // ============================================================

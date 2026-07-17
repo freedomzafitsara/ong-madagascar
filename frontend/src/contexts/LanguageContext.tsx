@@ -150,6 +150,15 @@ export const translations: Record<Language, Record<string, string>> = {
     'common.actions': 'Actions',
     'common.status': 'Statut',
 
+    // ✅ AJOUT : Traductions manquantes
+    'common.fix_errors': 'Veuillez corriger les erreurs',
+    'common.future_date': 'La date doit être dans le futur',
+    'common.invalid_format': 'Format non supporté',
+    'common.file_too_large': 'Fichier trop volumineux',
+    'common.upload_error': 'Erreur lors du téléchargement',
+    'common.access_denied': 'Accès non autorisé',
+    'common.optional': 'Optionnel',
+
     // ==================== DASHBOARD ====================
     'dashboard.title': 'Tableau de bord',
     'dashboard.welcome': 'Bonjour',
@@ -249,6 +258,14 @@ export const translations: Record<Language, Record<string, string>> = {
     'auth.terms_accept': 'J\'accepte les conditions d\'utilisation',
     'auth.already_account': 'Déjà un compte ?',
     'auth.no_account': 'Pas encore de compte ?',
+
+    // ==================== JOBS DASHBOARD ====================
+    'jobs.publish_success': 'Offre publiée avec succès !',
+    'jobs.draft_saved': 'Brouillon sauvegardé avec succès !',
+    'jobs.create_success': 'Offre créée avec succès !',
+    'jobs.update_success': 'Offre mise à jour avec succès !',
+    'jobs.delete_success': 'Offre supprimée avec succès !',
+    'jobs.status_updated': 'Statut de l\'offre mis à jour !',
   },
   mg: {
     // ==================== NAVIGATION ====================
@@ -378,6 +395,15 @@ export const translations: Record<Language, Record<string, string>> = {
     'common.actions': 'Hetsika',
     'common.status': 'Toe-javatra',
 
+    // ✅ AJOUT : Traductions manquantes
+    'common.fix_errors': 'Ahitsio ny hadisoana',
+    'common.future_date': 'Tsy maintsy ho avy ny daty',
+    'common.invalid_format': 'Tsy ekena ny endrika',
+    'common.file_too_large': 'Be loatra ny rakitra',
+    'common.upload_error': 'Nisy olana tamin\'ny fampidirana',
+    'common.access_denied': 'Tsy mahazo miditra',
+    'common.optional': 'Tsy voatery',
+
     // ==================== DASHBOARD ====================
     'dashboard.title': 'Takelaka fandraisana',
     'dashboard.welcome': 'Tonga soa',
@@ -477,6 +503,14 @@ export const translations: Record<Language, Record<string, string>> = {
     'auth.terms_accept': 'Ekena ny fepetra fampiasana',
     'auth.already_account': 'Efa manana kaonty ?',
     'auth.no_account': 'Mbola tsy manana kaonty ?',
+
+    // ==================== JOBS DASHBOARD ====================
+    'jobs.publish_success': 'Vita ny famoahana ny asa !',
+    'jobs.draft_saved': 'Vita ny fitehirizana volavola !',
+    'jobs.create_success': 'Vita ny famoronana ny asa !',
+    'jobs.update_success': 'Vita ny fanovana ny asa !',
+    'jobs.delete_success': 'Vita ny famafana ny asa !',
+    'jobs.status_updated': 'Vita ny fanovana sata !',
   },
 };
 
@@ -515,7 +549,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('y-mad-language', language);
       document.documentElement.lang = language;
       
-      // ✅ Déclencher un événement pour mettre à jour les composants
+      // Déclencher un événement pour mettre à jour les composants
       window.dispatchEvent(new Event('languageChange'));
     }
   }, [language, isLoaded]);

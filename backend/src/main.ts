@@ -27,10 +27,11 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'debug'],
   });
 
+  // ✅ Modification : forbidNonWhitelisted à false pour permettre les champs additionnels
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,  // ← Changé de true à false
       transform: true,
       transformOptions: {
         enableImplicitConversion: true,
@@ -109,18 +110,15 @@ async function bootstrap() {
   logger.log('Sous-dossiers uploads crees avec succes');
 
   // ============================================================
-  // SERVEUR DE FICHIERS STATIQUES - CORRECTION IMPORTANTE
+  // SERVEUR DE FICHIERS STATIQUES
   // ============================================================
 
-  // ✅ Utiliser le chemin absolu complet
   const absoluteUploadsPath = path.resolve(uploadsPath);
   logger.log(`Chemin absolu des uploads: ${absoluteUploadsPath}`);
 
-  // ✅ Servir les fichiers statiques avec le bon prefixe
   app.useStaticAssets(absoluteUploadsPath, {
     prefix: '/uploads/',
     setHeaders: (res, filePath) => {
-      // Déterminer le type MIME en fonction de l'extension
       const ext = path.extname(filePath).toLowerCase();
       let contentType = 'application/octet-stream';
       
@@ -138,20 +136,17 @@ async function bootstrap() {
     },
   });
 
-  // ✅ Ajouter une route de fallback pour debug
   app.use('/uploads', (req, res, next) => {
     logger.debug(`Fichier statique demande: ${req.url}`);
     next();
   });
 
-  // ✅ Vérifier les fichiers existants au demarrage
   const profileDir = path.join(uploadsPath, 'profile');
   if (fs.existsSync(profileDir)) {
     const files = fs.readdirSync(profileDir);
     logger.log(`Fichiers dans uploads/profile: ${files.length}`);
     files.forEach(file => {
       logger.log(`  - ${file}`);
-      // Vérifier que le fichier est accessible
       const filePath = path.join(profileDir, file);
       const stats = fs.statSync(filePath);
       logger.log(`    Taille: ${stats.size} octets`);

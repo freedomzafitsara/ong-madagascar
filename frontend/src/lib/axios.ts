@@ -3,14 +3,21 @@
 import axios from 'axios';
 
 // ============================================================
-// 1. CONFIGURATION DE BASE - CORRIGÉ
+// 1. CONFIGURATION DE BASE
 // ============================================================
 
-//  Utiliser NEXT_PUBLIC_API_URL directement
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+
+const getBaseUrl = (): string => {
+  const url = API_BASE_URL;
+  if (url.endsWith('/api')) {
+    return url;
+  }
+  return `${url}/api`;
+};
 
 const api = axios.create({
-  baseURL: API_BASE_URL, // Déjà avec /api
+  baseURL: getBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -32,7 +39,6 @@ api.interceptors.request.use(
       }
     }
     
-    // Debug: Afficher l'URL complète
     console.log(`[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     
     return config;
@@ -76,7 +82,7 @@ api.interceptors.response.use(
         const isPublicPage = window.location.pathname.includes('/login') || 
                             window.location.pathname === '/' ||
                             window.location.pathname.includes('/public') ||
-                            window.location.pathname.includes('/offers'); // ✅ Ajout des pages publiques
+                            window.location.pathname.includes('/jobs');
                             
         if (!isPublicPage) {
           window.location.href = '/login';

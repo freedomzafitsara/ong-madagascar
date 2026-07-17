@@ -201,7 +201,7 @@ export default function Header() {
     if (role === 'super_admin' || role === 'admin') {
       router.push('/dashboard/profil-admin');
     } else if (role === 'candidate') {
-      router.push('/candidate/profil-candidat');
+      router.push('/candidat/profil-candidat');
     } else {
       toast(t(
         'Votre espace personnel est en cours de configuration.',
@@ -215,11 +215,10 @@ export default function Header() {
   }, [isAuthenticated, user, router, t]);
 
   // ============================================================
-  // ✅ GESTIONNAIRE DASHBOARD - CORRIGÉ
+  // GESTIONNAIRE DASHBOARD
   // ============================================================
 
   const handleDashboardClick = useCallback((e?: React.MouseEvent) => {
-    // Empêcher le comportement par défaut si c'est un événement
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -227,14 +226,6 @@ export default function Header() {
     
     setIsUserOpen(false);
     setIsMenuOpen(false);
-    
-    // ✅ DEBUG - Afficher l'état actuel
-    console.log('[Header] handleDashboardClick - État:', {
-      isAuthenticated,
-      user,
-      role: user?.role,
-      hasAccess: hasDashboardAccess()
-    });
     
     if (!isAuthenticated || !user) {
       toast(t(
@@ -251,8 +242,6 @@ export default function Header() {
     const role = user.role;
     
     if (role === 'admin' || role === 'super_admin') {
-      // ✅ NAVIGATION SIMPLE avec Next.js
-      console.log('[Header] Navigation vers /dashboard');
       router.push('/dashboard');
     } else {
       toast(t(
@@ -264,7 +253,7 @@ export default function Header() {
       });
       router.push('/');
     }
-  }, [isAuthenticated, user, router, t, hasDashboardAccess]);
+  }, [isAuthenticated, user, router, t]);
 
   // ============================================================
   // RENDU
@@ -440,28 +429,10 @@ export default function Header() {
                         <ChevronRight className="w-3 h-3 ml-auto text-gray-500" />
                       </button>
                       
-                      {isCandidate() && (
-                        <>
-                          <Link
-                            href="/candidate/applications"
-                            onClick={() => setIsUserOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                          >
-                            <FileText className="w-4 h-4" />
-                            {t('Mes candidatures', 'Ny fangatahako')}
-                          </Link>
-                          <Link
-                            href="/candidate/saved-jobs"
-                            onClick={() => setIsUserOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                          >
-                            <Heart className="w-4 h-4" />
-                            {t('Offres sauvegardées', 'Asa voatahiry')}
-                          </Link>
-                        </>
-                      )}
+                      {/* ✅ SUPPRESSION DES LIENS "Mes candidatures" et "Offres sauvegardées" */}
+                      {/* ✅ Les liens ont été supprimés ci-dessous */}
                       
-                      {/* ✅ LIEN DASHBOARD CORRIGÉ - On utilise un Link avec onClick */}
+                      {/* LIEN DASHBOARD */}
                       {hasDashboardAccess() && (
                         <Link
                           href="/dashboard"
@@ -554,28 +525,10 @@ export default function Header() {
                     {t('Mon profil', 'Ny momba ahy')}
                   </button>
                   
-                  {isCandidate() && (
-                    <>
-                      <Link
-                        href="/candidate/applications"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
-                      >
-                        <FileText className="w-4 h-4" />
-                        {t('Mes candidatures', 'Ny fangatahako')}
-                      </Link>
-                      <Link
-                        href="/candidate/saved-jobs"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
-                      >
-                        <Heart className="w-4 h-4" />
-                        {t('Offres sauvegardées', 'Asa voatahiry')}
-                      </Link>
-                    </>
-                  )}
+                  {/* ✅ SUPPRESSION DES LIENS "Mes candidatures" et "Offres sauvegardées" DANS LE MENU MOBILE */}
+                  {/* ✅ Les liens ont été supprimés ci-dessous */}
                   
-                  {/* ✅ LIEN DASHBOARD MOBILE CORRIGÉ */}
+                  {/* LIEN DASHBOARD MOBILE */}
                   {hasDashboardAccess() && (
                     <Link
                       href="/dashboard"

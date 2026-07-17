@@ -139,6 +139,19 @@ export default function NewJobPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { language, t } = useLanguage();
   
+  // Fonction sécurisée pour les traductions
+  const safeT = useCallback((key: string, fallback: string): string => {
+    try {
+      const result = t(key);
+      if (result === key) {
+        return fallback;
+      }
+      return result;
+    } catch {
+      return fallback;
+    }
+  }, [t]);
+  
   // ============================================================
   // ÉTATS
   // ============================================================
@@ -274,12 +287,12 @@ export default function NewJobPage() {
     }
     
     if (formData.deadline && isDateExpired(formData.deadline)) {
-      errors.deadline = t('common.future_date') || 'La date doit être dans le futur';
+      errors.deadline = safeT('common.future_date', 'La date doit être dans le futur');
     }
     
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [formData, currentLabels, t]);
+  }, [formData, currentLabels, safeT]);
 
   // ============================================================
   // GESTIONNAIRES
@@ -298,19 +311,19 @@ export default function NewJobPage() {
     if (!file) return;
 
     if (!VALID_IMAGE_TYPES.includes(file.type)) {
-      toast.error(t('common.invalid_format') || 'Format non supporté');
+      toast.error(safeT('common.invalid_format', 'Format non supporté'));
       return;
     }
 
     if (file.size > MAX_IMAGE_SIZE) {
-      toast.error(t('common.file_too_large') || 'Image trop grande (max 5 Mo)');
+      toast.error(safeT('common.file_too_large', 'Image trop grande (max 5 Mo)'));
       return;
     }
 
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
     setIsDirty(true);
-  }, [t]);
+  }, [safeT]);
 
   const removeImage = useCallback(() => {
     setImageFile(null);
@@ -324,14 +337,14 @@ export default function NewJobPage() {
   }, []);
 
   // ============================================================
-  // SOUMISSION
+  // SOUMISSION - ✅ CORRIGÉE
   // ============================================================
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
-      toast.error(t('common.fix_errors') || 'Veuillez corriger les erreurs');
+      toast.error(safeT('common.fix_errors', 'Veuillez corriger les erreurs'));
       const firstError = Object.keys(validationErrors)[0];
       if (firstError) {
         const element = document.querySelector(`[name="${firstError}"]`) as HTMLElement;
@@ -347,6 +360,7 @@ export default function NewJobPage() {
       let imageUrl = null;
       let imageId = null;
       
+      // Upload de l'image si présente
       if (imageFile) {
         try {
           const result = await uploadService.uploadImage(imageFile, 'job');
@@ -367,13 +381,14 @@ export default function NewJobPage() {
           setUploadedFile(uploadedFileData);
         } catch (uploadError: any) {
           console.error('Erreur upload:', uploadError);
-          toast.error(uploadError.message || t('common.upload_error') || 'Erreur lors de l\'upload');
+          toast.error(uploadError.message || safeT('common.upload_error', 'Erreur lors de l\'upload'));
           setLoading(false);
           setUploadingImage(false);
           return;
         }
       }
       
+      // ✅ Préparer les données avec l'image
       const jobData = {
         title_fr: formData.title_fr.trim(),
         title_mg: formData.title_mg?.trim() || undefined,
@@ -385,31 +400,34 @@ export default function NewJobPage() {
         deadline: formData.deadline || undefined,
         is_published: formData.is_published,
         image_url: imageUrl || undefined,
+        main_image_id: imageId || undefined,  // ✅ Inclure directement
       };
 
+      // ✅ Créer l'offre avec toutes les données en une seule requête
       const result = await jobService.createOffer(jobData);
       
-      if (imageId && result.id) {
-        await jobService.updateOffer(result.id, { 
-          image_url: imageUrl || undefined,
-          main_image_id: imageId,
-        });
-      }
+      // ✅ SUPPRIMER l'appel updateOffer séparé - plus besoin !
+      // if (imageId && result.id) {
+      //   await jobService.updateOffer(result.id, { 
+      //     image_url: imageUrl || undefined,
+      //     main_image_id: imageId,
+      //   });
+      // }
       
       toast.success(result.is_published
-        ? t('jobs.publish_success') || 'Offre publiée avec succès !'
-        : t('jobs.draft_saved') || 'Brouillon sauvegardé avec succès !');
+        ? safeT('jobs.publish_success', 'Offre publiée avec succès !')
+        : safeT('jobs.draft_saved', 'Brouillon sauvegardé avec succès !'));
       
       router.push('/dashboard/jobs');
     } catch (err) {
       console.error('Erreur:', err);
       const errorObj = err as { response?: { data?: { message?: string } }; message?: string };
-      toast.error(errorObj.response?.data?.message || errorObj.message || t('common.error') || 'Erreur lors de la création');
+      toast.error(errorObj.response?.data?.message || errorObj.message || safeT('common.error', 'Erreur lors de la création'));
     } finally {
       setLoading(false);
       setUploadingImage(false);
     }
-  }, [formData, imageFile, validateForm, validationErrors, router, t]);
+  }, [formData, imageFile, validateForm, validationErrors, router, safeT]);
 
   // ============================================================
   // RENDU CONDITIONNEL
@@ -428,9 +446,9 @@ export default function NewJobPage() {
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-800">{t('common.access_denied') || 'Accès non autorisé'}</h1>
+          <h1 className="text-2xl font-bold text-gray-800">{safeT('common.access_denied', 'Accès non autorisé')}</h1>
           <Link href="/dashboard/jobs" className="mt-4 inline-flex items-center gap-2 text-blue-600 hover:underline">
-            {t('common.back') || 'Retour aux offres'}
+            {safeT('common.back', 'Retour aux offres')}
           </Link>
         </div>
       </div>
@@ -447,9 +465,7 @@ export default function NewJobPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
       
-      {/* ============================================================
-      EN-TÊTE
-      ============================================================ */}
+      {/* EN-TÊTE */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/jobs" className="p-2 hover:bg-gray-100 rounded-lg transition">
@@ -468,7 +484,6 @@ export default function NewJobPage() {
           </div>
         </div>
         
-        {/* Bouton Aperçu */}
         <button
           type="button"
           onClick={togglePreview}
@@ -481,16 +496,12 @@ export default function NewJobPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* ============================================================
-        FORMULAIRE - 2/3 DE LA LARGEUR
-        ============================================================ */}
+        {/* FORMULAIRE - 2/3 DE LA LARGEUR */}
         <div className="lg:col-span-2">
           <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200">
             <div className="p-6 space-y-6">
               
-              {/* ============================================================
-              SECTION IMAGE
-              ============================================================ */}
+              {/* SECTION IMAGE */}
               <div className="border-b border-gray-200 pb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   {currentLabels.imageUpload} <span className="text-xs text-gray-400 font-normal">({currentLabels.optional})</span>
@@ -543,9 +554,7 @@ export default function NewJobPage() {
                 )}
               </div>
 
-              {/* ============================================================
-              TITRES BILINGUES
-              ============================================================ */}
+              {/* TITRES BILINGUES */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -586,9 +595,7 @@ export default function NewJobPage() {
                 </div>
               </div>
 
-              {/* ============================================================
-              ENTREPRISE ET LIEU
-              ============================================================ */}
+              {/* ENTREPRISE ET LIEU */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -632,9 +639,7 @@ export default function NewJobPage() {
                 </div>
               </div>
 
-              {/* ============================================================
-              TYPE CONTRAT ET DATE
-              ============================================================ */}
+              {/* TYPE CONTRAT ET DATE */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -679,9 +684,7 @@ export default function NewJobPage() {
                 </div>
               </div>
 
-              {/* ============================================================
-              DESCRIPTION FR
-              ============================================================ */}
+              {/* DESCRIPTION FR */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {currentLabels.descriptionFr} <span className="text-red-500">*</span>
@@ -705,9 +708,7 @@ export default function NewJobPage() {
                 </p>
               </div>
 
-              {/* ============================================================
-              DESCRIPTION MG
-              ============================================================ */}
+              {/* DESCRIPTION MG */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {currentLabels.descriptionMg}
@@ -721,9 +722,7 @@ export default function NewJobPage() {
                 />
               </div>
 
-              {/* ============================================================
-              STATUT DE PUBLICATION
-              ============================================================ */}
+              {/* STATUT DE PUBLICATION */}
               <div className="pt-4 border-t border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   {currentLabels.status}
@@ -761,9 +760,7 @@ export default function NewJobPage() {
               </div>
             </div>
 
-            {/* ============================================================
-            BOUTONS D'ACTION
-            ============================================================ */}
+            {/* BOUTONS D'ACTION */}
             <div className="flex flex-wrap justify-end gap-3 p-6 bg-gray-50 border-t border-gray-200 rounded-b-xl">
               <Link 
                 href="/dashboard/jobs" 
@@ -793,9 +790,7 @@ export default function NewJobPage() {
           </form>
         </div>
 
-        {/* ============================================================
-        PANEL DE PRÉVISUALISATION - 1/3 DE LA LARGEUR
-        ============================================================ */}
+        {/* PANEL DE PRÉVISUALISATION - 1/3 DE LA LARGEUR */}
         <div className="lg:col-span-1">
           {showPreview && (
             <div className="sticky top-6">
@@ -808,7 +803,6 @@ export default function NewJobPage() {
                 imagePreview={imagePreview}
               />
               
-              {/* Résumé des champs obligatoires */}
               <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
                 <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-blue-700" />

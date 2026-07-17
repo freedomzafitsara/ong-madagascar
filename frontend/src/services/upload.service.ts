@@ -26,6 +26,30 @@ export interface UploadOptions {
 }
 
 // ============================================================
+// CONSTANTES
+// ============================================================
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'image/bmp'];
+const ALLOWED_DOCUMENT_TYPES = ['application/pdf'];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 Mo
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 Mo
+
+const getBaseUrl = (): string => {
+  return process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
+};
+
+const buildImageUrl = (id?: string, fileName?: string, type?: string): string => {
+  const baseUrl = getBaseUrl();
+  if (id) {
+    return `${baseUrl}/uploads/${id}`;
+  }
+  if (fileName && type) {
+    return `${baseUrl}/uploads/${type}/${fileName}`;
+  }
+  return `${baseUrl}/uploads`;
+};
+
+// ============================================================
 // SERVICE
 // ============================================================
 
@@ -39,26 +63,27 @@ export const uploadService = {
       throw new Error('Vous devez etre connecte pour uploader des fichiers.');
     }
 
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    // ✅ Validation du type de fichier
+    const validTypes = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOCUMENT_TYPES];
     if (!validTypes.includes(file.type)) {
-      throw new Error('Format de fichier non supporte. Utilisez JPG, PNG, WEBP ou GIF.');
+      throw new Error(`Format de fichier non supporte. Types acceptes: JPG, PNG, WEBP, GIF, SVG, BMP, PDF. Format recu: ${file.type}`);
     }
 
-    const maxSize = 5 * 1024 * 1024;
+    // ✅ Verification de la taille
+    const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
+    const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
     if (file.size > maxSize) {
-      throw new Error('Le fichier est trop volumineux (max 5 Mo).');
+      throw new Error(`Le fichier est trop volumineux (max ${maxSize / 1024 / 1024} Mo).`);
     }
 
     const formData = new FormData();
     formData.append('file', file);
-    
-    // ✅ AJOUT: Envoyer les deux champs pour compatibilité
     formData.append('type', type);
     formData.append('entityType', type);
     
     if (entityId) {
       formData.append('entityId', entityId);
-      formData.append('entity_id', entityId); // ✅ Compatibilité
+      formData.append('entity_id', entityId);
     }
 
     try {
@@ -69,17 +94,26 @@ export const uploadService = {
       });
 
       const data = response.data;
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
+      const baseUrl = getBaseUrl();
       
       // ✅ Construction correcte de l'URL
       let fileUrl = data.url || data.fileUrl || data.data?.url;
-      if (!fileUrl || !fileUrl.startsWith('http')) {
-        if (fileUrl && fileUrl.startsWith('/uploads')) {
-          fileUrl = `${baseUrl}${fileUrl}`;
-        } else if (data.id) {
-          fileUrl = `${baseUrl}/uploads/${type}/${data.fileName || data.id}`;
+      
+      if (!fileUrl) {
+        if (data.id) {
+          fileUrl = buildImageUrl(data.id);
+        } else if (data.fileName) {
+          fileUrl = buildImageUrl(undefined, data.fileName, type);
         } else {
           fileUrl = `${baseUrl}/uploads/${type}/${file.name}`;
+        }
+      } else if (!fileUrl.startsWith('http')) {
+        if (fileUrl.startsWith('/uploads')) {
+          fileUrl = `${baseUrl}${fileUrl}`;
+        } else if (fileUrl.startsWith('/')) {
+          fileUrl = `${baseUrl}${fileUrl}`;
+        } else {
+          fileUrl = `${baseUrl}/${fileUrl}`;
         }
       }
 
@@ -103,7 +137,8 @@ export const uploadService = {
         throw new Error('Session expiree. Veuillez vous reconnecter pour uploader des fichiers.');
       }
       
-      throw new Error(error.response?.data?.message || 'Erreur lors de l\'upload');
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de l\'upload';
+      throw new Error(errorMsg);
     }
   },
 
@@ -119,8 +154,7 @@ export const uploadService = {
    * Recupere l'URL complete d'une image a partir de son ID
    */
   getImageUrl(id: string): string {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
-    return `${baseUrl}/uploads/${id}`;
+    return buildImageUrl(id);
   },
 
   /**
@@ -192,21 +226,33 @@ export const uploadService = {
       });
 
       const data = response.data;
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
+      const baseUrl = getBaseUrl();
 
-      return data.map((item: any) => ({
-        id: item.id || item.fileId || item.data?.id || '',
-        url: item.url || item.fileUrl || item.data?.url || `${baseUrl}/uploads/${type}/${item.filename || item.id}`,
-        fileName: item.filename || item.fileName || item.data?.filename || '',
-        originalName: item.originalName || item.data?.originalName || '',
-        fileSize: item.size || item.data?.size || 0,
-        format: item.format || item.data?.format || 'unknown',
-        path: item.path || item.data?.path || '',
-        type: item.type || item.data?.type || type,
-        entityId: item.entityId || item.data?.entityId || entityId || null,
-        createdAt: item.createdAt || item.data?.createdAt || new Date().toISOString(),
-        updatedAt: item.updatedAt || item.data?.updatedAt || new Date().toISOString(),
-      }));
+      // ✅ Si la reponse est un objet avec data
+      const items = Array.isArray(data) ? data : (data.data || data.files || []);
+      
+      return items.map((item: any) => {
+        let fileUrl = item.url || item.fileUrl || item.data?.url;
+        if (!fileUrl) {
+          fileUrl = buildImageUrl(item.id, item.filename || item.fileName, type);
+        } else if (!fileUrl.startsWith('http')) {
+          fileUrl = `${baseUrl}${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+        }
+
+        return {
+          id: item.id || item.fileId || item.data?.id || '',
+          url: fileUrl,
+          fileName: item.filename || item.fileName || item.data?.filename || '',
+          originalName: item.originalName || item.data?.originalName || '',
+          fileSize: item.size || item.data?.size || 0,
+          format: item.format || item.data?.format || 'unknown',
+          path: item.path || item.data?.path || '',
+          type: item.type || item.data?.type || type,
+          entityId: item.entityId || item.data?.entityId || entityId || null,
+          createdAt: item.createdAt || item.data?.createdAt || new Date().toISOString(),
+          updatedAt: item.updatedAt || item.data?.updatedAt || new Date().toISOString(),
+        };
+      });
     } catch (error: any) {
       console.error('Erreur upload multiple:', error);
       
@@ -219,7 +265,7 @@ export const uploadService = {
   },
 
   /**
-   * Recuperation des fichiers par entite
+   * Recuperation des fichiers par entite - CORRIGE
    */
   async getFilesByEntity(entityId: string, type: string): Promise<UploadedFile[]> {
     if (!entityId || !type) {
@@ -230,11 +276,26 @@ export const uploadService = {
       const response = await api.get(`/upload/entity/${type}/${entityId}`);
       const data = response.data;
       
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4001';
+      const baseUrl = getBaseUrl();
 
-      return (data.data || data || []).map((item: any) => ({
+      // ✅ Extraction robuste des fichiers
+      let files: any[] = [];
+      
+      if (data && typeof data === 'object') {
+        if (Array.isArray(data)) {
+          files = data;
+        } else if (Array.isArray(data.data)) {
+          files = data.data;
+        } else if (Array.isArray(data.files)) {
+          files = data.files;
+        } else if (data.success && Array.isArray(data.files)) {
+          files = data.files;
+        }
+      }
+
+      return files.map((item: any) => ({
         id: item.id || item.fileId || '',
-        url: item.url || item.fileUrl || `${baseUrl}/uploads/${type}/${item.filename || item.id}`,
+        url: item.url || item.fileUrl || buildImageUrl(item.id, item.filename || item.fileName, type),
         fileName: item.filename || item.fileName || '',
         originalName: item.originalName || '',
         fileSize: item.size || item.fileSize || 0,
@@ -247,7 +308,7 @@ export const uploadService = {
       }));
     } catch (error: any) {
       console.error('Erreur recuperation fichiers:', error);
-      throw new Error(error.response?.data?.message || 'Erreur lors de la recuperation des fichiers');
+      return []; // ✅ Retourner un tableau vide en cas d'erreur
     }
   },
 
@@ -287,12 +348,28 @@ export const uploadService = {
    * Verifie si le fichier est valide
    */
   isValidImage(file: File): { valid: boolean; error?: string } {
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'image/bmp'];
     if (!validTypes.includes(file.type)) {
-      return { valid: false, error: 'Format non supporte' };
+      return { valid: false, error: `Format non supporte. Types acceptes: JPG, PNG, WEBP, GIF, SVG, BMP. Format recu: ${file.type}` };
     }
-    if (file.size > 5 * 1024 * 1024) {
-      return { valid: false, error: 'Taille maximale 5 Mo' };
+    if (file.size > MAX_IMAGE_SIZE) {
+      return { valid: false, error: `Taille maximale ${MAX_IMAGE_SIZE / 1024 / 1024} Mo.` };
+    }
+    if (file.size === 0) {
+      return { valid: false, error: 'Fichier vide' };
+    }
+    return { valid: true };
+  },
+
+  /**
+   * Verifie si le fichier est un PDF valide
+   */
+  isValidPdf(file: File): { valid: boolean; error?: string } {
+    if (file.type !== 'application/pdf') {
+      return { valid: false, error: 'Format PDF uniquement' };
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return { valid: false, error: `Taille maximale ${MAX_FILE_SIZE / 1024 / 1024} Mo.` };
     }
     if (file.size === 0) {
       return { valid: false, error: 'Fichier vide' };

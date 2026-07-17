@@ -206,7 +206,20 @@ function ArchiveIcon(props: any) {
 
 export default function JobsDashboardPage() {
   const { user, token } = useAuth();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
+  
+  // Fonction sécurisée pour les traductions
+  const safeT = useCallback((key: string, fallback: string): string => {
+    try {
+      const result = t(key);
+      if (result === key) {
+        return fallback;
+      }
+      return result;
+    } catch {
+      return fallback;
+    }
+  }, [t]);
   
   // ============================================================
   // ETATS
@@ -233,6 +246,7 @@ export default function JobsDashboardPage() {
     pending_applications: 0,
   });
   const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const isMounted = useRef(true);
   const initialFetchDone = useRef(false);
@@ -285,13 +299,14 @@ export default function JobsDashboardPage() {
   }, []);
 
   // ============================================================
-  // FETCH FUNCTIONS
+  // ✅ FETCH FUNCTIONS - CORRIGÉES AVEC GESTION D'ERREUR 404
   // ============================================================
 
   const fetchJobs = useCallback(async () => {
     if (!token || !isMounted.current) return;
     
     setLoading(true);
+    setError(null);
     try {
       const params: any = { 
         page: currentPage, 
@@ -303,10 +318,8 @@ export default function JobsDashboardPage() {
       
       const response = await jobService.getAllOffers(params);
       
-      if (response && response.data && isMounted.current) {
-        // ✅ CORRECTION: Enrichir les offres avec l'URL complète des images
-        // Utiliser undefined au lieu de null pour compatibilité avec JobOffer
-        const enrichedJobs: JobOffer[] = response.data.map((job: JobOffer) => ({
+      if (response && isMounted.current) {
+        const enrichedJobs: JobOffer[] = (response.data || []).map((job: JobOffer) => ({
           ...job,
           image_url: buildImageUrl(job.image_url) || undefined,
         }));
@@ -314,18 +327,34 @@ export default function JobsDashboardPage() {
         setJobs(enrichedJobs);
         setTotalPages(response.totalPages || 1);
         setTotalItems(response.total || 0);
+      } else {
+        setJobs([]);
+        setTotalPages(1);
+        setTotalItems(0);
       }
     } catch (error: any) {
       console.error('Erreur chargement:', error);
       if (isMounted.current) {
-        toast.error(error.response?.data?.message || 'Erreur de chargement');
+        // ✅ Ne pas afficher de toast pour les erreurs 404
+        if (error.response?.status !== 404) {
+          const errorMsg = safeT('common.error', 'Erreur de chargement');
+          toast.error(error.response?.data?.message || errorMsg);
+        }
+        setJobs([]);
+        setTotalPages(1);
+        setTotalItems(0);
+        setError('Impossible de charger les offres');
       }
     } finally {
       if (isMounted.current) {
         setLoading(false);
       }
     }
-  }, [currentPage, filters.search, filters.status, filters.contractType, token]);
+  }, [currentPage, filters.search, filters.status, filters.contractType, token, safeT]);
+
+  // ============================================================
+  // ✅ FETCH STATS - CORRIGÉ AVEC FALLBACK SILENCIEUX
+  // ============================================================
 
   const fetchStats = useCallback(async () => {
     if (!token || !isMounted.current) return;
@@ -344,7 +373,9 @@ export default function JobsDashboardPage() {
         });
       }
     } catch (error) {
-      console.error('Erreur stats:', error);
+      // ✅ Erreur silencieuse pour les stats - ne pas afficher de toast
+      console.warn('Erreur stats (ignored):', error);
+      // Garder les valeurs par défaut
     }
   }, [token]);
 
@@ -386,7 +417,8 @@ export default function JobsDashboardPage() {
       fetchJobs();
       fetchStats();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Erreur');
+      const errorMsg = safeT('common.error', 'Erreur');
+      toast.error(error.response?.data?.message || errorMsg);
     }
   };
 
@@ -402,7 +434,8 @@ export default function JobsDashboardPage() {
       fetchJobs();
       fetchStats();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Erreur');
+      const errorMsg = safeT('common.error', 'Erreur');
+      toast.error(error.response?.data?.message || errorMsg);
     }
   };
 
@@ -421,7 +454,8 @@ export default function JobsDashboardPage() {
       URL.revokeObjectURL(url);
       toast.success('Export reussi');
     } catch (error) {
-      toast.error('Erreur export');
+      const errorMsg = safeT('common.error', 'Erreur export');
+      toast.error(errorMsg);
     } finally {
       setExporting(false);
     }
@@ -462,7 +496,7 @@ export default function JobsDashboardPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 className="w-12 h-12 text-blue-800 animate-spin" />
-        <p className="text-gray-500 font-medium">Chargement...</p>
+        <p className="text-gray-500 font-medium">{getText('Chargement...', 'Miandry...')}</p>
       </div>
     );
   }
@@ -481,8 +515,8 @@ export default function JobsDashboardPage() {
             <Briefcase className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Offres d'emploi</h1>
-            <p className="text-gray-500 text-sm">Gestion des offres d'emploi</p>
+            <h1 className="text-2xl font-bold text-gray-800">{getText('Offres d\'emploi', 'Toerana asa')}</h1>
+            <p className="text-gray-500 text-sm">{getText('Gestion des offres d\'emploi', 'Fitantanana ny toerana asa')}</p>
           </div>
         </div>
         {hasEditRights && (
@@ -491,7 +525,7 @@ export default function JobsDashboardPage() {
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition shadow-sm font-medium"
           >
             <Plus className="w-4 h-4" />
-            Nouvelle offre
+            {getText('Nouvelle offre', 'Asa vaovao')}
           </Link>
         )}
       </div>
@@ -510,7 +544,7 @@ export default function JobsDashboardPage() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
               type="text" 
-              placeholder="Rechercher..." 
+              placeholder={getText('Rechercher...', 'Karohy...')}
               value={filters.search}
               onChange={(e) => { 
                 setFilters({ ...filters, search: e.target.value }); 
@@ -553,7 +587,7 @@ export default function JobsDashboardPage() {
                 className="px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition flex items-center gap-1"
               >
                 <X className="w-4 h-4" />
-                Effacer
+                {getText('Effacer', 'Fafao')}
               </button>
             )}
           </div>
@@ -562,7 +596,7 @@ export default function JobsDashboardPage() {
             <button 
               onClick={handleRefresh} 
               className="p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-              title="Actualiser"
+              title={getText('Actualiser', 'Havaozina')}
             >
               <RefreshCw className="w-4 h-4 text-gray-600" />
             </button>
@@ -570,7 +604,7 @@ export default function JobsDashboardPage() {
               onClick={handleExport} 
               disabled={exporting} 
               className="p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
-              title="Exporter"
+              title={getText('Exporter', 'Hanondrana')}
             >
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 text-gray-600" />}
             </button>
@@ -610,12 +644,12 @@ export default function JobsDashboardPage() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-[30%]">Offre</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-[15%]">Entreprise</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-[15%]">Lieu</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-[10%]">Candidatures</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-[15%]">Statut</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-[15%]">Actions</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-[30%]">{getText('Offre', 'Asa')}</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-[15%]">{getText('Entreprise', 'Orinasa')}</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-[15%]">{getText('Lieu', 'Toerana')}</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-[10%]">{getText('Candidatures', 'Fangatahana')}</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-[15%]">{getText('Statut', 'Sata')}</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-[15%]">{getText('Actions', 'Hetsika')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -624,8 +658,8 @@ export default function JobsDashboardPage() {
                   <td colSpan={6} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Briefcase className="w-12 h-12 text-gray-300" />
-                      <p className="text-gray-500 font-medium">Aucune offre trouvee</p>
-                      <p className="text-sm text-gray-400">Essayez de modifier vos filtres</p>
+                      <p className="text-gray-500 font-medium">{getText('Aucune offre trouvee', 'Tsy misy asa hita')}</p>
+                      <p className="text-sm text-gray-400">{getText('Essayez de modifier vos filtres', 'Andramo ovaina ny filtrao')}</p>
                     </div>
                   </td>
                 </tr>
@@ -634,7 +668,6 @@ export default function JobsDashboardPage() {
                   <tr key={job.id} className="hover:bg-gray-50 transition">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        {/* ✅ IMAGE CORRIGEE */}
                         <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden relative flex items-center justify-center flex-shrink-0 border border-gray-200">
                           {job.image_url ? (
                             <img 
@@ -687,7 +720,7 @@ export default function JobsDashboardPage() {
                         <Link 
                           href={`/dashboard/jobs/${job.id}`} 
                           className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" 
-                          title="Voir"
+                          title={getText('Voir', 'Jereo')}
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
@@ -696,14 +729,14 @@ export default function JobsDashboardPage() {
                             <Link 
                               href={`/dashboard/jobs/${job.id}/edit`} 
                               className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" 
-                              title="Modifier"
+                              title={getText('Modifier', 'Hanova')}
                             >
                               <Edit className="w-4 h-4" />
                             </Link>
                             <button 
                               onClick={() => handleToggleStatus(job.id, job.status)} 
                               className="p-2 text-gray-500 hover:text-blue-800 rounded-lg hover:bg-gray-100 transition" 
-                              title={job.status === 'published' ? 'Fermer' : 'Publier'}
+                              title={job.status === 'published' ? getText('Fermer', 'Hanakatona') : getText('Publier', 'Hamoaka')}
                             >
                               {job.status === 'published' ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
                             </button>
@@ -713,7 +746,7 @@ export default function JobsDashboardPage() {
                           <button 
                             onClick={() => handleDelete(job.id, job.title_fr)} 
                             className="p-2 text-gray-500 hover:text-red-600 rounded-lg hover:bg-gray-100 transition" 
-                            title="Supprimer"
+                            title={getText('Supprimer', 'Hamafa')}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -732,9 +765,9 @@ export default function JobsDashboardPage() {
       {totalPages > 1 && (
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
           <div className="text-sm text-gray-500 order-2 sm:order-1">
-            Page {currentPage} / {totalPages} 
+            {getText('Page', 'Pejy')} {currentPage} / {totalPages} 
             <span className="hidden sm:inline ml-2">
-              ({totalItems} offres)
+              ({totalItems} {getText('offres', 'asa')})
             </span>
           </div>
           <div className="flex gap-2 order-1 sm:order-2">
@@ -790,29 +823,29 @@ export default function JobsDashboardPage() {
             <div className="flex items-center gap-6 flex-wrap">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                <span className="text-xs text-gray-600">Publiees: {stats.published}</span>
+                <span className="text-xs text-gray-600">{getText('Publiees', 'Navoaka')}: {stats.published}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                <span className="text-xs text-gray-600">Brouillons: {stats.draft}</span>
+                <span className="text-xs text-gray-600">{getText('Brouillons', 'Volavola')}: {stats.draft}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                <span className="text-xs text-gray-600">Fermees: {stats.closed}</span>
+                <span className="text-xs text-gray-600">{getText('Fermees', 'Nakatona')}: {stats.closed}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-                <span className="text-xs text-gray-600">Expirees: {stats.expired}</span>
+                <span className="text-xs text-gray-600">{getText('Expirees', 'Lany daty')}: {stats.expired}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                <span className="text-xs text-gray-600">Archivees: {stats.archived}</span>
+                <span className="text-xs text-gray-600">{getText('Archivees', 'Voatahiry')}: {stats.archived}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">Total: {stats.total}</span>
+              <span className="text-xs text-gray-400">{getText('Total', 'Rehetra')}: {stats.total}</span>
               <span className="text-xs text-gray-300">|</span>
-              <span className="text-xs text-gray-400">Candidatures: {stats.total_applications}</span>
+              <span className="text-xs text-gray-400">{getText('Candidatures', 'Fangatahana')}: {stats.total_applications}</span>
             </div>
           </div>
         </div>

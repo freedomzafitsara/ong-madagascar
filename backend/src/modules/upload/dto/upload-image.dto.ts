@@ -17,11 +17,13 @@ export const ENTITY_TYPES = [
   'background', 
   'cv', 
   'diploma', 
-  'attestation'
+  'attestation',
+  'cover_letter',   
+  'letter',         
+  'cover'           
 ] as const;
 
 export type EntityType = typeof ENTITY_TYPES[number];
-
 // ============================================================
 // DTO POUR L'UPLOAD D'UNE IMAGE
 // ============================================================

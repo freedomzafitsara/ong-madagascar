@@ -271,7 +271,42 @@ export default function LoginPage() {
   }, [email]);
 
   // ============================================================
-  // SOUMISSION DU FORMULAIRE - AVEC REDIRECTION INTELLIGENTE
+  //  FONCTION DE REDIRECTION - CORRIGÉE
+  // ============================================================
+
+  const redirectUser = useCallback((user: any) => {
+    const role = user?.role;
+    
+    // Si c'est un administrateur
+    if (role === 'admin' || role === 'super_admin') {
+      router.push('/dashboard');
+      return;
+    }
+    
+    // Si c'est un candidat et qu'il y a une offre specifique
+    if (jobId) {
+      router.push(`/jobs/${jobId}`);
+      return;
+    }
+    
+    // Si c'est un candidat et qu'il y a une URL de redirection
+    if (redirectUrl && redirectUrl !== '/') {
+      router.push(redirectUrl);
+      return;
+    }
+    
+    //  CORRECTION : Redirection vers /candidat/profil-candidat (avec un "a")
+    if (role === 'candidate') {
+      router.push('/candidat/profil-candidat');
+      return;
+    }
+    
+    // Fallback
+    router.push('/');
+  }, [router, jobId, redirectUrl]);
+
+  // ============================================================
+  // SOUMISSION DU FORMULAIRE
   // ============================================================
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -300,30 +335,12 @@ export default function LoginPage() {
       await login(email, password);
       recordLoginAttempt(true);
       
-      // Redirection intelligente selon le role
+      //  Récupérer l'utilisateur et rediriger
       const userData = localStorage.getItem('user');
       const currentUser = userData ? JSON.parse(userData) : null;
       
-      // Si c'est un administrateur
-      if (currentUser?.role === 'admin' || currentUser?.role === 'super_admin') {
-        router.push('/dashboard');
-        return;
-      }
-      
-      // Si c'est un candidat et qu'il y a une offre specifique
-      if (jobId) {
-        router.push(`/jobs/${jobId}`);
-        return;
-      }
-      
-      // Si c'est un candidat et qu'il y a une URL de redirection
-      if (redirectUrl && redirectUrl !== '/') {
-        router.push(redirectUrl);
-        return;
-      }
-      
-      // Par defaut pour les candidats : redirection vers la page des offres
-      router.push('/jobs');
+      //  Rediriger en fonction du role
+      redirectUser(currentUser);
       
     } catch (error: any) {
       recordLoginAttempt(false);

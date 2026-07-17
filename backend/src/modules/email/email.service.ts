@@ -94,7 +94,7 @@ export class EmailService {
   }
 
   // ============================================================
-  // ✅ ENVOI D'EMAIL DE BIENVENUE
+  // ENVOI D'EMAIL DE BIENVENUE
   // ============================================================
 
   async sendWelcomeEmail(to: string, firstName: string): Promise<void> {
@@ -153,7 +153,7 @@ export class EmailService {
   }
 
   // ============================================================
-  // ✅ ENVOI D'EMAIL DE REINITIALISATION DU MOT DE PASSE
+  // ENVOI D'EMAIL DE REINITIALISATION DU MOT DE PASSE
   // ============================================================
 
   async sendResetPasswordEmail(to: string, token: string, firstName?: string): Promise<void> {
@@ -215,6 +215,67 @@ export class EmailService {
       this.logger.log(`Email de reinitialisation envoye a ${to}`);
     } catch (error) {
       this.logger.error(`Erreur envoi email de reinitialisation a ${to}:`, error.message);
+    }
+  }
+
+  // ============================================================
+  // ✅ AJOUT : ENVOI D'EMAIL DE CONFIRMATION DE CHANGEMENT DE MOT DE PASSE
+  // ============================================================
+
+  async sendPasswordChangedEmail(to: string, firstName: string): Promise<void> {
+    await this.ensureConnected();
+
+    const fromEmail = this.configService.get<string>('SMTP_FROM', 'ymad.mg@gmail.com');
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Y-MaD Association');
+
+    const subject = 'Mot de passe modifié - Y-MaD';
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Mot de passe modifié</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #1E3A8A; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px; }
+          .security-note { background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b; }
+          .footer { text-align: center; font-size: 12px; color: #94a3b8; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Y-MaD</h1>
+          <p>Young for Madagascar Development</p>
+        </div>
+        <div class="content">
+          <h2>Bonjour ${firstName},</h2>
+          <p>Votre mot de passe a été modifié avec succès.</p>
+          <div class="security-note">
+            <strong>🔒 Sécurité</strong><br>
+            Si vous n'êtes pas à l'origine de cette modification, 
+            veuillez contacter immédiatement notre support à 
+            <a href="mailto:support@ymad.mg">support@ymad.mg</a>.
+          </div>
+          <p style="color: #64748b;">L'équipe Y-MaD</p>
+        </div>
+        <div class="footer">
+          <p>© 2025 Y-MaD Association - Carion, Antananarivo, Madagascar</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject,
+        html,
+      });
+      this.logger.log(`Email de confirmation de changement de mot de passe envoyé à ${to}`);
+    } catch (error) {
+      this.logger.error(`Erreur envoi email de confirmation à ${to}:`, error.message);
     }
   }
 

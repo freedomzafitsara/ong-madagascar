@@ -156,7 +156,7 @@ function StatusBadge({ isActive }: { isActive: boolean }) {
 }
 
 /**
- * ✅ ImagePreview corrigé - Gère les valeurs null
+ * ImagePreview corrigé - Gère les valeurs null
  */
 function ImagePreview({ url, alt }: { url: string; alt: string }) {
   const [hasError, setHasError] = useState(false);

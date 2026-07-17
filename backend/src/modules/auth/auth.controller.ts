@@ -1,4 +1,4 @@
-﻿// backend/src/modules/auth/auth.controller.ts
+﻿// backend/src/modules/auth/auth.controller.ts (extrait modifié)
 
 import {
   Controller,
@@ -22,6 +22,8 @@ import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { Public } from './decorators/public.decorator';
 import { UserRole } from '../../entities/user.entity';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -48,13 +50,18 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Put('profile')
-  async updateProfile(@Request() req: any, @Body() updateDto: any) {
+  async updateProfile(@Request() req: any, @Body() updateDto: UpdateProfileDto) {
     return this.authService.updateProfile(req.user.id, updateDto);
   }
 
+  // ✅ CHANGER PATCH EN PUT pour correspondre à la requête frontend
   @UseGuards(JwtAuthGuard)
-  @Patch('change-password')
-  async changePassword(@Request() req: any, @Body() changePasswordDto: any) {
+  @Put('change-password')  // ← Modifié de @Patch à @Put
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @Request() req: any,
+    @Body() changePasswordDto: ChangePasswordDto,  // ← Utiliser le DTO typé
+  ) {
     return this.authService.changePassword(req.user.id, changePasswordDto);
   }
 

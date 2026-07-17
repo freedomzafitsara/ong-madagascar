@@ -39,6 +39,30 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { UserRole } from '../auth/entities/user.entity';
 
+// ✅ Liste des types MIME autorises
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml',
+  'image/bmp',
+  'image/tiff',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+];
+
+// ✅ Types pour les avatars (limites plus strictes)
+const AVATAR_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+];
+
 @Controller('upload')
 export class UploadController {
   private readonly logger = new Logger(UploadController.name);
@@ -55,12 +79,14 @@ export class UploadController {
     storage: memoryStorage(),
     limits: { fileSize: 100 * 1024 * 1024 },
     fileFilter: (req, file, callback) => {
-      const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
-      if (allowed.includes(file.mimetype.toLowerCase())) {
+      const mimeType = file.mimetype.toLowerCase();
+      
+      // ✅ Vérifier si le type MIME est autorise
+      if (ALLOWED_MIME_TYPES.includes(mimeType)) {
         callback(null, true);
       } else {
         callback(new BadRequestException(
-          `Format non supporte. Types acceptes: JPG, PNG, WEBP, GIF, PDF. Format recu: ${file.mimetype}`
+          `Format non supporte. Types acceptes: JPG, PNG, WEBP, GIF, SVG, BMP, TIFF, HEIC, PDF. Format recu: ${file.mimetype}`
         ), false);
       }
     },
@@ -70,7 +96,6 @@ export class UploadController {
     @Body() uploadDto: UploadImageDto,
     @CurrentUser() currentUser: any,
   ) {
-    // Verifier l'authentification
     if (!currentUser) {
       throw new UnauthorizedException('Vous devez etre connecte pour uploader un fichier.');
     }
@@ -81,13 +106,12 @@ export class UploadController {
       throw new BadRequestException('Aucun fichier recu');
     }
 
-    // ✅ Utiliser entityType ou type (compatibilite frontend)
+    // ✅ Verifier si c'est un avatar (limite de taille plus stricte)
     const entityType = uploadDto.entityType || uploadDto.type;
     if (!entityType) {
       throw new BadRequestException('entityType ou type est requis');
     }
 
-    // ✅ Utiliser entityId ou entity_id (compatibilite frontend)
     const entityId = uploadDto.entityId || uploadDto.entity_id;
 
     try {
@@ -99,7 +123,6 @@ export class UploadController {
       
       this.logger.log(`Upload reussi: ${result.id} - ${result.filename} par ${currentUser.email}`);
       
-      // ✅ Construction de l'URL complete
       const baseUrl = process.env.API_URL || 'http://localhost:4001';
       const imageUrl = `${baseUrl}${result.url}`;
       
@@ -118,6 +141,108 @@ export class UploadController {
     } catch (error) {
       this.logger.error(`Erreur upload: ${error.message}`);
       throw new BadRequestException(`Erreur lors de l'upload: ${error.message}`);
+    }
+  }
+
+  // ============================================================
+  // UPLOAD AVATAR - ENDPOINT DEDIE
+  // ============================================================
+
+  @UseGuards(JwtAuthGuard)
+  @Post('avatar')
+  @UseInterceptors(FileInterceptor('avatar', {
+    storage: memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, callback) => {
+      const mimeType = file.mimetype.toLowerCase();
+      
+      if (AVATAR_MIME_TYPES.includes(mimeType)) {
+        callback(null, true);
+      } else {
+        callback(new BadRequestException(
+          `Format non supporte. Types acceptes: JPG, PNG, WEBP, GIF. Format recu: ${file.mimetype}`
+        ), false);
+      }
+    },
+  }))
+  async uploadAvatar(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() currentUser: any,
+  ) {
+    if (!currentUser) {
+      throw new UnauthorizedException('Vous devez etre connecte pour uploader un avatar.');
+    }
+
+    this.logger.log(`Upload avatar demande par ${currentUser.email} (${currentUser.role})`);
+
+    if (!file) {
+      throw new BadRequestException('Aucun fichier recu');
+    }
+
+    try {
+      const result = await this.uploadService.uploadAvatar(file, currentUser.id);
+      
+      this.logger.log(`Avatar upload reussi pour ${currentUser.email}: ${result.id}`);
+      
+      const baseUrl = process.env.API_URL || 'http://localhost:4001';
+      const imageUrl = `${baseUrl}${result.url}`;
+      
+      return {
+        success: true,
+        id: result.id,
+        url: imageUrl,
+        avatar_url: imageUrl,
+        fileName: result.filename,
+        originalName: result.originalName,
+        fileSize: result.size,
+        format: result.format,
+        updatedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error(`Erreur upload avatar: ${error.message}`);
+      throw new BadRequestException(`Erreur lors de l'upload de l'avatar: ${error.message}`);
+    }
+  }
+
+  // ============================================================
+  // RECUPERATION DES FICHIERS PAR ENTITE
+  // ============================================================
+
+  @UseGuards(JwtAuthGuard)
+  @Get('entity/:type/:entityId')
+  async getFilesByEntity(
+    @Param('type') type: string,
+    @Param('entityId') entityId: string,
+    @CurrentUser() currentUser: any,
+  ) {
+    if (!currentUser) {
+      throw new UnauthorizedException('Vous devez etre connecte pour cette action.');
+    }
+
+    this.logger.log(`Recuperation des fichiers pour ${type}/${entityId} par ${currentUser.email}`);
+
+    try {
+      const files = await this.uploadService.getFilesByEntity(type, entityId);
+      
+      const baseUrl = process.env.API_URL || 'http://localhost:4001';
+      
+      return {
+        success: true,
+        files: files.map(f => ({
+          id: f.id,
+          url: `${baseUrl}${f.url}`,
+          fileName: f.filename,
+          originalName: f.originalName,
+          fileSize: f.size,
+          format: f.format,
+          type: f.type,
+          entityId: f.entityId,
+          createdAt: f.createdAt,
+        })),
+      };
+    } catch (error) {
+      this.logger.error(`Erreur recuperation fichiers: ${error.message}`);
+      throw new BadRequestException('Erreur lors de la recuperation des fichiers');
     }
   }
 
@@ -254,6 +379,11 @@ export class UploadController {
       'png': 'image/png',
       'webp': 'image/webp',
       'gif': 'image/gif',
+      'svg': 'image/svg+xml',
+      'bmp': 'image/bmp',
+      'tiff': 'image/tiff',
+      'heic': 'image/heic',
+      'heif': 'image/heif',
       'pdf': 'application/pdf',
     };
     return mimeMap[ext?.toLowerCase() || ''] || 'application/octet-stream';

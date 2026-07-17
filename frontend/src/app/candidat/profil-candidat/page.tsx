@@ -1,23 +1,15 @@
-// frontend/src/app/(candidate)/profil-candidat/page.tsx
+// frontend/src/app/candidate/profil-candidat/page.tsx
 
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { uploadService } from '@/services/upload.service';
 import { 
   User, Mail, Phone, Camera, Save, Loader2, 
-  CheckCircle, Eye, EyeOff, Lock, Shield, 
-  Calendar, Briefcase, Award, Users, Clock,
-  Edit2, BookOpen, Heart, FileText, Upload, X,
-  AlertCircle  // ✅ AJOUT DE AlertCircle
+  CheckCircle, Eye, EyeOff, Lock, AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-// ============================================================
-// TYPES
-// ============================================================
 
 interface FormErrors {
   first_name?: string;
@@ -29,30 +21,16 @@ interface FormErrors {
   general?: string;
 }
 
-// ============================================================
-// CONFIGURATION
-// ============================================================
-
 const SECURITY_CONFIG = {
   minPasswordLength: 8,
-  maxNameLength: 50,
   maxPhoneLength: 12,
 };
 
-// ✅ Validation téléphone UNIQUEMENT NUMERIQUE
 const PHONE_REGEX = /^\d+$/;
-
-// ============================================================
-// PROFIL CANDIDAT
-// ============================================================
 
 export default function CandidateProfilePage() {
   const router = useRouter();
   const { user, isAuthenticated, updateProfile, changePassword, uploadAvatar } = useAuth();
-  
-  // ============================================================
-  // ETATS
-  // ============================================================
   
   const [loading, setLoading] = useState<boolean>(false);
   const [passwordLoading, setPasswordLoading] = useState<boolean>(false);
@@ -67,18 +45,10 @@ export default function CandidateProfilePage() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ============================================================
-  // DONNEES DU FORMULAIRE
-  // ============================================================
-  
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     phone: '',
-    region: '',
-    bio: '',
-    position: '',
-    department: '',
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -90,10 +60,6 @@ export default function CandidateProfilePage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState<string>('');
 
-  // ============================================================
-  // TRADUCTION
-  // ============================================================
-
   const getText = (fr: string, mg: string): string => {
     const language = typeof window !== 'undefined' 
       ? localStorage.getItem('y-mad-language') || 'fr' 
@@ -101,18 +67,9 @@ export default function CandidateProfilePage() {
     return language === 'fr' ? fr : mg;
   };
 
-  // ============================================================
-  // INITIALISATION
-  // ============================================================
-
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login');
-      return;
-    }
-
-    if (user?.role === 'admin' || user?.role === 'super_admin') {
-      router.push('/dashboard');
       return;
     }
 
@@ -121,18 +78,10 @@ export default function CandidateProfilePage() {
         first_name: user.first_name || '',
         last_name: user.last_name || '',
         phone: user.phone || '',
-        region: 'Analamanga',
-        bio: '',
-        position: '',
-        department: '',
       });
       setPhoneValue(user.phone || '');
     }
   }, [user, isAuthenticated, router]);
-
-  // ============================================================
-  // VALIDATION
-  // ============================================================
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -155,7 +104,6 @@ export default function CandidateProfilePage() {
       );
     }
 
-    // ✅ Validation telephone UNIQUEMENT NUMERIQUE
     if (formData.phone && !PHONE_REGEX.test(formData.phone)) {
       newErrors.phone = getText(
         'Le telephone doit contenir uniquement des chiffres',
@@ -215,10 +163,6 @@ export default function CandidateProfilePage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // ============================================================
-  // GESTION DU PROFIL
-  // ============================================================
-
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
@@ -261,10 +205,6 @@ export default function CandidateProfilePage() {
     }
   };
 
-  // ============================================================
-  // GESTION DU MOT DE PASSE
-  // ============================================================
-
   const handlePasswordChange = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
@@ -304,15 +244,10 @@ export default function CandidateProfilePage() {
     }
   };
 
-  // ============================================================
-  // GESTION DE L'AVATAR - AVEC UPLOAD SERVICE
-  // ============================================================
-
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validation
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       toast.error(getText(
@@ -330,18 +265,15 @@ export default function CandidateProfilePage() {
       return;
     }
 
-    // Preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setAvatarPreview(reader.result as string);
     };
     reader.readAsDataURL(file);
 
-    // Upload avec progression
     setAvatarLoading(true);
     setUploadProgress(0);
 
-    // Simuler la progression
     const interval = setInterval(() => {
       setUploadProgress(prev => {
         if (prev >= 90) {
@@ -353,16 +285,13 @@ export default function CandidateProfilePage() {
     }, 200);
 
     try {
-      // ✅ Utiliser uploadAvatar du contexte qui appelle le service
       await uploadAvatar(file);
-      
       setUploadProgress(100);
       toast.success(getText(
         'Photo de profil mise à jour',
         'Vita soa aman-tsara ny fanovana sary'
       ));
       
-      // ✅ Recharger le user pour avoir l'avatar à jour
       setTimeout(() => {
         window.location.reload();
       }, 1000);
@@ -383,23 +312,14 @@ export default function CandidateProfilePage() {
     }
   };
 
-  // ============================================================
-  // GESTION DU TELEPHONE - UNIQUEMENT DES CHIFFRES
-  // ============================================================
-
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const rawValue = e.target.value;
-    
-    // ✅ Supprimer tous les caracteres non numeriques
     const numericOnly = rawValue.replace(/\D/g, '');
-    
-    // ✅ Limiter la longueur
     const limitedValue = numericOnly.slice(0, SECURITY_CONFIG.maxPhoneLength);
     
     setPhoneValue(limitedValue);
     setFormData({ ...formData, phone: limitedValue });
     
-    // ✅ Validation en temps reel
     if (limitedValue && limitedValue.length > 0 && limitedValue.length < 9) {
       setErrors(prev => ({ 
         ...prev, 
@@ -421,38 +341,6 @@ export default function CandidateProfilePage() {
     }
   };
 
-  // ============================================================
-  // FORMATAGE DE LA DATE
-  // ============================================================
-
-  const formatDate = (dateString?: string): string => {
-    if (!dateString) return '-';
-    try {
-      return new Date(dateString).toLocaleDateString('fr-FR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    } catch {
-      return '-';
-    }
-  };
-
-  // ============================================================
-  // STATISTIQUES CANDIDAT
-  // ============================================================
-
-  const stats = [
-    { label: getText('Projets suivis', 'Tetikasa arahina'), value: '8', icon: BookOpen },
-    { label: getText('Beneficiaires', 'Tompondaka'), value: '156', icon: Users },
-    { label: getText('Heures de benefolat', 'Ora fanaovana asa soa'), value: '42', icon: Clock },
-    { label: getText('Certifications', 'Fanamarinana'), value: '2', icon: Award },
-  ];
-
-  // ============================================================
-  // RENDU
-  // ============================================================
-
   if (!user) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -464,10 +352,10 @@ export default function CandidateProfilePage() {
   return (
     <div className="max-w-4xl mx-auto">
       
-      {/* En-tête du profil */}
+      {/* Profile header */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         
-        {/* Bannière avec avatar */}
+        {/* Banner with avatar */}
         <div className="bg-gradient-to-r from-blue-700 to-blue-900 p-6">
           <div className="flex items-center gap-6">
             <div className="relative">
@@ -489,7 +377,7 @@ export default function CandidateProfilePage() {
                 )}
               </div>
               
-              {/* Bouton upload avatar */}
+              {/* Upload avatar button */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={avatarLoading}
@@ -511,7 +399,7 @@ export default function CandidateProfilePage() {
                 className="hidden"
               />
               
-              {/* Barre de progression upload */}
+              {/* Upload progress bar */}
               {avatarLoading && (
                 <div className="absolute -bottom-2 left-0 right-0">
                   <div className="w-full h-1 bg-white/30 rounded-full overflow-hidden">
@@ -536,66 +424,14 @@ export default function CandidateProfilePage() {
                   <Phone className="w-3 h-3" /> {user.phone}
                 </p>
               )}
-              <p className="text-blue-300 text-sm flex items-center gap-1">
-                <Shield className="w-3 h-3" />
-                {getText('Candidat', 'Mpangataka')}
-              </p>
             </div>
           </div>
         </div>
 
-        {/* Infos de base */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-1 text-sm text-gray-500">
-                <Calendar className="w-4 h-4" />
-                <span>
-                  {getText('Membre depuis', 'Nisoratra tamin\'ny')} {formatDate(user.created_at)}
-                </span>
-              </div>
-              <div className="flex items-center gap-1 text-sm text-gray-500">
-                <Clock className="w-4 h-4" />
-                <span>
-                  {getText('Dernière connexion', 'Niditra farany')}: {new Date().toLocaleDateString('fr-FR')} à {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-700 font-medium transition hover:bg-blue-50 rounded-lg"
-            >
-              <Edit2 className="w-4 h-4" />
-              {isEditing ? getText('Annuler', 'Aoka') : getText('Modifier le profil', 'Hanova ny momba ahy')}
-            </button>
-          </div>
-        </div>
-
-        {/* Statistiques */}
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="text-sm font-medium text-gray-500 mb-4">
-            {getText('Statistiques', 'Statistika')}
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {stats.map((stat, index) => {
-              const Icon = stat.icon;
-              return (
-                <div key={index} className="bg-gray-50 rounded-xl p-4 text-center hover:shadow-md transition">
-                  <div className="flex items-center justify-center mb-2">
-                    <Icon className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
-                  <p className="text-xs text-gray-500">{stat.label}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Contenu principal */}
+        {/* Main content */}
         <div className="p-6">
           
-          {/* Message de succès */}
+          {/* Success message */}
           {successMessage && (
             <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
               <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -603,7 +439,7 @@ export default function CandidateProfilePage() {
             </div>
           )}
 
-          {/* Messages d'erreur */}
+          {/* Error message */}
           {errors.general && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -611,193 +447,140 @@ export default function CandidateProfilePage() {
             </div>
           )}
 
-          {/* Formulaire d'édition */}
-          {isEditing ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Account name modification */}
+          <div className="mb-8">
+            <h3 className="text-sm font-medium text-gray-500 mb-4 flex items-center gap-2">
+              <User className="w-4 h-4" />
+              {getText('Modifier le nom du compte', 'Hanova ny anaran\'ny kaonty')}
+            </h3>
+            
+            {!isEditing ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-xs text-gray-400">{getText('Prenom', 'Anarana')}</p>
+                  <p className="font-medium text-gray-800">{user.first_name || getText('Non renseigne', 'Tsy voalaza')}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-xs text-gray-400">{getText('Nom', 'Fanampiny')}</p>
+                  <p className="font-medium text-gray-800">{user.last_name || getText('Non renseigne', 'Tsy voalaza')}</p>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {getText('Prenom', 'Anarana')} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.first_name}
+                      onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
+                        errors.first_name ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      required
+                    />
+                    {errors.first_name && (
+                      <p className="text-xs text-red-500 mt-1">{errors.first_name}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {getText('Nom', 'Fanampiny')} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.last_name}
+                      onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
+                        errors.last_name ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      required
+                    />
+                    {errors.last_name && (
+                      <p className="text-xs text-red-500 mt-1">{errors.last_name}</p>
+                    )}
+                  </div>
+                </div>
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {getText('Prenom', 'Anarana')} <span className="text-red-500">*</span>
+                    {getText('Telephone', 'Telefaonina')}
                   </label>
-                  <input
-                    type="text"
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
-                      errors.first_name ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    required
-                  />
-                  {errors.first_name && (
-                    <p className="text-xs text-red-500 mt-1">{errors.first_name}</p>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={phoneValue}
+                      onChange={handlePhoneChange}
+                      onKeyDown={(e) => {
+                        if (!/^[0-9]$/.test(e.key) && 
+                            e.key !== 'Backspace' && 
+                            e.key !== 'Delete' && 
+                            e.key !== 'Tab' && 
+                            e.key !== 'ArrowLeft' && 
+                            e.key !== 'ArrowRight' && 
+                            e.key !== 'Home' && 
+                            e.key !== 'End') {
+                          e.preventDefault();
+                        }
+                      }}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
+                        errors.phone ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder={getText('0321234567', '0321234567')}
+                    />
+                  </div>
+                  {errors.phone && (
+                    <p className="text-xs text-red-500 mt-1">{errors.phone}</p>
                   )}
+                  <p className="text-xs text-gray-400 mt-1">
+                    {getText(
+                      'Uniquement des chiffres. 9 a 12 chiffres',
+                      'Isa ihany. 9 hatramin\'ny 12 isa'
+                    )}
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {getText('Nom', 'Fanampiny')} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
-                      errors.last_name ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    required
-                  />
-                  {errors.last_name && (
-                    <p className="text-xs text-red-500 mt-1">{errors.last_name}</p>
-                  )}
+                
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 shadow-md hover:shadow-lg"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {getText('Enregistrer', 'Tehirizo')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
+                  >
+                    {getText('Annuler', 'Aoka')}
+                  </button>
                 </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {getText('Telephone', 'Telefaonina')}
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={phoneValue}
-                    onChange={handlePhoneChange}
-                    onKeyDown={(e) => {
-                      // ✅ Bloquer les lettres et caracteres speciaux
-                      if (!/^[0-9]$/.test(e.key) && 
-                          e.key !== 'Backspace' && 
-                          e.key !== 'Delete' && 
-                          e.key !== 'Tab' && 
-                          e.key !== 'ArrowLeft' && 
-                          e.key !== 'ArrowRight' && 
-                          e.key !== 'Home' && 
-                          e.key !== 'End') {
-                        e.preventDefault();
-                      }
-                    }}
-                    className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${
-                      errors.phone ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder={getText('0321234567', '0321234567')}
-                  />
-                </div>
-                {errors.phone && (
-                  <p className="text-xs text-red-500 mt-1">{errors.phone}</p>
-                )}
-                <p className="text-xs text-gray-400 mt-1">
-                  {getText(
-                    'Uniquement des chiffres. 9 a 12 chiffres',
-                    'Isa ihany. 9 hatramin\'ny 12 isa'
-                  )}
-                </p>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {getText('Region', 'Faritra')}
-                </label>
-                <input
-                  type="text"
-                  value={formData.region}
-                  onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  placeholder={getText('Antananarivo', 'Antananarivo')}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {getText('Biographie', 'Tantara momba anao')}
-                </label>
-                <textarea
-                  value={formData.bio}
-                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition resize-none"
-                  placeholder={getText('Parlez-nous un peu de vous...', 'Lazao kely momba anao...')}
-                />
-              </div>
-              
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 shadow-md hover:shadow-lg"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {getText('Enregistrer', 'Tehirizo')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
-                >
-                  {getText('Annuler', 'Aoka')}
-                </button>
-              </div>
-            </form>
-          ) : (
-            // Affichage des informations
-            <div className="space-y-6">
-              
-              {/* Informations personnelles */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-4">
-                  {getText('Informations personnelles', 'Fampahalalana manokana')}
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition">
-                    <p className="text-xs text-gray-400">{getText('Prenom', 'Anarana')}</p>
-                    <p className="font-medium text-gray-800">{user.first_name || getText('Non renseigne', 'Tsy voalaza')}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition">
-                    <p className="text-xs text-gray-400">{getText('Nom', 'Fanampiny')}</p>
-                    <p className="font-medium text-gray-800">{user.last_name || getText('Non renseigne', 'Tsy voalaza')}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition">
-                    <p className="text-xs text-gray-400">{getText('Adresse email', 'Adiresy email')}</p>
-                    <p className="font-medium text-gray-800">{user.email}</p>
-                    <p className="text-xs text-gray-400 mt-1">{getText("L'adresse email ne peut pas etre modifiee", "Tsy azo ovaina ny adiresy email")}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition">
-                    <p className="text-xs text-gray-400">{getText('Telephone', 'Telefaonina')}</p>
-                    <p className="font-medium text-gray-800">{user.phone || getText('Non renseigne', 'Tsy voalaza')}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition">
-                    <p className="text-xs text-gray-400">{getText('Region', 'Faritra')}</p>
-                    <p className="font-medium text-gray-800">{formData.region}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition">
-                    <p className="text-xs text-gray-400">{getText('Biographie', 'Tantara momba anao')}</p>
-                    <p className="font-medium text-gray-800">{formData.bio || getText('Aucune biographie renseignee', 'Tsy misy tantara voalaza')}</p>
-                  </div>
-                </div>
-              </div>
+              </form>
+            )}
 
-              {/* Informations professionnelles */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-4">
-                  {getText('Informations professionnelles', 'Fampahalalana momba ny asa')}
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition">
-                    <p className="text-xs text-gray-400">{getText('Poste / Fonction', 'Toerana / Asa')}</p>
-                    <p className="font-medium text-gray-800">{formData.position || getText('Non renseigne', 'Tsy voalaza')}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition">
-                    <p className="text-xs text-gray-400">{getText('Departement', 'Departemanta')}</p>
-                    <p className="font-medium text-gray-800">{formData.department || getText('Non renseigne', 'Tsy voalaza')}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+            {!isEditing && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="mt-4 flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-700 font-medium transition hover:bg-blue-50 rounded-lg"
+              >
+                <Save className="w-4 h-4" />
+                {getText('Modifier le nom du compte', 'Hanova ny anaran\'ny kaonty')}
+              </button>
+            )}
+          </div>
 
-          {/* Changement de mot de passe - Toujours visible */}
-          <div className="border-t border-gray-200 mt-6 pt-6">
-            <h3 className="text-sm font-medium text-gray-500 mb-4">
-              {getText('Changer le mot de passe', 'Hanova ny tenimiafina')}
+          {/* Password reset */}
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="text-sm font-medium text-gray-500 mb-4 flex items-center gap-2">
+              <Lock className="w-4 h-4" />
+              {getText('Réinitialiser le mot de passe', 'Averina ny tenimiafina')}
             </h3>
             <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
               <div>
@@ -885,7 +668,7 @@ export default function CandidateProfilePage() {
                 className="flex items-center gap-2 px-6 py-2.5 bg-gray-800 text-white rounded-lg font-semibold hover:bg-gray-900 transition disabled:opacity-50 shadow-md hover:shadow-lg"
               >
                 {passwordLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                {getText('Changer le mot de passe', 'Hanova ny tenimiafina')}
+                {getText('Réinitialiser le mot de passe', 'Averina ny tenimiafina')}
               </button>
             </form>
           </div>

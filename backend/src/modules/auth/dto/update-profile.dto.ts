@@ -1,6 +1,6 @@
 // backend/src/modules/auth/dto/update-profile.dto.ts
 
-import { IsString, IsOptional, IsUrl, IsEmail, Length, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsUrl, IsEmail, Length, IsBoolean, IsPhoneNumber, MaxLength } from 'class-validator';
 
 export class UpdateProfileDto {
   @IsString({ message: 'Le prenom doit être une chaîne de caracteres' })
@@ -17,6 +17,12 @@ export class UpdateProfileDto {
   @IsOptional()
   email?: string;
 
+  //  AJOUT : Champ phone
+  @IsString({ message: 'Le téléphone doit être une chaîne de caracteres' })
+  @IsOptional()
+  @MaxLength(20, { message: 'Le téléphone ne doit pas dépasser 20 caracteres' })
+  phone?: string;
+
   @IsString({ message: 'Le role doit être une chaîne de caracteres' })
   @IsOptional()
   role?: string;
@@ -28,4 +34,15 @@ export class UpdateProfileDto {
   @IsUrl({}, { message: 'L URL de l avatar doit être une URL valide' })
   @IsOptional()
   avatar?: string;
+
+  //  AJOUT : Champ pour la langue préférée
+  @IsString({ message: 'La langue préférée doit être une chaîne de caracteres' })
+  @IsOptional()
+  @Length(2, 10, { message: 'La langue doit contenir entre 2 et 10 caracteres' })
+  preferred_language?: string;
+
+  //  AJOUT : Champ pour le fuseau horaire
+  @IsString({ message: 'Le fuseau horaire doit être une chaîne de caracteres' })
+  @IsOptional()
+  timezone?: string;
 }

@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -15,8 +15,8 @@ import {
   ArrowLeft, Save, Loader2, AlertCircle, CheckCircle,
   Building, MapPin, Briefcase, Calendar,
   FileText, Eye, XCircle, Clock, X,
-  Upload, Trash2, Globe, Info, AlertTriangle,
-  Zap, Sparkles, Award, Target, Users
+  Upload, Trash2, Globe, Info,
+  Zap, Award, Target, Users
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -67,12 +67,18 @@ const ArchiveIcon = (props: any) => (
   </svg>
 );
 
-const STATUS_OPTIONS = [
-  { value: JobStatus.PUBLISHED, label: 'Publiée', labelMg: 'Navoaka', color: 'green' as StatusColor, icon: CheckCircle },
-  { value: JobStatus.DRAFT, label: 'Brouillon', labelMg: 'Volavola', color: 'gray' as StatusColor, icon: FileText },
-  { value: JobStatus.CLOSED, label: 'Fermée', labelMg: 'Nakatona', color: 'red' as StatusColor, icon: XCircle },
-  { value: JobStatus.EXPIRED, label: 'Expirée', labelMg: 'Lany daty', color: 'orange' as StatusColor, icon: Clock },
-  { value: JobStatus.ARCHIVED, label: 'Archivée', labelMg: 'Voatahiry', color: 'purple' as StatusColor, icon: ArchiveIcon },
+const STATUS_OPTIONS: { 
+  value: JobStatus; 
+  label: string; 
+  labelMg: string; 
+  color: StatusColor; 
+  icon: any 
+}[] = [
+  { value: JobStatus.PUBLISHED, label: 'Publiée', labelMg: 'Navoaka', color: 'green', icon: CheckCircle },
+  { value: JobStatus.DRAFT, label: 'Brouillon', labelMg: 'Volavola', color: 'gray', icon: FileText },
+  { value: JobStatus.CLOSED, label: 'Fermée', labelMg: 'Nakatona', color: 'red', icon: XCircle },
+  { value: JobStatus.EXPIRED, label: 'Expirée', labelMg: 'Lany daty', color: 'orange', icon: Clock },
+  { value: JobStatus.ARCHIVED, label: 'Archivée', labelMg: 'Voatahiry', color: 'purple', icon: ArchiveIcon },
 ];
 
 // ============================================================
@@ -114,7 +120,7 @@ interface StatusBadgeProps {
 function StatusBadge({ status, language }: StatusBadgeProps) {
   const option = STATUS_OPTIONS.find(opt => opt.value === status);
   if (!option) {
-    return <span className="px-2 py-1 text-xs rounded-full bg-gray-100">{status}</span>;
+    return <span className="px-2 py-1 text-xs rounded-full bg-gray-100">{String(status)}</span>;
   }
   const Icon = option.icon;
   return (
@@ -135,21 +141,34 @@ export default function EditJobPage() {
   const { user, isAuthenticated } = useAuth();
   const { language, t } = useLanguage();
   
+  // Fonction sécurisée pour les traductions
+  const safeT = useCallback((key: string, fallback: string): string => {
+    try {
+      const result = t(key);
+      if (result === key) {
+        return fallback;
+      }
+      return result;
+    } catch {
+      return fallback;
+    }
+  }, [t]);
+  
   // ============================================================
   // ÉTATS
   // ============================================================
   
   const [job, setJob] = useState<JobOffer | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<string>('');
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'general' | 'description' | 'publication'>('general');
-  const [imageError, setImageError] = useState(false);
+  const [imageError, setImageError] = useState<boolean>(false);
   
-  const hasFetched = useRef(false);
+  const hasFetched = useRef<boolean>(false);
   const hasEditRights = user?.role === 'super_admin' || user?.role === 'admin';
   const isSuperAdmin = user?.role === 'super_admin';
   const jobId = params.id as string;
@@ -158,34 +177,55 @@ export default function EditJobPage() {
   // FONCTIONS UTILITAIRES
   // ============================================================
 
-  const getText = useCallback((fr: string, mg: string) => {
+  const getText = useCallback((fr: string, mg: string): string => {
     return language === 'fr' ? fr : mg;
   }, [language]);
 
   // ============================================================
-  // CHARGEMENT DES DONNÉES
+  // CHARGEMENT DES DONNÉES - CORRIGÉ
   // ============================================================
 
-  const fetchJob = useCallback(async () => {
+  const fetchJob = useCallback(async (): Promise<void> => {
     if (!jobId) return;
     setLoading(true);
+    setError('');
     try {
-      const response = await jobService.getOfferById(jobId);
-      setJob(response);
+      const response: JobOffer = await jobService.getOfferById(jobId);
       
-      if (response.main_image_id) {
-        try {
-          const files = await uploadService.getFilesByEntity(jobId, 'job');
-          const mainFile = files.find((f: UploadedFile) => f.id === response.main_image_id);
-          if (mainFile) setUploadedFile(mainFile);
-        } catch (err) {
-          console.error('Erreur chargement image:', err);
+      if (response) {
+        setJob(response);
+        
+        // ✅ Si image_url est présente, l'utiliser directement
+        if (response.image_url) {
+          setUploadedFile({
+            id: 'temp',
+            url: response.image_url,
+            fileName: '',
+            originalName: '',
+            fileSize: 0,
+            format: '',
+            type: 'job',
+            entityId: jobId,
+            createdAt: new Date().toISOString(),
+          });
+        }
+        
+        // Charger l'image depuis le service d'upload si main_image_id existe
+        if (response.main_image_id) {
+          try {
+            const files: UploadedFile[] = await uploadService.getFilesByEntity(jobId, 'job');
+            const mainFile: UploadedFile | undefined = files.find((f: UploadedFile) => f.id === response.main_image_id);
+            if (mainFile) {
+              setUploadedFile(mainFile);
+            }
+          } catch (err) {
+            console.error('Erreur chargement image:', err);
+          }
         }
       }
-      setError('');
     } catch (err) {
       const errorObj = err as { response?: { data?: { message?: string } }; message?: string };
-      const errorMsg = errorObj.response?.data?.message || errorObj.message || getText('Offre non trouvée', 'Tsy hita ny asa');
+      const errorMsg: string = errorObj.response?.data?.message || errorObj.message || getText('Offre non trouvee', 'Tsy hita ny asa');
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -208,7 +248,7 @@ export default function EditJobPage() {
   // GESTIONNAIRES
   // ============================================================
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>): void => {
     if (!job) return;
     const { name, value, type } = e.target;
     if (type === 'checkbox') {
@@ -219,43 +259,65 @@ export default function EditJobPage() {
     }
   };
 
-  const handleImageUpload = async (file: File) => {
+  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
+    if (!job) return;
+    const value: JobStatus = e.target.value as JobStatus;
+    setJob({ ...job, status: value });
+  };
+
+  const handleImageUpload = async (file: File): Promise<void> => {
     if (!job) return;
     setUploadingImage(true);
     try {
-      const result = await uploadService.uploadImage(file, 'job', job.id);
+      const result: UploadedFile = await uploadService.uploadImage(file, 'job', job.id);
       setUploadedFile(result);
-      const imageUrl = uploadService.getImageUrl(result.id);
+      const imageUrl: string = uploadService.getImageUrl(result.id);
+      
+      // ✅ Mettre à jour job.image_url localement
+      setJob(prev => prev ? {
+        ...prev,
+        image_url: imageUrl,
+        main_image_id: result.id
+      } : prev);
+      
       await jobService.updateOffer(job.id, { 
         image_url: imageUrl, 
         main_image_id: result.id 
       });
-      toast.success(getText('Image uploadee avec succès', 'Nahomana ny fampidirana sary'));
+      toast.success(getText('Image uploadee avec succes', 'Nahomana ny fampidirana sary'));
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
+      const errorMessage: string = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
       toast.error(errorMessage);
     } finally {
       setUploadingImage(false);
     }
   };
 
-  const handleRemoveImage = async () => {
+  const handleRemoveImage = async (): Promise<void> => {
     if (!uploadedFile || !job) return;
     try {
       await uploadService.deleteImage(uploadedFile.id);
       setUploadedFile(null);
+      
+      // ✅ Mettre à jour job.image_url localement
+      setJob(prev => prev ? {
+        ...prev,
+        image_url: null,
+        main_image_id: null
+      } : prev);
+      
       await jobService.updateOffer(job.id, { 
-        image_url: undefined, 
-        main_image_id: undefined 
+        image_url: null, 
+        main_image_id: null 
       });
-      toast.success(getText('Image supprimée', 'Voafafa ny sary'));
+      toast.success(getText('Image supprimee', 'Voafafa ny sary'));
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la suppression';
+      const errorMessage: string = err instanceof Error ? err.message : 'Erreur lors de la suppression';
       toast.error(errorMessage);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     if (!job) return;
     setSaving(true);
@@ -266,26 +328,31 @@ export default function EditJobPage() {
       const updateData: Partial<JobOffer> = {
         title_fr: job.title_fr,
         description_fr: job.description_fr,
+        title_mg: job.title_mg || '',
+        description_mg: job.description_mg || '',
+        company: job.company || '',
+        location: job.location || '',
+        contract_type: job.contract_type || ContractType.CDI,
+        deadline: job.deadline || undefined,
+        is_published: job.is_published || false,
+        status: job.status || JobStatus.DRAFT,
       };
-      if (job.title_mg) updateData.title_mg = job.title_mg;
-      if (job.description_mg) updateData.description_mg = job.description_mg;
-      if (job.company) updateData.company = job.company;
-      if (job.location) updateData.location = job.location;
-      if (job.contract_type) updateData.contract_type = job.contract_type;
-      if (job.deadline) updateData.deadline = job.deadline;
-      if (uploadedFile) {
-        updateData.image_url = uploadService.getImageUrl(uploadedFile.id);
-        updateData.main_image_id = uploadedFile.id;
+      
+      // ✅ Inclure les données de l'image
+      if (job.image_url) {
+        updateData.image_url = job.image_url;
       }
-      updateData.is_published = job.is_published;
+      if (job.main_image_id) {
+        updateData.main_image_id = job.main_image_id;
+      }
 
       await jobService.updateOffer(job.id, updateData);
-      setSuccess(getText('Offre mise à jour avec succès !', 'Vita ny fanovana ny asa!'));
-      toast.success(getText('Offre mise à jour', 'Vita ny fanovana'));
+      setSuccess(getText('Offre mise a jour avec succes !', 'Vita ny fanovana ny asa!'));
+      toast.success(getText('Offre mise a jour', 'Vita ny fanovana'));
       setTimeout(() => router.push(`/dashboard/jobs/${job.id}`), 1500);
     } catch (err) {
       const errorObj = err as { response?: { data?: { message?: string } }; message?: string };
-      const errorMsg = errorObj.response?.data?.message || errorObj.message || getText('Erreur lors de la mise à jour', 'Nisy hadisoana');
+      const errorMsg: string = errorObj.response?.data?.message || errorObj.message || safeT('common.error', 'Erreur lors de la mise à jour');
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -315,7 +382,7 @@ export default function EditJobPage() {
         <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-12 h-12 text-gray-400" />
         </div>
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">{getText('Offre non trouvée', 'Tsy hita ny asa')}</h3>
+        <h3 className="text-xl font-semibold text-gray-700 mb-2">{getText('Offre non trouvee', 'Tsy hita ny asa')}</h3>
         <p className="text-gray-500 mb-6">{error}</p>
         <Link href="/dashboard/jobs" className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-800 text-white rounded-lg hover:bg-blue-900 transition shadow-sm">
           {getText('Retour aux offres', 'Hiverina any amin\'ny asa')}
@@ -326,7 +393,8 @@ export default function EditJobPage() {
 
   if (!job) return null;
 
-  const imageUrl = uploadedFile ? uploadService.getImageUrl(uploadedFile.id) : null;
+  // ✅ Utiliser job.image_url directement comme source principale
+  const displayImageUrl: string | null = job.image_url || (uploadedFile ? uploadService.getImageUrl(uploadedFile.id) : null);
 
   // ============================================================
   // RENDU PRINCIPAL
@@ -335,12 +403,10 @@ export default function EditJobPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       
-      {/* ============================================================
-      EN-TÊTE
-      ============================================================ */}
+      {/* EN-TÊTE */}
       <div>
         <Link href={`/dashboard/jobs/${jobId}`} className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-blue-800 transition mb-3">
-          <ArrowLeft className="w-4 h-4" /> {getText('Retour au détail', 'Hiverina any amin\'ny antsipirihany')}
+          <ArrowLeft className="w-4 h-4" /> {getText('Retour au detail', 'Hiverina any amin\'ny antsipirihany')}
         </Link>
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -358,7 +424,7 @@ export default function EditJobPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <StatusBadge status={job.status} language={language} />
+            <StatusBadge status={job.status as JobStatus} language={language} />
             {isSuperAdmin && (
               <span className="px-2 py-1 bg-blue-800 text-white text-xs rounded-full shadow-sm flex items-center gap-1">
                 <Award className="w-3 h-3" /> Super Admin
@@ -368,9 +434,7 @@ export default function EditJobPage() {
         </div>
       </div>
 
-      {/* ============================================================
-      MESSAGES
-      ============================================================ */}
+      {/* MESSAGES */}
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-start gap-3">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -384,9 +448,7 @@ export default function EditJobPage() {
         </div>
       )}
 
-      {/* ============================================================
-      ONGLETS
-      ============================================================ */}
+      {/* ONGLETS */}
       <div className="flex gap-2 border-b border-gray-200">
         <button
           onClick={() => setActiveTab('general')}
@@ -397,7 +459,7 @@ export default function EditJobPage() {
           }`}
         >
           <FileText className="w-4 h-4" />
-          {getText('Général', 'Ankapobeny')}
+          {getText('General', 'Ankapobeny')}
         </button>
         <button
           onClick={() => setActiveTab('description')}
@@ -423,29 +485,25 @@ export default function EditJobPage() {
         </button>
       </div>
 
-      {/* ============================================================
-      FORMULAIRE
-      ============================================================ */}
+      {/* FORMULAIRE */}
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 space-y-6">
           
-          {/* ============================================================
-          UPLOAD IMAGE
-          ============================================================ */}
+          {/* ✅ UPLOAD IMAGE - CORRIGÉ AVEC displayImageUrl */}
           <div className="border-b border-gray-200 pb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {getText('Image de couverture', 'Sary fonony')}
               <span className="text-xs text-gray-400 ml-2">
-                {getText('(Format recommandé 1200x630px)', '(Endrika atolotra 1200x630px)')}
+                {getText('(Format recommande 1200x630px)', '(Endrika atolotra 1200x630px)')}
               </span>
             </label>
             
-            {imageUrl ? (
+            {displayImageUrl ? (
               <div className="relative">
                 <div className="relative w-full h-56 bg-gray-100 rounded-xl border border-gray-200 overflow-hidden">
                   <Image 
-                    src={imageUrl} 
-                    alt="Aperçu" 
+                    src={displayImageUrl} 
+                    alt="Apercu" 
                     fill 
                     className="object-cover"
                     onError={() => setImageError(true)}
@@ -454,7 +512,7 @@ export default function EditJobPage() {
                 <div className="absolute top-3 right-3 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => window.open(imageUrl, '_blank')}
+                    onClick={() => window.open(displayImageUrl || '', '_blank')}
                     className="p-2 bg-white/90 text-gray-700 rounded-lg hover:bg-white transition shadow-md"
                     title={getText('Voir', 'Hijery')}
                   >
@@ -500,20 +558,18 @@ export default function EditJobPage() {
             )}
           </div>
           
-          {/* ============================================================
-          ONGLET GÉNÉRAL
-          ============================================================ */}
+          {/* ONGLET GENERAL */}
           {activeTab === 'general' && (
             <div className="space-y-6">
               <FormSection 
-                title={getText('Informations générales', 'Fampahalalana ankapobeny')} 
+                title={getText('Informations generales', 'Fampahalalana ankapobeny')} 
                 icon={FileText}
-                description={getText('Titre du poste en français et en malgache', 'Lohateny amin\'ny teny frantsay sy malagasy')}
+                description={getText('Titre du poste en francais et en malgache', 'Lohateny amin\'ny teny frantsay sy malagasy')}
               >
                 <div className="grid grid-cols-1 gap-5">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {getText('Titre du poste (français)', 'Lohateny (frantsay)')} 
+                      {getText('Titre du poste (francais)', 'Lohateny (frantsay)')} 
                       <span className="text-red-500 ml-1">*</span>
                     </label>
                     <input
@@ -590,7 +646,7 @@ export default function EditJobPage() {
               </FormSection>
 
               <FormSection 
-                title={getText('Détails du contrat', 'Antsipirihan\'ny fifanarahana')} 
+                title={getText('Details du contrat', 'Antsipirihan\'ny fifanarahana')} 
                 icon={Briefcase}
                 description={getText('Type de contrat et date limite', 'Karazana fifanarahana sy daty farany')}
               >
@@ -633,13 +689,11 @@ export default function EditJobPage() {
             </div>
           )}
 
-          {/* ============================================================
-          ONGLET DESCRIPTION
-          ============================================================ */}
+          {/* ONGLET DESCRIPTION */}
           {activeTab === 'description' && (
             <div className="space-y-6">
               <FormSection 
-                title={getText('Description du poste (français)', 'Famaritana ny asa (frantsay)')} 
+                title={getText('Description du poste (francais)', 'Famaritana ny asa (frantsay)')} 
                 icon={FileText}
                 description={getText('Utilisez les outils de mise en forme', 'Ampiasao ny fitaovana fanoratana')}
               >
@@ -649,13 +703,13 @@ export default function EditJobPage() {
                     onChange={(value) => {
                       if (job) setJob({ ...job, description_fr: value });
                     }}
-                    placeholder={getText('Description détaillée du poste...', 'Famaritana feno momba ny asa...')}
+                    placeholder={getText('Description detaillee du poste...', 'Famaritana feno momba ny asa...')}
                     language={language}
                     minHeight="400px"
                   />
                   <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
                     <Info className="w-3 h-3" />
-                    {getText('Minimum 20 caractères. Utilisez les outils de formatage (gras, italique, listes, etc.)', 'Litera 20 farafahakeliny. Ampiasao ny fitaovana fanoratana (maitso, lisitra, sns)')}
+                    {getText('Minimum 20 caracteres. Utilisez les outils de formatage (gras, italique, listes, etc.)', 'Litera 20 farafahakeliny. Ampiasao ny fitaovana fanoratana (maitso, lisitra, sns)')}
                   </p>
                 </div>
               </FormSection>
@@ -680,15 +734,13 @@ export default function EditJobPage() {
             </div>
           )}
 
-          {/* ============================================================
-          ONGLET PUBLICATION
-          ============================================================ */}
+          {/* ONGLET PUBLICATION */}
           {activeTab === 'publication' && (
             <div className="space-y-6">
               <FormSection 
                 title={getText('Statut de publication', 'Satan\'ny famoahana')} 
                 icon={Globe}
-                description={getText('Gérez la visibilité de l\'offre', 'Amboary ny fahitan\'ny asa')}
+                description={getText('Gerez la visibilite de l\'offre', 'Amboary ny fahitan\'ny asa')}
               >
                 <div className="space-y-4">
                   <div>
@@ -696,9 +748,8 @@ export default function EditJobPage() {
                       {getText('Statut actuel', 'Sata ankehitriny')}
                     </label>
                     <select
-                      name="status"
                       value={job.status || JobStatus.DRAFT}
-                      onChange={handleChange}
+                      onChange={handleStatusChange}
                       className="w-full md:w-64 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-800 outline-none focus:border-blue-800 bg-white"
                     >
                       {STATUS_OPTIONS.map(option => (
@@ -710,7 +761,7 @@ export default function EditJobPage() {
                     <p className="text-xs text-gray-400 mt-2 flex items-start gap-1">
                       <Info className="w-3 h-3 flex-shrink-0 mt-0.5" />
                       {getText(
-                        'Les offres publiées sont visibles par les candidats sur le site public',
+                        'Les offres publiees sont visibles par les candidats sur le site public',
                         'Ny asa navoaka dia hitan\'ny mpangataka eo amin\'ny tranokala'
                       )}
                     </p>
@@ -735,15 +786,15 @@ export default function EditJobPage() {
               </FormSection>
 
               <FormSection 
-                title={getText('Aperçu de l\'offre', 'Topi-mason\'ny asa')} 
+                title={getText('Apercu de l\'offre', 'Topi-mason\'ny asa')} 
                 icon={Eye}
-                description={getText('Visualisation de l\'offre modifiée', 'Fijerena ny asa novaina')}
+                description={getText('Visualisation de l\'offre modifiee', 'Fijerena ny asa novaina')}
               >
                 <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                   <div className="flex items-start gap-3">
-                    {imageUrl && !imageError ? (
+                    {displayImageUrl && !imageError ? (
                       <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 relative">
-                        <Image src={imageUrl} alt={job.title_fr} fill className="object-cover" />
+                        <Image src={displayImageUrl} alt={job.title_fr} fill className="object-cover" />
                       </div>
                     ) : (
                       <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -781,9 +832,7 @@ export default function EditJobPage() {
           )}
         </div>
 
-        {/* ============================================================
-        BOUTONS D'ACTION
-        ============================================================ */}
+        {/* BOUTONS D'ACTION */}
         <div className="sticky bottom-0 flex flex-wrap justify-end gap-3 p-6 bg-gray-50 border-t border-gray-200 rounded-b-xl">
           <Link
             href={`/dashboard/jobs/${jobId}`}

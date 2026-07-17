@@ -81,12 +81,30 @@ interface ValidationError {
 }
 
 // ============================================================
-// CONSTANTES
+// CONSTANTES - AVEC PLUS DE FORMATS SUPPORTES
 // ============================================================
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
-const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+// ✅ PLUS DE FORMATS D'IMAGE SUPPORTES
+const ALLOWED_PHOTO_TYPES = [
+  'image/jpeg', 
+  'image/jpg', 
+  'image/png', 
+  'image/webp', 
+  'image/gif',
+  'image/svg+xml',
+  'image/bmp',
+  'image/tiff'
+];
+
+// ✅ FORMATS POUR LE CV
+const ALLOWED_CV_TYPES = ['application/pdf'];
+
+// ✅ FORMATS POUR LA LETTRE DE MOTIVATION
+const ALLOWED_COVER_LETTER_TYPES = ['application/pdf'];
+
 const PHONE_REGEX = /^(?:\+261|0)(?:32|33|34|37|38)\d{7}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -269,6 +287,15 @@ export default function JobDetailPage() {
     return phone;
   }, []);
 
+  // ✅ Validation du type de fichier avec plus de formats
+  const isValidImageType = useCallback((file: File): boolean => {
+    return ALLOWED_PHOTO_TYPES.includes(file.type.toLowerCase());
+  }, []);
+
+  const isValidPdfType = useCallback((file: File): boolean => {
+    return file.type === 'application/pdf';
+  }, []);
+
   // ============================================================
   // GESTION DU FORMULAIRE
   // ============================================================
@@ -292,7 +319,7 @@ export default function JobDetailPage() {
   };
 
   // ============================================================
-  // GESTION DES FICHIERS
+  // GESTION DES FICHIERS - AVEC VALIDATION AMELIOREE
   // ============================================================
 
   const handleFileUpload = async (
@@ -343,11 +370,12 @@ export default function JobDetailPage() {
     }
   };
 
+  // ✅ CV - Validation amelioree
   const handleCvChange = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    if (file.type !== 'application/pdf') {
+    if (!isValidPdfType(file)) {
       setCvState(prev => ({ 
         ...prev, 
         error: getText('Seuls les fichiers PDF sont acceptes pour le CV', 'Ny rakitra PDF ihany no ekena ho an\'ny CV') 
@@ -369,11 +397,12 @@ export default function JobDetailPage() {
     await handleFileUpload(file, 'cv', setCvState);
   };
 
+  // ✅ Lettre de motivation - Validation amelioree
   const handleCoverLetterFileChange = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    if (file.type !== 'application/pdf') {
+    if (!isValidPdfType(file)) {
       setCoverLetterState(prev => ({ 
         ...prev, 
         error: getText('Seuls les fichiers PDF sont acceptes', 'Ny rakitra PDF ihany no ekena') 
@@ -395,14 +424,18 @@ export default function JobDetailPage() {
     await handleFileUpload(file, 'cover_letter', setCoverLetterState);
   };
 
+  // ✅ Photo - Validation amelioree avec plus de formats
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+    if (!isValidImageType(file)) {
       setPhotoState(prev => ({ 
         ...prev, 
-        error: getText('Formats acceptes: JPG, PNG, WEBP', 'Endrika azo: JPG, PNG, WEBP') 
+        error: getText(
+          'Formats acceptes: JPG, PNG, WEBP, GIF, SVG, BMP, TIFF',
+          'Endrika azo: JPG, PNG, WEBP, GIF, SVG, BMP, TIFF'
+        ) 
       }));
       if (photoInputRef.current) photoInputRef.current.value = '';
       return;
@@ -588,7 +621,7 @@ export default function JobDetailPage() {
     if (!isAuthenticated) {
       toast.error(getText(
         'Veuillez vous connecter ou creer un compte pour postuler.',
-        'Mba midira na hamorona kaonty aloha vao hangataka.'
+        'Mba midira na hamorony kaonty aloha vao hangataka.'
       ));
       router.push(`/login?redirect=/jobs/${jobId}`);
       return;
@@ -616,6 +649,40 @@ export default function JobDetailPage() {
 
   const toggleSection = (section: string): void => {
     setActiveSection(activeSection === section ? null : section);
+  };
+
+  // ✅ Fonction pour nettoyer le HTML et supprimer les balises <p>
+  const cleanHtmlContent = (html: string): string => {
+    if (!html) return '';
+    
+    let cleaned = html
+      .replace(/<p[^>]*>/gi, '')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<b>/gi, '**')
+      .replace(/<\/b>/gi, '**')
+      .replace(/<strong>/gi, '**')
+      .replace(/<\/strong>/gi, '**')
+      .replace(/<i>/gi, '*')
+      .replace(/<\/i>/gi, '*')
+      .replace(/<em>/gi, '*')
+      .replace(/<\/em>/gi, '*')
+      .replace(/<ul[^>]*>/gi, '')
+      .replace(/<\/ul>/gi, '')
+      .replace(/<ol[^>]*>/gi, '')
+      .replace(/<\/ol>/gi, '')
+      .replace(/<li[^>]*>/gi, '• ')
+      .replace(/<\/li>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    
+    return cleaned;
   };
 
   // ============================================================
@@ -664,6 +731,8 @@ export default function JobDetailPage() {
   const title = language === 'fr' ? job.title_fr : (job.title_mg || job.title_fr);
   const description = language === 'fr' ? job.description_fr : (job.description_mg || job.description_fr);
   const imageUrl = job.image_url;
+
+  const cleanedDescription = cleanHtmlContent(description);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -826,20 +895,20 @@ export default function JobDetailPage() {
         </section>
 
         {/* ============================================================
-        DESCRIPTION DU POSTE
+        DESCRIPTION DU POSTE - SANS BALISES <p>
         ============================================================ */}
         <section className="bg-white rounded-2xl shadow-lg p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <FileText className="w-6 h-6 text-blue-800" />
             <span>{getText('Description du poste', 'Famaritana ny asa')}</span>
           </h2>
-          <div className="prose max-w-none text-gray-600 whitespace-pre-wrap leading-relaxed">
-            {description}
+          <div className="text-gray-600 whitespace-pre-wrap leading-relaxed">
+            {cleanedDescription}
           </div>
         </section>
 
         {/* ============================================================
-        FORMULAIRE DE CANDIDATURE (MODAL)
+        FORMULAIRE DE CANDIDATURE (MODAL) - AVEC ACCEPT PLUS DE FORMATS
         ============================================================ */}
         {showApplicationForm && isAvailable && isAuthenticated && !hasApplied && (
           <div 
@@ -870,7 +939,7 @@ export default function JobDetailPage() {
               
               <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6" noValidate>
                 
-                {/* Photo de profil */}
+                {/* Photo de profil - AVEC PLUS DE FORMATS */}
                 <div className="border-b border-gray-200 pb-6">
                   <button
                     type="button"
@@ -908,7 +977,7 @@ export default function JobDetailPage() {
                         <input
                           ref={photoInputRef}
                           type="file"
-                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          accept="image/jpeg,image/jpg,image/png,image/webp,image/gif,image/svg+xml,image/bmp,image/tiff"
                           onChange={handlePhotoChange}
                           className="hidden"
                           aria-label="Photo de profil"
@@ -919,7 +988,7 @@ export default function JobDetailPage() {
                           {getText('Photo de profil (optionnelle)', 'Sary momba anao (tsy voatery)')}
                         </p>
                         <p className="text-xs text-gray-400">
-                          {getText('Formats: JPG, PNG, WEBP. Max 5 Mo', 'Endrika: JPG, PNG, WEBP. Farany 5 Mo')}
+                          {getText('Formats: JPG, PNG, WEBP, GIF, SVG, BMP, TIFF. Max 5 Mo', 'Endrika: JPG, PNG, WEBP, GIF, SVG, BMP, TIFF. Farany 5 Mo')}
                         </p>
                         {photoState.file && (
                           <div className="mt-2 flex items-center gap-2 text-emerald-600 text-sm">
@@ -1116,7 +1185,7 @@ export default function JobDetailPage() {
                   )}
                 </div>
 
-                {/* CV */}
+                {/* CV - accepte plus de formats */}
                 <div className="border-b border-gray-200 pb-6">
                   <button
                     type="button"
@@ -1166,7 +1235,7 @@ export default function JobDetailPage() {
                           <input
                             ref={cvInputRef}
                             type="file"
-                            accept=".pdf"
+                            accept=".pdf,application/pdf"
                             onChange={handleCvChange}
                             className="hidden"
                           />
@@ -1197,7 +1266,7 @@ export default function JobDetailPage() {
                   )}
                 </div>
 
-                {/* Lettre de motivation */}
+                {/* Lettre de motivation - accepte plus de formats */}
                 <div className="border-b border-gray-200 pb-6">
                   <button
                     type="button"
@@ -1214,7 +1283,7 @@ export default function JobDetailPage() {
                   {activeSection === 'cover' && (
                     <div className="mt-4 space-y-4">
                       <div>
-                        <label htmlFor="cover_letter" className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
                           {getText('Redigez votre lettre', 'Soraty ny taratasy')}
                         </label>
                         <div className="quill-editor">
@@ -1244,7 +1313,7 @@ export default function JobDetailPage() {
                           <input
                             ref={coverLetterInputRef}
                             type="file"
-                            accept=".pdf"
+                            accept=".pdf,application/pdf"
                             onChange={handleCoverLetterFileChange}
                             className="hidden"
                           />
